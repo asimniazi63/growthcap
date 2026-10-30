@@ -1,0 +1,31 @@
+# Reference documents: never commit (see CLAUDE.md)
+/Growth Capital Developer Takehome.pdf
+/main-agentic-ai-team-lead.pdf
+
+# Env files (the example is committed)
+.env*
+!.env.example
+
+# Dependencies and builds
+node_modules/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
+
+# Seed loader journal (local state)
+.seed-journal/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS and logs
+.DS_Store
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
