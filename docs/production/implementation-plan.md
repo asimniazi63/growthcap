@@ -52,8 +52,8 @@ lib/sync/{reconcile,watermark}.ts            15-minute incremental reconcile    
 lib/privacy/{compliance,pseudonym,retention}.ts                                              T3
 lib/agent/gateway.ts                         AI Gateway models and provider order            T4
 app/api/cron/{reconcile,snapshot,retention,brief}/route.ts   (replaces cron/refresh)         T3/T5
-app/(app)/portfolio/page.tsx                 stretch E                                       T5
-app/api/mcp/route.ts, app/.well-known/*      stretch F                                       T5
+app/(app)/portfolio/page.tsx                 stretch F                                       T5
+app/api/mcp/route.ts, app/.well-known/*      stretch G                                       T5
 e2e/*.spec.ts                                Playwright smoke tests                          T4
 .github/workflows/evals.yml                  tier-2 eval gate                                T4
 shopify.app.{dev,staging,production}.toml    one Shopify app per environment                 T1
@@ -167,9 +167,9 @@ The take-home T4, with these changes.
 
 ### T5: Plan-to-Pace stretch
 
-The take-home T5 A–D, with the production additions in product plan §5: exact provider messages and a backtested month-end range (A), the internal flag (B), private storage for uploads (C), and single-use, tenant-bound, expiring approvals with a drift check and safe retries (D). Plus E and F.
+The take-home stretch A–E (implementation plan T5 and build plan T9), with the production additions in product plan §5: exact provider messages and a backtested month-end range (A), the internal flag (B), private storage for uploads (C), single-use, tenant-bound, expiring approvals with a drift check and safe retries (D), and theme writes to an unpublished theme only (E). Plus F and G, hardened.
 
-**E. Operate**
+**F. Operate**
 - [ ] `/portfolio` ranks the tenants from `listAccessibleTenants(userId)` by dollar gap to plan, querying each one under its own tenant context.
 - [ ] Monday brief: a cron route (checked against `CRON_SECRET`, one slot a week) starts a Vercel Workflow per tenant. The workflow drafts the brief through `runAgent`, so the number checker runs; waits for approval with a workflow hook; then posts a templated Slack message with link previews off. A brief with an unmatched number can't be approved.
 - [ ] **Tests:**
@@ -180,7 +180,7 @@ The take-home T5 A–D, with the production additions in product plan §5: exact
   - A client-ready brief contains no internal material.
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
-**F. MCP**
+**G. MCP**
 - [ ] Spike first: confirm that Clerk's SDK exposes the token's org when it verifies an OAuth token.
 - [ ] `/api/mcp` exposes the read tools behind Clerk OAuth. Clients request `user:org:read` with the consent screen on, so each token is bound to one org; tokens without an org are rejected. Only pre-registered OAuth clients are accepted.
 - [ ] The same tenant guard and audit log (`source: 'mcp'`, with the client ID in the actor).

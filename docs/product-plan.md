@@ -42,7 +42,7 @@ Oasis Pace connects a client brand's Shopify store to Oasis. Growth Capital's te
 | Client team (viewer) | Any time | Self-serve answers using GC's metric definitions |
 | Liam (GC's AI teammate) | Scheduled | The same governed tools, over MCP |
 
-The core serves an operator and a client viewer on one store. The stretch adds the plan. The multi-client portfolio and Liam's MCP access are on the roadmap (§5).
+The core serves an operator and a client viewer on one store. The stretch adds the plan, campaign landing pages, the multi-client portfolio and Liam's MCP access.
 
 ## 4. Goals, non-goals, anti-goals
 
@@ -123,10 +123,19 @@ Pace and Why come first because they are the headline. They run straight off the
 - An **action ledger** records the owner, the hypothesis, the metric to watch and a check date. It grades each action later as "observed after", never "caused by".
 - On the reviewer logins, approvals run as a dry run: the card shows the exact change and the ledger records it, but the store isn't touched. The demo stays the same for every reviewer.
 
+**E. Liquid landing pages.**
+- A GC partner asks for a landing page for a planned campaign (e.g. Black Friday from the calendar) or a product moment (e.g. the Fig restock).
+- The agent drafts a Liquid section and page template. Product handles come from tool results, and prices and stock come from Liquid objects at render time, so the page has no number the model typed.
+- Shopify's Theme Check validates the draft. On approval, the files go to an unpublished copy of the theme, with a hidden page; a person publishes in the Shopify admin.
+
+**F. Operate across clients.**
+- A staff-only portfolio ranks clients by dollars behind plan and shows the top driver for each.
+- A Monday brief is drafted per client, checked by the number checker, approved by a strategist, then posted to Slack.
+
+**G. Oasis MCP server.** The same read tools, tenant guard and audit log, so Liam and GC staff can use them from Claude. Each token is bound to one client org.
+
 ### Roadmap (written up in `ROADMAP.md`, not built)
 
-- **Operate across clients:** a staff-only portfolio ranking clients by dollars behind plan, and a Monday brief drafted per client, approved by a strategist, then posted to Slack (stretch E in the production plan)
-- **An Oasis MCP server:** the same tools, tenant guard and audit log, so Liam and GC staff can use them from Claude (stretch F in the production plan)
 - a prospect audit for the waitlist (needs a public app)
 - a data-health score when a store connects
 - the first purchases that create the best customers, feeding creative briefs and email-flow timing
@@ -135,7 +144,6 @@ Pace and Why come first because they are the headline. They run straight off the
 - a Black Friday readiness playbook
 - a Sidekick app extension
 - an "Oasis Lite" tier for brands under $1M
-- Liquid page generation, one of the brief's stretch ideas, ranked last because it sits outside the plan-versus-actual loop
 
 ## 6. Demo data
 
@@ -271,15 +279,17 @@ Shopify Admin GraphQL API (pinned 2026-10) ── Solenne / Tidepool dev stores
   |---|---|---|---|
   | Clients visible | All | Clients they're a member of | Own brand only |
   | Chat over store data, pacing screen | ✓ | ✓ | ✓ |
-  | Agency-internal material: call notes, calendar notes, "why" analyses that cite them, action ledger | ✓ | ✓ | ✗ |
+  | Agency-internal material: call notes, calendar notes, "why" analyses that cite them, action ledger, portfolio | ✓ | ✓ | ✗ |
   | Plan targets and SOW targets | ✓ | ✓ | ✓, read-only |
   | Confirm remembered client facts (they change the numbers) | ✓ | ✓ | ✗ |
-  | Approve Shopify writes | ✓ | ✓ | ✗ |
+  | Approve Shopify writes and Monday briefs | ✓ | ✓ | ✗ |
   | Resync a store | ✓ | ✓ | ✗ |
   | Manage connections, roles, spend caps | ✓ | ✗ | ✗ |
 
-  - **Human review covers what GC sends:** reports and writes. It doesn't cover a client viewer's own live chat, which only has store-data tools.
-  - **Reviewer logins** approve writes as a dry run (§5 D).
+  - **Human review covers what GC sends:** briefs, reports and writes. It doesn't cover a client viewer's own live chat, which only has store-data tools.
+  - **Reviewer logins** approve writes and briefs as a dry run (§5 D).
+  - **Liam over MCP** signs in as a GC user through Clerk OAuth, and each token is bound to one client org at consent.
+  - **The Monday job** runs one brand at a time and only drafts; posting needs a GC approval.
 - **Inventory history.** The seeded stores have no stock history, because their orders and stock were created through the API. So:
   - the sync snapshots inventory daily from now on
   - past stockouts are inferred from days a normally selling variant sold nothing (§8), and the agent labels them "suspected"
@@ -288,7 +298,7 @@ Shopify Admin GraphQL API (pinned 2026-10) ── Solenne / Tidepool dev stores
 - **Permissions.**
   - Core scopes: `read_products`, `read_orders`, `read_customers`, `read_inventory` and `read_discounts`, plus `read_all_orders` once Shopify approves it. Until then, seeded orders stay readable for 60 days after import, because Shopify's 60-day window counts orders by creation date.
   - Customers appear as IDs such as `CUST_8f3a19c2`. Shopify gives custom-distribution apps Level 1 and Level 2 customer data automatically, so the app enforces its own rule: queries never ask for names, emails, phones or addresses (a test scans them), webhook payloads keep only the mapped fields, and nothing personal is stored.
-  - Stretch D adds `read_reports`, `write_reports`, `write_analytics_annotations` and `write_discounts` as a documented trade-off.
+  - Stretch D adds `read_reports`, `write_reports`, `write_analytics_annotations` and `write_discounts`, and stretch E adds the theme and page write scopes. Both are documented trade-offs.
 
 ## 8. Agent design
 
@@ -434,7 +444,7 @@ Stretch B adds a "why" case per storyline.
 | Evals | Run locally, results in the README | A paid eval gate in CI | Model output isn't deterministic, and a CI gate needs an API key and a budget; the production plan adds it |
 | Models | Sonnet chat, Opus "why", Haiku summaries | One model for everything | A starting point; the evals decide on cost per correct answer |
 | Model provider | Claude on Amazon Bedrock | The Claude API directly | Model access and billing run through AWS; Bedrock supports the streaming, tools, structured output, effort and caching this build uses |
-| Stretch order | Pace → Why → Plan in → Act | Starting with document parsing; Liquid generation | The headline runs off `plan.csv`, parsing feeds the same plan, and Liquid sits outside the plan-versus-actual loop |
+| Stretch order | Pace → Why → Plan in → Act → Liquid pages → Operate → MCP | Starting with document parsing or Liquid generation | The headline runs off `plan.csv` and parsing feeds the same plan. Landing pages serve planned campaigns, so they follow the plan. The portfolio, brief and MCP aren't in the brief, so they come last |
 | Roles | The access table in §7 | One role for everyone | Keeps call notes and other agency-internal material away from client viewers |
 | Storyline timing | Fixed history; October is "last month" | Dates relative to the recording day | Evals and the Loom stay stable; the demo clock handles later visits |
 | Libraries | Drizzle, Zod, shadcn/ui + Tailwind, Recharts, Vitest, Langfuse | Heavier equivalents | They fit the Next.js and Vercel stack; the builder may swap any of them, keeping the intent |
@@ -452,7 +462,7 @@ Stretch B adds a "why" case per storyline.
 
 ## 13. Demo (Loom, 5 minutes)
 
-Rehearse against a timer, and cut any stretch step that isn't built.
+Rehearse against a timer, and cut any stretch step that isn't built. Stretch features that don't fit in five minutes go in a second short video.
 
 1. **0:00–0:30.** Solenne's Shopify admin shows the app installed. Create an order there, then show it arrive in Oasis on `/connect`, with "data as of" a few seconds ago.
 2. **0:30–1:30.** Ask "How did we do last month?": a streaming answer and a table. Click a number to see its definition and query.
@@ -482,4 +492,4 @@ This build is a demo of one module, not a production launch. These are the gaps 
 - **Models:** failover to a second provider, refusal handling, and effort settings chosen by evals.
 - **Evals:** a CI gate with repeated trials, a held-out set and a second data world.
 - **Operations:** a Clerk production instance on GC's domain, separate environments, backups, alerting, measured targets and a fuller runbook.
-- **Product:** the portfolio screen, the Monday brief and the MCP server for Liam; accessibility to WCAG 2.2 AA.
+- **Product:** hardened versions of the stretch features (internal-material flags, approval workflows, token-bound MCP), and accessibility to WCAG 2.2 AA.

@@ -4,12 +4,12 @@
 Take-home for Growth Capital: a Shopify app with an AI agent that answers questions about store data. It's built as a module for Oasis, GC's platform.
 - Product plan: `docs/product-plan.md`
 - Build tickets: `docs/implementation-plan.md`
-- Today's build: `docs/one-day-plan.md`. It cuts the implementation plan down to one day and comes first.
+- Build order: `docs/priorities.md` sets the order; `docs/build-plan.md` has each ticket's steps (the core in one day, then every stretch feature). Each ticket is also a GitHub issue.
 - `docs/production/` holds the production version of both plans. It's reference material for the README and the Loom; don't build from it unless Asim asks.
 - Stack: Next.js (App Router, TypeScript) on Vercel, Clerk, Neon Postgres, Shopify Admin GraphQL API, Vercel AI SDK with Claude on Amazon Bedrock.
 
 ## Rules
-- Follow the order in `docs/one-day-plan.md`: T0, then T1 with T2 while the seed loads, then T3, T4 and T5. Work it marks as later follows the implementation plan. Core and polish come before stretch.
+- Follow the order in `docs/priorities.md`. Core and polish come before stretch, and nothing outside the tickets gets built without Asim's go-ahead.
 - Keep secrets in `.env.local` and list every variable in `.env.example`. Never print or commit secret values.
 - Call Shopify from the server only. Authorization never comes from tool arguments or the model: signed-in users get their tenant from the Clerk session, webhooks from the HMAC-verified shop domain, and cron jobs from a `CRON_SECRET`-checked job.
 - Every number the agent states must come from a tool result.

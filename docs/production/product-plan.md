@@ -14,11 +14,11 @@
 | Models | One retry on another Claude model | Failover to a second provider; refusal handling; effort chosen by evals |
 | Evals | Run locally, results in the README | A CI gate with repeated trials, a held-out set and a second data world |
 | Operations | A short runbook | Separate environments, backups, measured targets with alerts, a full runbook |
-| Product | Stretch A–D | Stretch A–F, adding the portfolio, the Monday brief and the MCP server; accessibility to WCAG 2.2 AA |
+| Product | Stretch A–G at demo quality | The same features hardened: internal-material flags, approval workflows, token-bound MCP; plus accessibility to WCAG 2.2 AA |
 
 ## 1–3. Summary, why, users
 
-Same as the take-home plan, §1–§3. In production, GC leadership uses the portfolio (§5 E), and Liam reaches the tools through the MCP server (§5 F).
+Same as the take-home plan, §1–§3. In production, GC leadership uses the portfolio (§5 F), and Liam reaches the tools through the MCP server (§5 G).
 
 ## 4. Goals, non-goals, anti-goals
 
@@ -54,24 +54,25 @@ The take-home list, plus accessibility to WCAG 2.2 AA on every screen.
 
 ### Stretch: Plan-to-Pace (in priority order)
 
-A–D are the take-home plan's §5, with these production additions:
+A–G are the take-home plan's §5, with these production additions:
 - **A. Pace.** Threads store the exact provider messages, so a resumed conversation replays the history the model saw. The month-end estimate shows a range and is backtested on past months. A per-client setting, off by default, decides whether client viewers see pacing against GC's plan.
 - **B. Why.** Answers that cite call notes or calendar notes are marked internal. Internal threads, views and briefs are never shown to client viewers.
 - **C. Plan in.** Uploads go to private storage, readable only by GC roles in that tenant.
 - **D. Act with approval.** An approval is single-use, bound to its tenant, and expires after 24 hours. Before running, the server checks the store hasn't changed since the proposal. Shopify writes are retried only when nothing could have run (a throttle), so a write never runs twice. A scheduled job grades each ledger entry on its check date.
+- **E. Liquid landing pages.** Theme writes go only to an unpublished theme, publishing stays a manual step in the Shopify admin, and every write uses the same approval rules as D.
 
-**E. Operate across clients.**
+**F. Operate across clients.**
 - A staff-only portfolio ranks every client the user can access by dollars behind plan and shows the top driver for each.
 - A Monday brief is drafted per client by a scheduled workflow, checked by the number checker, approved by a strategist, then posted to Slack with link previews off. It can't be approved while any number is unmatched.
 - Briefs go to GC staff. A brief reaches a client only after a strategist marks that version client-ready, and a client-ready brief never includes internal material.
 
-**F. Oasis MCP server.**
+**G. Oasis MCP server.**
 - The same read tools, tenant guard and audit log, for Liam and GC staff.
 - Each MCP token is bound to one client org at consent. Switching clients means a new consent, and no tool takes a tenant argument.
 - Over MCP, Oasis vouches for its tool results only. Liam writes its own prose, and the docs say so.
 
 ### Roadmap
-The take-home plan's roadmap (§5), without E and F, which are in scope here.
+The take-home plan's roadmap (§5).
 
 ## 6. Test data and the demo environment
 
@@ -160,7 +161,7 @@ The take-home table (§7), plus portfolio access and brief approval for GC roles
 With `read_reports` and Level 2 customer data, ShopifyQL's inventory and sessions data would replace the take-home's inferred stockouts and add conversion to the driver tree. It's a per-client decision, because Level 2 means more personal-data access.
 
 ### Permissions
-Core scopes are the take-home's, with `read_all_orders` approved. Stretch D adds `read_reports`, `write_reports`, `write_analytics_annotations` and `write_discounts`. A scope change is deployed and approved by each merchant in their admin; the app is never uninstalled to change scopes.
+Core scopes are the take-home's, with `read_all_orders` approved. Stretch D adds `read_reports`, `write_reports`, `write_analytics_annotations` and `write_discounts`, and stretch E adds the theme and page write scopes. A scope change is deployed and approved by each merchant in their admin; the app is never uninstalled to change scopes.
 
 ### Environments
 

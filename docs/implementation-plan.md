@@ -381,7 +381,7 @@ docs/{metrics,runbook}.md, docs/decisions/*.md, docs/evals/                     
 
 ### T5: Plan-to-Pace stretch (about 4–6 days, needs T4; stop after any letter)
 
-Each letter matches product plan §5 and ends with its own checkpoint. Stretch E (portfolio and Monday brief) and F (MCP) are on the roadmap; the production plan covers them.
+Each letter matches product plan §5 and ends with its own checkpoint. Stretch E (Liquid landing pages), F (portfolio and Monday brief) and G (MCP) are specified in [build-plan.md](build-plan.md), tickets T9 and T10.
 
 **A. Pace, generative UI and memory**
 - [ ] Add the `plans` and `plan_targets` tables. `npm run fixtures:load` loads each store's `plan.csv`, `calendar.csv` and call notes into its tenant.
