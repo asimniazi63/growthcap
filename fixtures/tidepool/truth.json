@@ -1,0 +1,225 @@
+{
+  "store": "tidepool",
+  "seed": 42,
+  "asOf": "2026-10-31",
+  "window": {
+    "from": "2025-11-01",
+    "to": "2026-10-31"
+  },
+  "monthly": {
+    "2025-11": {
+      "gross_sales": 80700,
+      "discounts": 7150,
+      "refunds": 3800,
+      "net_sales": 69750,
+      "orders": 8,
+      "aov": 9193.75,
+      "units": 17,
+      "new_customer_orders": 8,
+      "returning_customer_rate": 0,
+      "refund_rate": 0.058823529411764705,
+      "discounted_order_share": 0.5
+    },
+    "2025-12": {
+      "gross_sales": 47800,
+      "discounts": 5710,
+      "refunds": 3900,
+      "net_sales": 38190,
+      "orders": 8,
+      "aov": 5261.25,
+      "units": 15,
+      "new_customer_orders": 8,
+      "returning_customer_rate": 0,
+      "refund_rate": 0.13333333333333333,
+      "discounted_order_share": 0.625
+    },
+    "2026-01": {
+      "gross_sales": 59800,
+      "discounts": 0,
+      "refunds": 0,
+      "net_sales": 59800,
+      "orders": 6,
+      "aov": 9966.666666666666,
+      "units": 11,
+      "new_customer_orders": 5,
+      "returning_customer_rate": 0.16666666666666666,
+      "refund_rate": 0,
+      "discounted_order_share": 0
+    },
+    "2026-02": {
+      "gross_sales": 61900,
+      "discounts": 0,
+      "refunds": 0,
+      "net_sales": 61900,
+      "orders": 6,
+      "aov": 10316.666666666666,
+      "units": 13,
+      "new_customer_orders": 2,
+      "returning_customer_rate": 0.6666666666666666,
+      "refund_rate": 0,
+      "discounted_order_share": 0
+    },
+    "2026-03": {
+      "gross_sales": 30800,
+      "discounts": 1000,
+      "refunds": 0,
+      "net_sales": 29800,
+      "orders": 5,
+      "aov": 5960,
+      "units": 11,
+      "new_customer_orders": 5,
+      "returning_customer_rate": 0,
+      "refund_rate": 0,
+      "discounted_order_share": 0.4
+    },
+    "2026-04": {
+      "gross_sales": 122600,
+      "discounts": 1560,
+      "refunds": 5400,
+      "net_sales": 115640,
+      "orders": 13,
+      "aov": 9310.76923076923,
+      "units": 32,
+      "new_customer_orders": 6,
+      "returning_customer_rate": 0.5833333333333334,
+      "refund_rate": 0.09375,
+      "discounted_order_share": 0.15384615384615385
+    },
+    "2026-05": {
+      "gross_sales": 100200,
+      "discounts": 760,
+      "refunds": 7220,
+      "net_sales": 92220,
+      "orders": 6,
+      "aov": 16573.333333333332,
+      "units": 20,
+      "new_customer_orders": 2,
+      "returning_customer_rate": 0.6666666666666666,
+      "refund_rate": 0,
+      "discounted_order_share": 0.16666666666666666
+    },
+    "2026-06": {
+      "gross_sales": 60600,
+      "discounts": 1160,
+      "refunds": 0,
+      "net_sales": 59440,
+      "orders": 6,
+      "aov": 9906.666666666666,
+      "units": 18,
+      "new_customer_orders": 4,
+      "returning_customer_rate": 0.3333333333333333,
+      "refund_rate": 0,
+      "discounted_order_share": 0.16666666666666666
+    },
+    "2026-07": {
+      "gross_sales": 97200,
+      "discounts": 1080,
+      "refunds": 0,
+      "net_sales": 96120,
+      "orders": 11,
+      "aov": 8738.181818181818,
+      "units": 27,
+      "new_customer_orders": 6,
+      "returning_customer_rate": 0.45454545454545453,
+      "refund_rate": 0,
+      "discounted_order_share": 0.09090909090909091
+    },
+    "2026-08": {
+      "gross_sales": 78000,
+      "discounts": 880,
+      "refunds": 0,
+      "net_sales": 77120,
+      "orders": 9,
+      "aov": 8568.888888888889,
+      "units": 23,
+      "new_customer_orders": 7,
+      "returning_customer_rate": 0.2222222222222222,
+      "refund_rate": 0,
+      "discounted_order_share": 0.1111111111111111
+    },
+    "2026-09": {
+      "gross_sales": 122300,
+      "discounts": 1400,
+      "refunds": 0,
+      "net_sales": 120900,
+      "orders": 11,
+      "aov": 10990.90909090909,
+      "units": 32,
+      "new_customer_orders": 6,
+      "returning_customer_rate": 0.5,
+      "refund_rate": 0,
+      "discounted_order_share": 0.18181818181818182
+    },
+    "2026-10": {
+      "gross_sales": 103000,
+      "discounts": 1140,
+      "refunds": 0,
+      "net_sales": 101860,
+      "orders": 13,
+      "aov": 7835.384615384615,
+      "units": 27,
+      "new_customer_orders": 9,
+      "returning_customer_rate": 0.3076923076923077,
+      "refund_rate": 0,
+      "discounted_order_share": 0.15384615384615385
+    }
+  },
+  "storylines": [
+    {
+      "id": "TP1",
+      "from": "2026-10-01",
+      "to": "2026-10-31",
+      "entities": [],
+      "finding": "October net sales ran a few percent above plan, a contrast with Solenne's October.",
+      "checks": [
+        {
+          "metric": "net_sales",
+          "filter": {
+            "exclude_tag": "wholesale"
+          },
+          "period": {
+            "from": "2026-10-01",
+            "to": "2026-10-31"
+          },
+          "expected": 101860,
+          "tolerance": 100
+        },
+        {
+          "metric": "orders",
+          "filter": {
+            "exclude_tag": "wholesale"
+          },
+          "period": {
+            "from": "2026-10-01",
+            "to": "2026-10-31"
+          },
+          "expected": 13,
+          "tolerance": 0
+        }
+      ]
+    },
+    {
+      "id": "TP2",
+      "from": "2026-10-04",
+      "to": "2026-10-31",
+      "entities": [
+        "P_001"
+      ],
+      "finding": "The best-selling Cloud Muslin Swaddle has about 9 days of stock left at its recent sales rate, ahead of Black Friday 2026 (11-27).",
+      "checks": [
+        {
+          "metric": "units",
+          "filter": {
+            "product": "P_001"
+          },
+          "period": {
+            "from": "2026-10-04",
+            "to": "2026-10-31"
+          },
+          "expected": 11,
+          "tolerance": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "oasis-pace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "seed:generate": "tsx scripts/seed/generate.ts",
+    "seed:load": "tsx scripts/seed/load.ts",
+    "seed:pilot-check": "tsx scripts/spikes/pilot-check.ts",
+    "seed:spike-a": "tsx scripts/spikes/spike-a.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "eslint": "^10.14.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
+  }
+}

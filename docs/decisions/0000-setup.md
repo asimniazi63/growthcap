@@ -32,13 +32,13 @@ Memberships: Asim is `org:gc_admin` in both orgs. `reviewer-gc+clerk_test@exampl
 **App distribution: deferred.** The checklist says to pick custom distribution for both apps. That choice can't be undone, and custom distribution covers one store, or several stores in the same Plus organization. Instead:
 - Both apps were installed on both stores from the Dev Dashboard's Installs card, with no distribution chosen.
 - A read-only probe (client credentials grant, then `orders(first: 1)` and `customers(first: 1)`) succeeded for both apps on both stores.
-- The stores were empty at the time, so the T1 pilot is the real test. If the pilot gets "not approved to access" errors, choose custom distribution, starting with the seeder, and re-run the probe on both stores before doing the product app.
+- The stores were empty at the time, so the T1 pilot was the real test. It did get a "not approved to access the Customer object" error, but for the seeder's unset data use, not for distribution. Selecting Level 1 data use for the seeder fixed it (see Protected customer data below), so **custom distribution stays unchosen** and `read_all_orders` stays deferred. See [0001-day1-spikes.md](0001-day1-spikes.md).
 
 **`read_all_orders`: deferred.** In the Partner Dashboard, the request sits behind "Choose your distribution model before requesting". The scope isn't needed yet, because imported orders are readable for 60 days. Spike (a) in T1 records whether older backdated orders can be read.
 
 **Protected customer data.**
 - Product app: Level 1 is selected in the Partner Dashboard, with no Name, Email, Phone or Address fields. The reasons were narrowed to what the app does (analytics, app functionality, and optionally store management). It stays a Draft, because apps installed only on dev stores need no review.
-- Seeder: left unset. It may need a Level 2 field, such as Name, if Shopify won't create a customer without a name, email or phone. The T1 pilot settles this.
+- Seeder: left unset in T0, and the first pilot run was refused on the Customer object (customers and orders were denied on reads too). After the same Level 1 data-use selection in the Partner Dashboard (no fields, Draft), reads worked and the pilot loaded 22 customers created from an `@example.com` address only, with no Level 2 field and no custom distribution.
 
 **App URL is a placeholder.** Both app versions use `https://shopify.dev/apps/default-app-home` and have no redirect URLs. In T2, `shopify app config link` and `shopify app deploy` set the Vercel URL and the redirects from `shopify.app.toml`.
 
@@ -89,8 +89,8 @@ For production, use Vercel OIDC federation with short-lived AWS credentials and 
 | Shopify identity verification | Never triggered |
 | Dev stores on Plus, test data off, time zone and currency set | Done, checked through the Admin API |
 | Product and seeder apps installed on both stores | Done |
-| Custom distribution | Deferred to the T1 pilot |
-| Protected customer data at Level 1, no personal fields | Done for the product app; seeder deferred to the T1 pilot |
+| Custom distribution | Not needed: the T1 pilot passed without it (left unchosen, since the choice is one-way) |
+| Protected customer data at Level 1, no personal fields | Done for both apps (the seeder after the pilot's first run) |
 | `read_all_orders` requested | Blocked until a distribution is chosen; deferred to spike (a) |
 | Vercel project (Hobby) linked to GitHub | Done |
 | Clerk development instance, roles, orgs and users | Done, checked through the Backend API |
