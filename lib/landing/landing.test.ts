@@ -261,3 +261,20 @@ describe("landing page executor", () => {
     expect(() => pickTheme([])).toThrow(/duplicate the live theme/);
   });
 });
+
+describe("when Theme Check cannot run", () => {
+  it("still lints the draft, and says on the card that Theme Check did not run", async () => {
+    const failing = vi.fn(async () => {
+      throw new Error("ENOENT: no such file or directory, open '/var/task/data/themes.json'");
+    });
+    const result = await validateLanding(
+      [{ path: "sections/a.liquid", content: "{% assign p = all_products['a'] %}<h1>Plain</h1>{{ p.price | money }}" }],
+      { handles: new Set(["a"]) },
+      { themeCheck: failing },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.notes[0]).toMatch(/Theme Check could not run .*ENOENT/);
+    const bad = await validateLanding([{ path: "sections/a.liquid", content: "<script>x</script>" }], { handles: new Set(["a"]) }, { themeCheck: failing });
+    expect(bad.ok).toBe(false); // our own lint still fails a bad draft
+  });
+});

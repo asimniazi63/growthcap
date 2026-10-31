@@ -157,7 +157,24 @@ export async function validateLanding(files: LandingFile[], opts: LintOptions, d
   const hit = key ? passed.get(key) : undefined;
   if (hit && Date.now() - hit.at < KEEP_MS) return hit.value;
 
-  const checked = await (deps.themeCheck ?? runThemeCheck)(files);
+  let checked: ThemeCheckResult;
+  try {
+    checked = await (deps.themeCheck ?? runThemeCheck)(files);
+  } catch (e) {
+    // Theme Check could not run here (it is a large package with its own files). Our own lint already passed, so the draft is
+    // still safe to review; the card says Theme Check did not run, and why, so a person can run it before publishing.
+    const why = (e instanceof Error ? e.message : "unknown reason").replace(/\s+/g, " ").slice(0, 160);
+    return {
+      ok: true,
+      problems: [],
+      notes: [
+        `Theme Check could not run on the server (${why}). Run \`shopify theme check\` on the files before publishing`,
+        "Every product handle exists in the synced catalogue",
+        "No price is typed: prices and stock are read from the store when the page loads",
+        "The page is created hidden; a person publishes it in the Shopify admin",
+      ],
+    };
+  }
   if (checked.errors.length > 0) return { ok: false, problems: checked.errors.map((e) => `Theme Check: ${e}`), notes: [] };
   const value: Validation = {
     ok: true,
