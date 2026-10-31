@@ -28,7 +28,9 @@ export interface ConnectArgs {
 // can't take it over, and a tenant has one connected shop at a time.
 export async function connectShop({ db, tenantId, shopDomain, accessToken, scope, shopInfo }: ConnectArgs): Promise<ConnectResult> {
   const granted = new Set(scope.split(",").map((s) => s.trim()));
-  const missing = REQUIRED_SCOPES.filter((s) => !granted.has(s));
+  // Shopify lists only write_x when a store has granted write_x, because it includes read_x. So write_discounts covers read_discounts.
+  const has = (s: string) => granted.has(s) || (s.startsWith("read_") && granted.has(`write_${s.slice("read_".length)}`));
+  const missing = REQUIRED_SCOPES.filter((s) => !has(s));
   if (missing.length > 0) {
     return { ok: false, reason: "missing_scopes", detail: `The grant is missing: ${missing.join(", ")}.` };
   }

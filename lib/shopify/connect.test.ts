@@ -42,6 +42,12 @@ describe("connectShop", () => {
     expect(decryptSecret(row!.tokenEnc!)).toBe("shpat_secret");
   });
 
+  it("accepts a write scope in place of its read scope, because Shopify lists only the write one", async () => {
+    const scope = "read_products,read_orders,read_customers,read_inventory,write_discounts,write_themes";
+    expect(await connect({ scope })).toMatchObject({ ok: true });
+    expect((await db.select().from(shopConnections))[0]!.scopes).toBe(scope);
+  });
+
   it("rejects a grant that is missing a required scope, and stores nothing", async () => {
     const result = await connect({ scope: "read_products,read_orders" });
     expect(result).toMatchObject({ ok: false, reason: "missing_scopes" });
