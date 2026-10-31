@@ -48,11 +48,16 @@ function AssistantMessage({ message }: { message: UIMessage }) {
   const repairAt = message.parts.findIndex((p) => p.type === "data-repair");
   const lastText = message.parts.findLastIndex((p) => p.type === "text");
   const truncated = provenanceList.filter((p) => p.truncated);
+  // A call that failed and was then made again successfully (the model fixing its own arguments) is not worth a red line.
+  const toolParts = message.parts.filter((p) => toolName(p));
+  const chips = toolParts.filter((p, i) => (p as { state?: string }).state !== "output-error" || !toolParts.slice(i + 1).some((q) => toolName(q) === toolName(p) && (q as { state?: string }).state === "output-available"));
 
   return (
     <div className="space-y-2">
       <ul className="space-y-1">
-        {message.parts.map((p, i) => (toolName(p) ? <ToolChip key={i} part={p} /> : null))}
+        {chips.map((p, i) => (
+          <ToolChip key={i} part={p} />
+        ))}
       </ul>
       {message.parts.map((p, i) => {
         if (p.type !== "text") return null;

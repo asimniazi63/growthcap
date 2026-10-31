@@ -17,20 +17,25 @@ describe("storeToday", () => {
     expect(storeToday(NY, "2026-03-06T00:00:00-05:00")).toBe("2026-03-07"); // exactly 36 hours
   });
 
-  it("uses the newest order's date once it is more than 36 hours old", () => {
+  it("treats the day after the newest order as today once that order is more than 36 hours old", () => {
     setTestNow("2026-03-07T12:01:00-05:00");
-    expect(storeToday(NY, "2026-03-06T00:00:00-05:00")).toBe("2026-03-06");
+    expect(storeToday(NY, "2026-03-06T00:00:00-05:00")).toBe("2026-03-07");
   });
 
-  it("gives a 2-day-old newest order's date as today", () => {
-    setTestNow("2026-03-07T12:00:00-05:00");
-    expect(storeToday(NY, "2026-03-05T12:00:00-05:00")).toBe("2026-03-05");
+  it("does the same for an older newest order, whatever today's real date", () => {
+    setTestNow("2026-03-20T12:00:00-05:00");
+    expect(storeToday(NY, "2026-03-05T12:00:00-05:00")).toBe("2026-03-06");
   });
 
-  it("keeps an order at 23:30 New York time on that local day, though UTC has moved on", () => {
+  it("makes the month that just ended 'last month' when the data stops on its last day (the demo's October)", () => {
+    setTestNow("2026-12-15T12:00:00-05:00");
+    expect(storeToday(NY, "2026-10-31T20:04:18-04:00")).toBe("2026-11-01");
+  });
+
+  it("counts an order at 23:30 New York time on its local day, though UTC has moved on, so today is 03-06 and not 03-07", () => {
     setTestNow("2026-03-10T12:00:00Z");
     // 23:30 on 03-05 in New York is 04:30 UTC on 03-06
-    expect(storeToday(NY, "2026-03-05T23:30:00-05:00")).toBe("2026-03-05");
+    expect(storeToday(NY, "2026-03-05T23:30:00-05:00")).toBe("2026-03-06");
   });
 
   it("is right on the fall-back day (2025-11-02, UTC-4 turns into UTC-5)", () => {

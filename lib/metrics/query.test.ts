@@ -109,10 +109,10 @@ describe("dates", () => {
     setTestNow("2026-11-02T12:00:00-05:00");
     try {
       const res = await run("solenne", { metrics: ["orders"], period: "last_month" });
-      expect(res.range).toEqual({ from: "2026-09-01", to: "2026-09-30" }); // "today" is the end of the data: 2026-10-31
+      expect(res.range).toEqual({ from: "2026-10-01", to: "2026-10-31" }); // the data ends on Oct 31, so "today" is Nov 1 and October is "last month"
       const def = await run("solenne", { metrics: ["orders"] });
-      expect(def.range.to).toBe("2026-10-31");
-      expect(def.range.from).toBe("2026-10-02");
+      expect(def.range.to).toBe("2026-11-01");
+      expect(def.range.from).toBe("2026-10-03");
     } finally {
       setTestNow(null);
     }

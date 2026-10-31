@@ -186,6 +186,16 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
             onError: ({ error }) => {
               modelError ??= error;
             },
+            // A call whose arguments fail validation never reaches our tool code, so it is recorded here. The model sees
+            // the validation error and usually tries again, as it did on the live site.
+            onStepFinish: (step) => {
+              for (const part of step.content) {
+                if (part.type !== "tool-call" || !("invalid" in part) || !part.invalid) continue;
+                const detail = (part as { error?: { message?: string } }).error?.message ?? "";
+                console.warn(`[agent] ${part.toolName} called with invalid input: ${detail.slice(0, 300)}`);
+                pending.push(recordStep(dbRef, { runId: runId!, tenantId: ctx.tenantId, stepIndex: summary.steps++, tool: part.toolName, input: part.input, ok: false, errorCode: "INVALID_INPUT", latencyMs: 0 }));
+              }
+            },
           });
 
         // Settles a model call: its steps, usage and what it added to the conversation, or the error that ended it.

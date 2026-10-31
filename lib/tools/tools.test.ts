@@ -22,7 +22,7 @@ let ctx: TenantContext;
 const FULL = { from: "2025-09-01", to: "2026-10-31" };
 
 beforeAll(async () => {
-  setTestNow("2026-11-02T12:00:00-05:00"); // two days after the data ends, so "today" is the newest order's date
+  setTestNow("2026-11-02T12:00:00-05:00"); // two days after the data ends, so "today" is the day after the newest order
   db = await createTestDb();
   const seeded = await seedTwoStores(db);
   ds = seeded.fixtures.solenne.dataset;
@@ -31,7 +31,8 @@ beforeAll(async () => {
 
 afterAll(() => setTestNow(null));
 
-const today = () => ds.orders[ds.orders.length - 1]!.processedAt.slice(0, 10);
+const newestDay = () => ds.orders[ds.orders.length - 1]!.processedAt.slice(0, 10);
+const today = () => addDays(newestDay(), 1); // the data is stale, so "today" is the day after its newest order
 
 describe("getOrders", () => {
   it("returns the 50 newest orders of the full window and says how many there are in all", async () => {
@@ -40,7 +41,7 @@ describe("getOrders", () => {
     expect(res.truncated).toEqual({ shown: 50, total: ds.orders.length });
     expect(res.range).toEqual(FULL);
     const dates = res.data.map((o) => o.date);
-    expect(dates[0]).toBe(today());
+    expect(dates[0]).toBe(newestDay());
     expect(dates).toEqual([...dates].sort().reverse());
   });
 

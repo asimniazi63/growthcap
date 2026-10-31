@@ -112,7 +112,8 @@ describe("a normal turn", () => {
     expect(prompt[0]).toMatchObject({ role: "system", content: SYSTEM_PROMPT });
     expect(SYSTEM_PROMPT).not.toMatch(/\b20\d\d-\d\d-\d\d\b/); // no date in the cached prefix
     const user = JSON.stringify(prompt.find((m) => m.role === "user"));
-    const today = ds.orders.at(-1)!.processedAt.slice(0, 10);
+    const newest = new Date(`${ds.orders.at(-1)!.processedAt.slice(0, 10)}T00:00:00Z`);
+    const today = new Date(newest.getTime() + 86_400_000).toISOString().slice(0, 10); // the day after the newest order
     expect(user).toContain(`Today is ${today}`);
     expect(user).toContain("last synced at");
     expect(user).toContain("How did March 2026 go?");
@@ -151,6 +152,20 @@ describe("a normal turn", () => {
     await collect(stream);
     await finished;
     expect((await lastRun()).source).toBe("eval");
+  });
+});
+
+describe("a tool call the model gets wrong (seen on the live site: a red 'couldn't read' line)", () => {
+  it("records a call whose arguments fail validation as an INVALID_INPUT step, lets the model try again, and still answers", async () => {
+    const model = scripted(callTool("query_metric", { metrics: ["profit"], period: "last_month" }, "bad"), ordersCall(), say(`There were ${marchOrders()} orders.`));
+    const { stream, finished } = run(model);
+    const chunks = await collect(stream);
+    expect(errorText(chunks)).toBeUndefined();
+    expect(texts(chunks).join("")).toContain(`${marchOrders()} orders`);
+    expect(await finished).toMatchObject({ status: "ok", steps: 2 });
+    const steps = await db.select().from(agentSteps).orderBy(agentSteps.stepIndex);
+    expect(steps.map((x) => [x.tool, x.ok, x.errorCode])).toEqual([["query_metric", false, "INVALID_INPUT"], ["query_metric", true, null]]);
+    expect(steps[0]!.input).toEqual({ metrics: ["profit"], period: "last_month" });
   });
 });
 

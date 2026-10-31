@@ -37,3 +37,10 @@ Found and fixed:
 - `chat:try` printed the first draft and the corrected answer joined together. It now prints the last answer only.
 
 Open question: "last month" resolves to **September**, because with the demo clock "today" is the newest order's date (2026-10-31). The product plan says October is the "last month" story (S9) and the Loom asks "How did we do last month?". Options are in the T4 hand-off; nothing has been changed yet.
+
+## Second live check and the clock decision (2026-10-31)
+
+On the live Tidepool chat: "Which discount codes were used most last month?" answered correctly (September: WELCOME10 2 orders, 9 with no code, out of 11, which matches the dataset) and every number was matched. The Bedrock key had been missing on Vercel; adding it fixed the earlier `INTERNAL_ERROR`.
+
+- **The red "couldn't read" line** was a first tool call whose arguments failed schema validation (it never reached our tool code), which the model then repeated correctly. Such calls are now recorded in the audit log as `INVALID_INPUT` steps, with the model's arguments, and logged (`[agent] <tool> called with invalid input: ...`) so the cause is visible in Vercel Logs. The UI hides a failed tool line when the same tool succeeded afterwards.
+- **The demo clock (ruling, Asim asked for the realistic choice):** when the newest order is more than 36 hours old, "today" is now **the day after** that order (it was the order's own day). That is what a live store looks like on the morning after its last order. Solenne's data ends on Oct 31, so on the demo "last month" is October (the S9 story and the Loom's first question) and "this month" has no orders yet (`NO_DATA`, "no November data yet"). Tidepool's data ends Oct 26, so there "today" is Oct 27 and "last month" stays September. The banner now reads "counted as if it were the day after". The plan's text ("that order's date as today") is superseded by this.
