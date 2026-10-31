@@ -4,6 +4,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Db } from "../../lib/db/client";
+import { tenants } from "../../lib/db/schema";
+import type { TenantContext } from "../../lib/tenancy/context";
 import type { OrderNode, ProductNode } from "../../lib/sync/map";
 import { syncStore, type GraphqlFn } from "../../lib/sync/sync";
 import { allocate, roundHalfUp } from "../seed/money.js";
@@ -23,6 +25,8 @@ const money = (cents: number) => ({ shopMoney: { amount: `${Math.trunc(cents / 1
 export const shopifyId = {
   product: (genId: string) => gid("Product", num(genId)),
   variant: (genId: string) => gid("ProductVariant", num(genId)),
+  order: (genId: string) => gid("Order", num(genId)),
+  customer: (genId: string) => gid("Customer", num(genId)),
 };
 
 function orderNodes(ds: Dataset): OrderNode[] {
@@ -132,4 +136,23 @@ export function fakeShopifyFor(ds: Dataset): GraphqlFn {
 
 export async function loadDataset(db: Db, tenantId: string, store: StoreKey, ds: Dataset): Promise<void> {
   await syncStore({ db, tenantId, timezone: STORES[store].timezone, graphql: fakeShopifyFor(ds) });
+}
+
+// Both stores in one database as two tenants, each with a connected-store context, as the tool tests need.
+export async function seedTwoStores(db: Db) {
+  const fixtures = {} as Record<StoreKey, { dataset: Dataset; truth: Truth }>;
+  const ctxs = {} as Record<StoreKey, TenantContext>;
+  for (const store of ["solenne", "tidepool"] as const) {
+    const [t] = await db.insert(tenants).values({ orgId: `org_${store}`, name: STORES[store].name }).returning();
+    fixtures[store] = readFixture(store);
+    await loadDataset(db, t!.id, store, fixtures[store].dataset);
+    ctxs[store] = {
+      tenantId: t!.id,
+      orgId: `org_${store}`,
+      userId: "user_test",
+      role: "gc_admin",
+      shop: { domain: `${store}.myshopify.com`, timezone: STORES[store].timezone, currency: "USD", status: "connected" },
+    };
+  }
+  return { fixtures, ctxs };
 }

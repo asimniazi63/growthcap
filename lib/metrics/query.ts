@@ -1,33 +1,23 @@
-import { createHash } from "node:crypto";
-import { and, eq, gte, isNull, lte, max, min, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
-import { storeToday } from "../clock";
 import type { Db } from "../db/client";
 import { orderLines, orders, refundLines, refunds } from "../db/schema";
 import { AppError } from "../errors";
 import type { TenantContext } from "../tenancy/context";
+import { assertInWindow, asOfOf, capLimit, dbFor, idList, limitField, loadWindow, parseInput, periodShape, queryIdFor, resolveRange, todayFor } from "../tools/common";
 import { requireConnectedShop, type ToolResult } from "../tools/result";
-import { addDays, addMonths, isValidDate, monthEnd, monthOf, monthStart, previousRange, sameRangeLastYear, weekStart } from "./dates";
+import { addDays, addMonths, monthOf, previousRange, sameRangeLastYear, weekStart } from "./dates";
 import { CORE_METRIC_IDS, METRICS, type MetricId } from "./registry";
 
 export const DIMENSIONS = ["day", "week", "month", "product", "variant", "channel", "discount_code", "customer_type", "tag"] as const;
 export type Dimension = (typeof DIMENSIONS)[number];
 const TIME_DIMENSIONS: Dimension[] = ["day", "week", "month"];
-export const PERIODS = ["last_7_days", "last_30_days", "this_month", "last_month", "this_year"] as const;
-export type Period = (typeof PERIODS)[number];
-
-const MAX_ROWS = 200;
-const DEFAULT_ROWS = 50;
-
-const date = z.string().refine(isValidDate, "must be a real date written YYYY-MM-DD");
-const ids = z.array(z.string().min(1).max(200)).max(50);
+const ids = idList;
 
 // strictObject: an unknown key (a tenant, a shop, anything the model invents) is an error, not ignored.
 export const queryMetricInputSchema = z.strictObject({
   metrics: z.array(z.enum(CORE_METRIC_IDS)).min(1),
-  period: z.enum(PERIODS).optional(),
-  from: date.optional(),
-  to: date.optional(),
+  ...periodShape,
   groupBy: z.array(z.enum(DIMENSIONS)).max(2).optional(),
   filters: z
     .strictObject({
@@ -41,7 +31,7 @@ export const queryMetricInputSchema = z.strictObject({
     })
     .optional(),
   compareTo: z.enum(["previous_period", "previous_year"]).optional(),
-  limit: z.number().int().min(1).max(500).optional(),
+  limit: limitField,
 });
 export type QueryMetricInput = z.input<typeof queryMetricInputSchema>;
 
@@ -253,28 +243,6 @@ async function aggregate(src: Source, range: { from: string; to: string }, filte
 
 // ---- Dates and periods
 
-function resolveRange(input: z.output<typeof queryMetricInputSchema>, today: string): { from: string; to: string } {
-  if (input.from !== undefined || input.to !== undefined) {
-    if (input.from === undefined || input.to === undefined) throw new AppError("INVALID_INPUT", "Give both from and to, or neither.");
-    if (input.from > input.to) throw new AppError("INVALID_INPUT", `from (${input.from}) is after to (${input.to}).`);
-    return { from: input.from, to: input.to };
-  }
-  switch (input.period ?? "last_30_days") {
-    case "last_7_days":
-      return { from: addDays(today, -6), to: today };
-    case "last_30_days":
-      return { from: addDays(today, -29), to: today };
-    case "this_month":
-      return { from: monthStart(monthOf(today)), to: today };
-    case "last_month": {
-      const m = addMonths(monthOf(today), -1);
-      return { from: monthStart(m), to: monthEnd(m) };
-    }
-    case "this_year":
-      return { from: `${today.slice(0, 4)}-01-01`, to: today };
-  }
-}
-
 function buckets(dim: Dimension, from: string, to: string): string[] {
   const out: string[] = [];
   if (dim === "day") for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
@@ -282,9 +250,6 @@ function buckets(dim: Dimension, from: string, to: string): string[] {
   else for (let m = monthOf(from); m <= monthOf(to); m = addMonths(m, 1)) out.push(m);
   return out;
 }
-
-const invalid = (error: z.ZodError) =>
-  new AppError("INVALID_INPUT", error.issues.map((i) => `${i.path.join(".") || "input"}: ${i.message}`).join("; "));
 
 export interface QueryDeps {
   db?: Db;
@@ -294,34 +259,27 @@ export interface QueryDeps {
 // session's: nothing in `input` can name another tenant or shop (unknown keys are rejected).
 export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput, deps: QueryDeps = {}): Promise<ToolResult<MetricRow[]>> {
   const shop = requireConnectedShop(ctx);
-  const parsed = queryMetricInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw invalid(parsed.error);
-  const input = parsed.data;
+  const input = parseInput(queryMetricInputSchema, rawInput);
   const dims = input.groupBy ?? [];
   const timeDim = dims.find((d) => TIME_DIMENSIONS.includes(d));
   if (input.compareTo && timeDim) throw new AppError("INVALID_INPUT", "compareTo can't be combined with a day, week or month grouping.");
   const metrics = [...new Set(input.metrics)];
   const filters = input.filters ?? {};
 
-  const db = deps.db ?? (await import("../db/client")).getDb();
-  const [win] = await db
-    .select({ first: min(orders.localDate), last: max(orders.localDate), newest: max(orders.processedAt), synced: max(orders.syncedAt) })
-    .from(orders)
-    .where(and(eq(orders.tenantId, ctx.tenantId), isNull(orders.cancelledAt)));
-  if (!win?.first || !win.last) throw new AppError("NO_DATA", "This store has no synced orders yet.");
-
-  const range = resolveRange(input, storeToday(shop.timezone, win.newest ? new Date(win.newest).toISOString() : null));
-  if (range.to < win.first || range.from > win.last) {
-    throw new AppError("NO_DATA", `This store has orders from ${win.first} to ${win.last}; nothing lies in ${range.from} to ${range.to}.`);
-  }
+  const db = await dbFor(deps);
+  const win = await loadWindow(db, ctx.tenantId);
+  const range = resolveRange(input, todayFor(shop.timezone, win));
+  assertInWindow(range, win);
+  const first = win.first!;
+  const last = win.last!;
 
   const src = await loadSource(db, ctx.tenantId);
   const groups = await aggregate(src, range, filters, dims);
 
   // A quiet day, week or month inside the data window is a real zero, so it appears as a row.
   if (dims.length === 1 && timeDim) {
-    const from = range.from < win.first ? win.first : range.from;
-    const to = range.to > win.last ? win.last : range.to;
+    const from = range.from < first ? first : range.from;
+    const to = range.to > last ? last : range.to;
     for (const b of buckets(timeDim, from, to)) if (!groups.has(b)) groups.set(b, blank({ [timeDim]: b }));
   }
   if (dims.length === 0 && groups.size === 0) groups.set("", blank({}));
@@ -359,15 +317,14 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
       ? String(a.group[timeDim]).localeCompare(String(b.group[timeDim]))
       : (b.values[byFirstMetric] ?? 0) - (a.values[byFirstMetric] ?? 0) || JSON.stringify(a.group).localeCompare(JSON.stringify(b.group)),
   );
-  const limit = Math.min(input.limit ?? DEFAULT_ROWS, MAX_ROWS);
+  const limit = capLimit(input.limit);
   const total = rows.length;
   rows = rows.slice(0, limit);
 
-  const asOf = win.synced ? new Date(win.synced).toISOString() : new Date(0).toISOString();
-  const queryId = `q_${createHash("sha256").update(JSON.stringify({ t: ctx.tenantId, input, asOf })).digest("hex").slice(0, 12)}`;
+  const asOf = asOfOf(win);
   return {
     data: rows,
-    queryId,
+    queryId: queryIdFor("query_metric", ctx.tenantId, input, asOf),
     range,
     definitions: Object.fromEntries(metrics.map((m) => [m, METRICS[m].definition])),
     asOf,
