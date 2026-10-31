@@ -1,0 +1,198 @@
+# Runbook
+
+How to operate Oasis Pace: set it up, run it, load data, sync, add a brand, deploy and fix common problems. The reasons behind choices are in [decisions/](decisions/). Build order is in [priorities.md](priorities.md).
+
+**[paid]** marks a step that calls the model (it costs money). **[live]** marks a step that writes to Shopify or another real service. `CLAUDE.md` says to get the owner's go-ahead before `shopify app deploy`, uninstalling an app, `vercel --prod` and `npm run seed:load`.
+
+## 1. First-time setup
+
+Needs Node 22 or newer, npm, and the Shopify CLI (for deploys). Accounts: Shopify Dev Dashboard (two apps and two dev stores), Clerk, Neon, Vercel, AWS Bedrock. The values already chosen (shop domains, Clerk org ids, regions) are in [decisions/0000-setup.md](decisions/0000-setup.md).
+
+Copy `.env.example` to `.env.local` and fill it in. `.env.local` is never committed. Names only below.
+
+| Variable | Where it comes from |
+|---|---|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Clerk dashboard, API keys (development instance) |
+| `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL` | Copy the values in `.env.example` |
+| `DATABASE_URL` | Neon, the pooled connection string |
+| `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` | Dev Dashboard, Oasis Pace app, Settings, Credentials |
+| `SHOPIFY_APP_URL` | The deployed URL (OAuth uses its host name) |
+| `SEEDER_CLIENT_ID`, `SEEDER_CLIENT_SECRET` | Dev Dashboard, Oasis Pace Seeder app. Local seeding only: never put them on Vercel |
+| `SOLENNE_SHOP_DOMAIN`, `TIDEPOOL_SHOP_DOMAIN` | The stores' `.myshopify.com` domains. Scripts use them to find the brand |
+| `TOKEN_ENCRYPTION_KEY` | You make it: `openssl rand -base64 32`. Seals Shopify tokens (AES-256-GCM) |
+| `CRON_SECRET` | You make it: `openssl rand -hex 32`. The cron routes check it |
+| `AWS_BEARER_TOKEN_BEDROCK` | A Bedrock API key (AWS console). The AI SDK reads it itself |
+| `AWS_REGION` | In `.env.example`, but no code reads it. Each model's region is set in `lib/agent/models.ts` |
+| `BEDROCK_CLAUDE_ENABLED` | Optional. `true` switches on the Claude models (section 8) |
+| `TENANT_DAILY_BUDGET_USD` | Optional. Model spend cap per brand per UTC day (section 8) |
+| `REVIEWER_USER_IDS` | Optional. Clerk user ids of the reviewer logins, comma separated (section 10) |
+| `LANGFUSE_*` | Not used yet |
+
+Use the same `TOKEN_ENCRYPTION_KEY` locally and on Vercel. Both read tokens stored in the one database. If it changes, stored tokens can't be read and each store must be reconnected.
+
+## 2. Running locally
+
+```
+npm ci
+npm run db:migrate     # section 3
+npm run dev
+```
+
+There is one Neon database. `npm run dev`, the scripts and the deployed app all use it, so a local change is a change to live data. The app's only allowed OAuth redirect is the production callback (`shopify.app.toml`), so connect and reconnect stores on the deployed app, not on localhost.
+
+Checks before handing work over: `npm run typecheck`, `npm run lint`, and `npx vitest run <files>` for the files you changed. The full `npm test` takes about a minute (three workers, set in `vitest.config.ts`) and is run once at the end of a ticket. CI runs typecheck, lint and `npm test` on pushes to `main` and on pull requests, with no secrets.
+
+## 3. Database
+
+- The schema is `lib/db/schema.ts`. Migrations are SQL files in `drizzle/` (`0000` to `0005`).
+- After a schema change: `npm run db:generate` writes a new SQL file (commit it), then `npm run db:migrate` applies every pending file to `DATABASE_URL` and prints the host.
+- Migrations run by hand. Neither CI nor a deploy runs them. Migrate before you deploy code that needs the change.
+- Neon runs Postgres 18. Tests run PGlite, an in-memory Postgres, so avoid features only Postgres 18 has (such as `uuidv7()`).
+- Tests that need a database call `createTestDb()` (`lib/db/test-db.ts`). It builds one in-memory database per test file, applies `drizzle/`, and empties the tables on each later call. Use `createTestDb({ fresh: true })` only when a test needs two databases at once. No secrets are needed.
+
+## 4. Loading data
+
+Three different things. Do not mix them up.
+
+| Command | What it does |
+|---|---|
+| `npm run seed:generate -- --store solenne\|tidepool\|all --as-of 2026-10-31` | Writes `dataset.json`, `truth.json`, `plan.csv` and `ad-spend.csv` to `fixtures/<store>/`. Deterministic (seed 42). It overwrites the committed files, which match the loaded stores, so only rerun it to change the data |
+| `npm run seed:load -- --store <store> [--dry-run] [--limit N]` **[live]** | Creates the products, customers, orders and refunds in the dev store through the seeder app. About 5 orders a minute, so a full Solenne load takes hours. Resumable: `.seed-journal/<store>.json` (git-ignored) records what is done, so keep it. `--dry-run` makes no network calls. Ask first |
+| `npm run fixtures:load -- [--store solenne\|tidepool\|both] [--check]` | Loads `plan.csv`, `ad-spend.csv`, `calendar.csv` and `call-notes/*.md` into Postgres for the brand that owns the store. Safe to repeat. `--check` only validates the files |
+
+`fixtures:load` needs the shop to be connected to a brand already (it finds the brand from the `*_SHOP_DOMAIN` variable). It manages only the fixture plan, so a plan uploaded in the app is never overwritten. Pace needs the plan, MER and CAC need ad spend, and Why and landing pages from a campaign need the calendar.
+
+`npm run reconcile:truth -- --store solenne|tidepool [--journal <file>]` is read-only. It compares the synced data with `truth.json` through the same `queryMetric` the agent uses, writes one section per store to `docs/evals/reconciliation.md`, and exits 1 if a difference has no explanation. Explanations live in `scripts/reconcile/explanations.ts`. Add one when you make an extra order in a store, or it shows up as a difference. Without the seed journal, storyline checks on products and variants are skipped. Last run (2026-10-31): no differences on either store.
+
+## 5. Syncing
+
+A sync reads products, variants, orders (with lines and refunds) and inventory through paged GraphQL queries and upserts them into Postgres. It never deletes rows. Each run is a row in `sync_runs`. A run with no result after 15 minutes counts as dead and no longer blocks a new one.
+
+- **On connect.** The OAuth callback starts the first sync.
+- **Resync.** The Resync button on `/connect` (`gc_admin` and `gc_partner`) posts to `/api/sync`. The work runs after the response, and the page refreshes every 10 seconds while it runs.
+- **Daily cron.** `/api/cron/refresh` runs at 07:00 UTC (`vercel.json`) and syncs every connected store in turn. One failing store does not stop the rest. It needs `Authorization: Bearer <CRON_SECRET>`. With no `CRON_SECRET` set it answers 500, with a wrong one 401. Vercel runs crons on production deployments only. To run it by hand: `curl -H "Authorization: Bearer $CRON_SECRET" <app url>/api/cron/refresh`.
+- **`orders/create` webhook.** Shopify posts to `/api/webhooks/shopify`. The route checks the HMAC on the raw body (`SHOPIFY_API_SECRET`), takes the shop from the `X-Shopify-Shop-Domain` header, drops duplicates (`webhook_events`), re-fetches the order by id and upserts it. A failure answers 500 and Shopify retries. The same route handles `app/uninstalled` (clears the token, marks the shop disconnected) and records the three compliance topics. The subscriptions are live only after `shopify app deploy`.
+- **Probe.** `npm run sync:probe -- --store <store> [--pages N]` runs the sync's own queries against the real store with the stored token and prints counts, query cost and timings. It is read-only. Use it before a deploy that changes a sync query.
+
+Shopify shows an app only orders created in the last 60 days unless it holds `read_all_orders`. Seeded orders carry the import time as `createdAt`, so the first load stops being readable around 2026-12-30. Rows already synced stay, because sync is upsert only. A store connected after that date would sync no history.
+
+## 6. Connecting a store and updating permissions
+
+Only a `gc_admin` can connect. On `/connect`, enter the `.myshopify.com` address and press Connect store. The app sends the admin through Shopify's consent screen, stores the encrypted offline token with the granted scopes, the time zone and the currency, then starts the first sync.
+
+- The app asks for the scopes in `shopify.app.toml` (also `REQUESTED_SCOPES` in `lib/shopify/connect.ts`). Only the five read scopes are required to connect. A store without a write scope still connects. The write that needs it fails later with Shopify's own message.
+- Shopify lists only `write_x` when both `read_x` and `write_x` are granted, because write includes read. The code counts a granted `write_x` as `read_x`, so this no longer causes `missing_scopes`.
+- **Update permissions** (a button shown to a `gc_admin` on a connected store) runs the same install flow for the same shop. Use it after `shopify app deploy` releases a version with new scopes. Shopify shows only what is new, the store stays connected, and a sync starts again.
+- One store per brand, and a store never moves to another brand (`shop_taken`, `tenant_has_shop`). After an uninstall the page shows Disconnected. Press Reconnect store.
+
+## 7. Adding a brand, and roles
+
+A signed-in user's brand comes from the Clerk session. Signing in never creates a brand. To add one:
+
+1. In Clerk, create an organization and add members with one of the role keys below.
+2. `npm run tenant:create -- --org <clerkOrgId> [--name <name>]`. Without `--name` it looks the name up with `CLERK_SECRET_KEY`. Running it again for the same org changes nothing.
+3. Sign in with that org active. A `gc_admin` connects the store (section 6).
+
+The Clerk instance is invite-only, and users can't create organizations. The built-in `org:admin` and `org:member` roles give no access.
+
+| Role (Clerk key) | Can do |
+|---|---|
+| `gc_admin` (`org:gc_admin`) | Everything below, plus connect, reconnect and update permissions |
+| `gc_partner` (`org:gc_partner`) | Chat, Pace, Resync, upload and confirm plans, propose and approve actions, approve briefs, open the portfolio, confirm notes |
+| `client_viewer` (`org:client_viewer`) | Chat and Pace for their own brand, read confirmed notes, read approved briefs. No calendar or call notes, no writes, no portfolio, no plan |
+
+Reviewer demo logins: `reviewer-gc+clerk_test@example.com` is `gc_partner` in both brands, and `reviewer-client+clerk_test@example.com` is `client_viewer` in Solenne.
+
+## 8. The agent and models
+
+`lib/agent/models.ts` is the registry of models the server will use. The chat picker sends an app id (`devstral-2`, `claude-sonnet-5-5`, and so on), never a Bedrock id. Anything not in the registry is refused with `INVALID_INPUT`.
+
+- With `BEDROCK_CLAUDE_ENABLED` unset, the only model is Devstral 2 (`mistral.devstral-2-123b`), used for every role.
+- With `BEDROCK_CLAUDE_ENABLED=true` (exactly that string), the Claude entries switch on: chat uses Sonnet 5.5, the "why" synthesis uses Opus 5.5, and the summary role uses Haiku 5.5 (nothing calls the summary role yet).
+- Turn it on only after AWS has granted Claude access to the account. Until then every Claude call fails with an access error. See [decisions/0000-setup.md](decisions/0000-setup.md). After flipping it, run `npm run eval`.
+- Prices in the registry feed only the spend cap, and they are estimates. Claude's reasoning effort is set through `output_config.effort`, which has not been verified on Bedrock.
+- **Spend cap.** `TENANT_DAILY_BUDGET_USD` is the cap per brand per UTC day (default 5, the same for every brand). A missing or invalid value gives the default, never no cap. It counts chat runs only (not eval or brief runs). The chat warns at 80% and answers `BUDGET_EXCEEDED` at 100% until midnight UTC.
+- **Loop.** At most 8 steps and a 90-second turn limit. A timeout or 5xx is retried once on the same model. The number checker compares every number in the answer with this turn's tool results, sends one repair turn if any are unmatched, and flags what is still unmatched.
+- **Audit.** `agent_runs` (one per turn: model, tokens, cost in millionths of a dollar, status, error code) and `agent_steps` (one per tool call, with the model's own arguments). Prompts, answers and tool results are not stored. Provider error text goes to the server log only.
+- `npm run chat:try -- --store solenne|tidepool --q "<question>" [--model <id>]` **[paid]** asks the real agent one question against the synced data and prints the answer, tool steps, number check and cost.
+
+## 9. Evals
+
+`npm run eval -- [--case <id>]... [--model <id>] [--out <file>]` **[paid]** needs `AWS_BEARER_TOKEN_BEDROCK` in `.env.local`. It asks the real model each case against the fixture data in an in-memory database (not the live one), with the clock pinned per case. Graders are deterministic, and expected numbers come from the dataset and fixture files, not from `lib/metrics`. It exits 1 if a case fails.
+
+- The cases are in `evals/cases.ts` and `evals/why-cases.ts` (eight today: pacing gauge, remembered note, MER, and five "why" cases).
+- It writes `docs/evals/latest.md` and `latest.json` only when every case was run (no `--case`). The committed files are from the earlier three-case run (3 of 3 on Devstral 2). `--out` writes the run's JSON to a path you choose.
+- `AGENT_SINGLE_AGENT=true` leaves out `explain_gap`, to compare one agent with the multi-agent "why". It is for evals only.
+- Run it when you change `lib/agent`, `lib/tools`, prompts or `models.ts`. CI does not run it.
+- `docs/evals/reconciliation.md` comes from `reconcile:truth` (section 4), not from this.
+
+## 10. Approved writes
+
+The agent can ask for a change. It cannot make one.
+
+1. A `gc_admin` or `gc_partner` asks in chat. The model calls `propose_action` with typed fields. The kinds are `metric_target` (Shopify Metric Target for net sales or orders), `annotation` (a chart annotation) and `discount_deactivate` (turn a discount code off; the code stays in the store). A landing page is the fourth kind (section 11). At most three proposals per turn.
+2. The server validates the payload, builds the GraphQL itself (user text only goes in variables), stores the payload with its hash in the `actions` table, and shows an approval card in chat and on `/actions`.
+3. A `gc_admin` or `gc_partner` approves or rejects (`/api/actions/<id>`). Approval re-checks the payload against its hash, then moves proposed to approved to running in one conditional update, so a double click runs once. The result is `done` or `failed`, or `rejected`.
+4. The ledger keeps who decided, when, the payload, and the result or error. A `client_viewer` can neither propose nor decide.
+
+**Reviewer dry runs.** If the approver's Clerk user id is in `REVIEWER_USER_IDS`, the approval is recorded as a dry run: the card shows the exact mutations, the action is marked `done` with `dryRun` set, and Shopify is never called. With the variable empty, nobody is a reviewer. The same applies to brief approvals (section 13).
+
+Writes need their scopes: `write_reports` (target), `write_analytics_annotations`, `write_discounts` (with `read_discounts` for the code lookup). Shopify refuses a second target for the same metric and dates, and limits annotations per app per shop. The Oasis plan is not changed by a Metric Target.
+
+## 11. Landing pages
+
+`draft_landing_page` (GC roles) takes a campaign from the calendar or a product.
+
+- **The model writes words only:** a headline, subhead, 2 to 5 bullets, a button label and 1 to 6 product handles. No Liquid, HTML, links, prices or numbers (a number is allowed only if the campaign row holds it).
+- **The server does the rest:** it builds `sections/oasis-landing-<slug>.liquid` and `templates/page.oasis-landing-<slug>.json` from fixed templates, with the copy escaped. Prices and stock are Liquid objects (`| money`), read live. Its own lint rejects a typed price, an unknown product handle, scripts, external links and unneeded Liquid tags. Then Shopify's Theme Check runs on the files. A failed draft goes back to the model with the reasons. After a few failures in one answer it stops.
+- **On approval** the app finds the unpublished theme (the first named like "Copy of ...", else the first unpublished one; never the live theme), writes both files with `themeFilesUpsert`, and creates a hidden page `/pages/oasis-<slug>` that uses the template. A person publishes in the Shopify admin.
+- **The unpublished copy.** Each store needs one: in Shopify admin, Online Store, Themes, duplicate the live theme. With none, approval fails with a message that says so.
+- **The exemption.** Shopify allows `themeFilesUpsert` only for apps with an exemption, on top of the `write_themes` scope. This app does not have one. Without it Shopify refuses the write, nothing is written, and no page is created. The ledger marks the action done, and the card says it was approved but not written to the theme, with the `shopify theme push --store ... --theme ... --only <file>` command that finishes the job by hand. The Theme Access fallback (a password for the CLI) is not built.
+- To check a store: `npx tsx scripts/spikes/theme-write.ts --store solenne|tidepool [--write]`. Without `--write` it only reads the granted scopes and themes. With `--write` **[live]** it upserts one harmless snippet into an unpublished theme.
+
+## 12. Plan upload (`/plan`)
+
+GC roles only. Upload a SOW (PDF) or a plan sheet (CSV), up to 4 MB. The file type is checked from its bytes. Only the text is kept, not the file. A PDF can have at most 40 pages and 150,000 characters of text, and a scan with no text is refused.
+
+- A SOW is read in two model calls **[paid]**. Pass 1 lists each target with a verbatim quote and page, and drops any quote not found on that page. Pass 2 builds structured targets from those sentences. Targets a monthly plan can't hold (refund rate, a quarter total) are listed as not applied.
+- The review screen shows each target against the active plan. Confirm makes them the brand's active plan, which Pace and the agent use. Discard drops them. A decision is final. If reading failed, the upload stays and "read again" retries it.
+- `npx tsx scripts/plan-in-try.ts` **[paid]** reads the fixture SOW with the real model (two calls, no database) and prints the targets next to the expected ones.
+
+## 13. The Monday brief
+
+`/api/cron/brief` runs weekly, Monday 06:00 UTC (`vercel.json`), with the same `CRON_SECRET` check as the refresh. For each brand with a connected store, it asks the agent loop for a brief **[paid]** (the number checker runs on it) and stores it. The reply is counts: drafted, blocked, skipped (a brief for that week exists) and failed.
+
+- A brief the checker could not fully match, even after its repair turn, is stored as `blocked` and cannot be approved.
+- A `gc_admin` or `gc_partner` approves a draft on `/briefs`. Approval hands it to `lib/briefs/deliver.ts`.
+- **Delivery is a log line.** Slack is not added yet. Approval writes `[brief] delivered` (brand, week, brief id; never the body) to the server log and marks the brief delivered. A reviewer's approval writes `[brief] dry run` and leaves it undelivered. Slack goes in `deliver.ts`, after the approval check, and nowhere else.
+- To run it by hand: `curl -H "Authorization: Bearer $CRON_SECRET" <app url>/api/cron/brief`. It makes one model run per connected brand.
+
+## 14. Deploying
+
+Vercel builds and deploys every push to `main` (project `oasis-pace`). Environment variables are set in the Vercel project, and a change takes effect on the next deploy. The app needs everything in section 1 except the `SEEDER_*` and `*_SHOP_DOMAIN` variables.
+
+1. `npm run typecheck`, `npm run lint`, `npm test`.
+2. If the schema changed: `npm run db:migrate`.
+3. Push to `main`. Do not run `vercel --prod` without the owner's go-ahead.
+4. If `shopify.app.toml` changed (scopes, webhooks, URLs), the owner runs `shopify app deploy --allow-updates`. It needs a browser login and releases a new app version. `[webhooks] api_version` in the toml must equal `lib/shopify/version.ts` (a test checks it).
+5. After new scopes, a `gc_admin` presses Update permissions in each store (section 6).
+6. Check both reviewer logins from a fresh browser.
+
+## 15. Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `/connect?error=missing_scopes` | A required read scope was not granted. Press Reconnect store and accept every permission |
+| A write fails with an "access denied" or scope message | The store lacks a write scope. Release the scope with `shopify app deploy`, then press Update permissions and accept it |
+| `STORE_DISCONNECTED` ("The store needs reconnecting") | The app was uninstalled or the token cleared. A `gc_admin` presses Reconnect store on `/connect` |
+| "This brand isn't set up yet" (`no_tenant`) | The Clerk org has no tenant. Run `npm run tenant:create` (section 7) |
+| `BUDGET_EXCEEDED` | The brand hit `TENANT_DAILY_BUDGET_USD` for the UTC day. It resets at midnight UTC. To raise the cap, change the variable in Vercel and redeploy. Spend is the sum of `cost_micros` in `agent_runs` where `source = 'chat'` since 00:00 UTC |
+| Answers look old, or `DATA_STALE` | The code defines `DATA_STALE` and has banner text for it, but nothing raises it yet. Check "Data as of" and the last run on `/connect`, press Resync, and check the Vercel cron log. A store whose newest order is over 36 hours old uses the demo clock, so "today" is the day after that order |
+| "A sync is already running" | A run is open. It is treated as dead after 15 minutes. A failed run shows its error on `/connect` |
+| A sync fails with "Access denied ... Required access" | A query asks for a field behind a scope the app lacks. Run `npm run sync:probe` to see it, and remove the field or add the scope |
+| Cron route answers 401 or 500 | `CRON_SECRET` is wrong or not set in Vercel |
+| Webhook answers 401 | The HMAC failed. Check `SHOPIFY_API_SECRET` in Vercel. If new orders never arrive and nothing is logged, `shopify app deploy` may not have released the `orders/create` subscription yet |
+| Theme Check fails or times out | Theme Check runs inside the chat function on bundled docs (`next.config.ts` includes them) and may try one network fetch. If it can't finish in 30 seconds the draft fails with "Theme Check did not finish in time". This has not been verified on the deployed route. Check Vercel Logs. The bundled docs are included through `outputFileTracingIncludes` in `next.config.ts` |
+| `INTERNAL_ERROR` in chat | Provider and unexpected errors are shown as this. The detail is in Vercel Logs, and failed tool calls are in `agent_steps` |
+| Every Claude call fails with an access error | `BEDROCK_CLAUDE_ENABLED=true` was set before AWS granted access. Unset it to go back to Devstral |
+| `reconcile:truth` shows a difference | An extra order or a changed fixture. Add a note in `scripts/reconcile/explanations.ts`, or find the real cause |
