@@ -10,5 +10,8 @@ export default defineConfig({
     // when the machine is busy. The default 5 s timeout made that flaky.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // The database tests each hold an in-memory Postgres of 0.5 to 1 GB. On this 8 GB machine, a worker for every core
+    // (the default) ran the editor out of memory, so only three files run at once.
+    maxWorkers: 3,
   },
 });

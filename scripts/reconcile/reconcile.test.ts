@@ -35,7 +35,7 @@ describe.each(["solenne", "tidepool"] as const)("reconcileStore on a faithful sy
 describe("reconcileStore on data that has gone wrong", () => {
   // Each test gets its own small database, because it breaks the data on purpose.
   async function tidepool() {
-    const d = await createTestDb();
+    const d = await createTestDb({ fresh: true });
     const [t] = await d.insert(tenants).values({ orgId: "org_t", name: "Tidepool" }).returning();
     const fx = readFixture("tidepool");
     await loadDataset(d, t!.id, "tidepool", fx.dataset);

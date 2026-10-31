@@ -2,10 +2,14 @@
 
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { linkClaims, type MatchedClaim } from "@/lib/agent/links";
 import type { ProvenanceEntry } from "@/lib/agent/run";
 import type { Role } from "@/lib/tenancy/context";
+import type { ViewPayload } from "@/lib/views/types";
+import { PinButton } from "../views/pin-button";
+import { ViewRenderer } from "../views/view-renderer";
+import { MemoryCard, type MemoryCardState } from "./memory-card";
 import { ERROR_COPY, ErrorBanner, type ChatErrorCode } from "./error-banner";
 import { SafeMarkdown, toolLabel } from "./safe-markdown";
 
@@ -41,7 +45,7 @@ function ToolChip({ part }: { part: Part }) {
   );
 }
 
-function AssistantMessage({ message }: { message: UIMessage }) {
+function AssistantMessage({ message, role, currency }: { message: UIMessage; role: Role; currency: string }) {
   const provenanceList = dataOf<ProvenanceEntry[]>(message, "data-provenance") ?? [];
   const provenance = Object.fromEntries(provenanceList.map((p) => [p.queryId, p]));
   const verification = dataOf<Verification>(message, "data-verification");
@@ -49,7 +53,8 @@ function AssistantMessage({ message }: { message: UIMessage }) {
   const lastText = message.parts.findLastIndex((p) => p.type === "text");
   const truncated = provenanceList.filter((p) => p.truncated);
   // A call that failed and was then made again successfully (the model fixing its own arguments) is not worth a red line.
-  const toolParts = message.parts.filter((p) => toolName(p));
+  // render_view and remember show their result (a view, a note card), not a status line.
+  const toolParts = message.parts.filter((p) => toolName(p) && toolName(p) !== "render_view" && toolName(p) !== "remember");
   const chips = toolParts.filter((p, i) => (p as { state?: string }).state !== "output-error" || !toolParts.slice(i + 1).some((q) => toolName(q) === toolName(p) && (q as { state?: string }).state === "output-available"));
 
   return (
@@ -60,6 +65,19 @@ function AssistantMessage({ message }: { message: UIMessage }) {
         ))}
       </ul>
       {message.parts.map((p, i) => {
+        if (p.type === "data-view") {
+          const view = (p as { data: ViewPayload }).data;
+          return (
+            <div key={i} className="space-y-2">
+              <ViewRenderer data={view.data} title={view.title} currency={currency} />
+              <PinButton title={view.title} component={view.component} sources={view.sources} />
+            </div>
+          );
+        }
+        if (p.type === "data-memory") {
+          const note = (p as { data: { id: string; text: string; status: MemoryCardState } }).data;
+          return <MemoryCard key={i} id={note.id} text={note.text} status={note.status} canDecide={role === "gc_admin" || role === "gc_partner"} />;
+        }
         if (p.type !== "text") return null;
         const text = (p as { text: string }).text;
         if (repairAt >= 0 && i < repairAt) {
@@ -92,9 +110,33 @@ function AssistantMessage({ message }: { message: UIMessage }) {
   );
 }
 
-export function ChatClient({ role, models, defaultModelId, suggestions }: { role: Role; models: { id: string; label: string }[]; defaultModelId: string; suggestions: readonly string[] }) {
-  const transport = useMemo(() => new DefaultChatTransport({ api: "/api/chat" }), []);
-  const { messages, sendMessage, regenerate, status, error } = useChat({ transport });
+interface ChatProps {
+  role: Role;
+  models: { id: string; label: string }[];
+  defaultModelId: string;
+  suggestions: readonly string[];
+  currency: string;
+}
+
+// One conversation. The server keeps the model's history; the browser sends only the newest question and the thread id,
+// which arrives in the stream (data-thread) once the first answer starts.
+function ChatSession({ role, models, defaultModelId, suggestions, currency, threadId, initial, onSaved, onThread }: ChatProps & { threadId: string | null; initial: UIMessage[]; onSaved: () => void; onThread: (id: string) => void }) {
+  const threadRef = useRef<string | null>(threadId);
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: "/api/chat", prepareSendMessagesRequest: ({ messages, body }) => ({ body: { ...body, messages: messages.slice(-1) } }) }),
+    [],
+  );
+  const { messages, sendMessage, regenerate, status, error } = useChat({
+    transport,
+    messages: initial,
+    onData: (part) => {
+      if (part.type === "data-thread") {
+        threadRef.current = (part.data as { id: string }).id;
+        onThread(threadRef.current);
+      }
+    },
+    onFinish: () => onSaved(),
+  });
   const [input, setInput] = useState("");
   const [modelId, setModelId] = useState(defaultModelId);
   const end = useRef<HTMLDivElement>(null);
@@ -107,7 +149,7 @@ export function ChatClient({ role, models, defaultModelId, suggestions }: { role
     const clean = text.trim();
     if (!clean || busy) return;
     setInput("");
-    void sendMessage({ text: clean }, { body: { modelId } });
+    void sendMessage({ text: clean }, { body: { modelId, ...(threadRef.current ? { threadId: threadRef.current } : {}) } });
   };
 
   return (
@@ -131,7 +173,7 @@ export function ChatClient({ role, models, defaultModelId, suggestions }: { role
                 <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-neutral-900 px-4 py-2 text-sm text-white">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</p>
               ) : (
                 <div className="max-w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3">
-                  <AssistantMessage message={m} />
+                  <AssistantMessage message={m} role={role} currency={currency} />
                 </div>
               )}
             </li>
@@ -140,7 +182,7 @@ export function ChatClient({ role, models, defaultModelId, suggestions }: { role
       )}
 
       {busy && messages.at(-1)?.role === "user" ? <p className="text-xs text-neutral-500">Thinking…</p> : null}
-      {code ? <ErrorBanner code={code} role={role} onRetry={() => void regenerate({ body: { modelId } })} /> : null}
+      {code ? <ErrorBanner code={code} role={role} onRetry={() => void regenerate({ body: { modelId, ...(threadRef.current ? { threadId: threadRef.current } : {}) } })} /> : null}
       <div ref={end} />
 
       <form
@@ -179,6 +221,86 @@ export function ChatClient({ role, models, defaultModelId, suggestions }: { role
           </label>
         ) : null}
       </form>
+    </div>
+  );
+}
+
+interface ThreadItem {
+  id: string;
+  title: string;
+}
+
+async function fetchThreads(): Promise<ThreadItem[] | null> {
+  const res = await fetch("/api/threads").catch(() => null);
+  return res?.ok ? ((await res.json()) as { threads: ThreadItem[] }).threads : null;
+}
+
+export function ChatClient(props: ChatProps) {
+  const [session, setSession] = useState<{ key: number; threadId: string | null; initial: UIMessage[] }>({ key: 0, threadId: null, initial: [] });
+  const [threads, setThreads] = useState<ThreadItem[]>([]);
+  const [problem, setProblem] = useState("");
+
+  const refresh = useCallback(() => fetchThreads().then((list) => list && setThreads(list)), []);
+  useEffect(() => {
+    let alive = true;
+    void fetchThreads().then((list) => alive && list && setThreads(list));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const fresh = () => {
+    setProblem("");
+    setSession((s) => ({ key: s.key + 1, threadId: null, initial: [] }));
+  };
+  async function open(id: string) {
+    const res = await fetch(`/api/threads/${id}`).catch(() => null);
+    if (!res?.ok) return setProblem("Couldn't open that conversation.");
+    const saved = (await res.json()) as { messages: UIMessage[] };
+    setProblem("");
+    setSession((s) => ({ key: s.key + 1, threadId: id, initial: saved.messages }));
+  }
+  async function remove(id: string) {
+    const res = await fetch(`/api/threads/${id}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) return setProblem("Couldn't delete that conversation.");
+    if (session.threadId === id) fresh();
+    void refresh();
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <button type="button" onClick={fresh} className="rounded-md border border-neutral-300 bg-white px-3 py-1 hover:border-neutral-500">
+          New chat
+        </button>
+        {threads.length > 0 ? (
+          <>
+            <label className="sr-only" htmlFor="saved-chats">
+              Saved conversations
+            </label>
+            <select
+              id="saved-chats"
+              value={session.threadId ?? ""}
+              onChange={(e) => (e.target.value ? void open(e.target.value) : fresh())}
+              className="max-w-xs rounded-md border border-neutral-300 bg-white px-2 py-1"
+            >
+              <option value="">Saved conversations…</option>
+              {threads.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.title}
+                </option>
+              ))}
+            </select>
+            {session.threadId ? (
+              <button type="button" onClick={() => void remove(session.threadId!)} className="rounded-md border border-neutral-300 bg-white px-3 py-1 text-neutral-600 hover:border-neutral-500">
+                Delete this conversation
+              </button>
+            ) : null}
+          </>
+        ) : null}
+        {problem ? <span role="alert" className="text-xs text-red-700">{problem}</span> : null}
+      </div>
+      <ChatSession key={session.key} {...props} threadId={session.threadId} initial={session.initial} onSaved={refresh} onThread={(id) => setSession((s) => (s.threadId === id ? s : { ...s, threadId: id }))} />
     </div>
   );
 }

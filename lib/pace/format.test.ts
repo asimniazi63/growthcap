@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatGap, formatPct, formatValue, monthName } from "./format";
+import { formatGap, formatMove, formatPct, formatRange, formatUnit, formatValue, monthName } from "./format";
 
 describe("formatValue", () => {
   it("writes money in dollars from cents, counts plainly, and rates as percentages", () => {
@@ -35,5 +35,23 @@ describe("monthName", () => {
   it("writes a month in words", () => {
     expect(monthName("2026-10")).toBe("October 2026");
     expect(monthName("2026-01")).toBe("January 2026");
+  });
+});
+
+describe("formatUnit, formatMove and formatRange", () => {
+  it("formats by unit, including a ratio", () => {
+    expect(formatUnit("ratio", 2.5, "USD")).toBe("2.50x");
+    expect(formatUnit("money", 100, "USD")).toBe("$1.00");
+  });
+  it("says a change in words", () => {
+    expect(formatMove(-0.2826)).toBe("down 28.3%");
+    expect(formatMove(0.04)).toBe("up 4.0%");
+    expect(formatMove(0)).toBe("no change");
+    expect(formatMove(null)).toBeNull();
+  });
+  it("writes a range of dates compactly", () => {
+    expect(formatRange("2026-09-01", "2026-09-30")).toBe("September 1 to 30, 2026");
+    expect(formatRange("2026-09-28", "2026-10-03")).toBe("September 28 to October 3, 2026");
+    expect(formatRange("2026-10-05", "2026-10-05")).toBe("October 5, 2026");
   });
 });

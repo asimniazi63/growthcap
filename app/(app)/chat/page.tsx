@@ -1,10 +1,12 @@
 import { ChatClient } from "@/components/chat/chat-client";
 import { ErrorBanner } from "@/components/chat/error-banner";
+import { NotesPanel } from "@/components/chat/notes-panel";
 import { SUGGESTED_QUESTIONS } from "@/components/chat/suggestions";
 import { budgetStatus } from "@/lib/agent/budget";
 import { availableModels, defaultModelId } from "@/lib/agent/models";
 import { isDemoClock } from "@/lib/clock";
 import { getDb } from "@/lib/db/client";
+import { listMemories } from "@/lib/memory/store";
 import { METRIC_IDS, METRICS } from "@/lib/metrics/registry";
 import { getTenantContext, type TenantContext } from "@/lib/tenancy/context";
 import { loadWindow } from "@/lib/tools/common";
@@ -30,7 +32,11 @@ export default async function ChatPage() {
 
   const connected = ctx.shop?.status === "connected";
   const db = getDb();
-  const [win, budget] = await Promise.all([loadWindow(db, ctx.tenantId).catch(() => null), budgetStatus(ctx.tenantId, { db }).catch(() => null)]);
+  const [win, budget, notes] = await Promise.all([
+    loadWindow(db, ctx.tenantId).catch(() => null),
+    budgetStatus(ctx.tenantId, { db }).catch(() => null),
+    listMemories(db, ctx.tenantId).catch(() => []),
+  ]);
   const demoThrough = connected && ctx.shop && win?.last && isDemoClock(ctx.shop.timezone, win.newest) ? win.last : null;
   const models = availableModels().map((m) => ({ id: m.id, label: m.label }));
 
@@ -53,7 +59,9 @@ export default async function ChatPage() {
       ) : null}
       {!connected ? <ErrorBanner code="STORE_DISCONNECTED" role={ctx.role} /> : null}
 
-      <ChatClient role={ctx.role} models={models} defaultModelId={defaultModelId("chat")} suggestions={SUGGESTED_QUESTIONS} />
+      <ChatClient role={ctx.role} models={models} defaultModelId={defaultModelId("chat")} suggestions={SUGGESTED_QUESTIONS} currency={ctx.shop?.currency ?? "USD"} />
+
+      <NotesPanel notes={notes.filter((n) => n.status !== "dismissed").map((n) => ({ id: n.id, text: n.text, status: n.status === "confirmed" ? ("confirmed" as const) : ("proposed" as const) }))} role={ctx.role} />
 
       <details className="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm">
         <summary className="cursor-pointer font-medium">What the metrics mean</summary>

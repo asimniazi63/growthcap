@@ -2,6 +2,7 @@ import { APICallError, convertToModelMessages, createUIMessageStream, isStepCoun
 import type { Db } from "../db/client";
 import type { AgentSource } from "../db/schema";
 import { AppError, type ErrorCode } from "../errors";
+import { confirmedNotes } from "../memory/store";
 import type { TenantContext } from "../tenancy/context";
 import { loadWindow, todayFor } from "../tools/common";
 import { requireConnectedShop, type ToolResult } from "../tools/result";
@@ -12,6 +13,7 @@ import { costUsd, resolveModel } from "./models";
 import { repairInstruction, SYSTEM_PROMPT, turnContext } from "./prompt";
 import { createModel, providerOptionsFor } from "./provider";
 import { buildTools, type ToolHooks } from "./tools";
+import { buildRememberTool, buildRenderViewTool, type TurnCall } from "./view-tools";
 
 // The one agent loop, used by the chat and by the evals. It runs the tools bound to the signed-in tenant, checks every
 // number in the answer against that turn's tool results, and asks the model to fix the answer once if any is unmatched.
@@ -25,9 +27,27 @@ const STEP_LIMIT_TEXT = "I couldn't finish that within my step limit. Try a narr
 
 type Env = Record<string, string | undefined>;
 
+// A saved conversation. Its history is what the provider returned, replayed as stored; the browser's earlier messages are
+// not used at all, only the newest question.
+export interface ThreadInput {
+  id: string;
+  title: string;
+  history: ModelMessage[];
+  ui: UIMessage[]; // the display copy so far
+}
+
 export interface AgentInput {
   messages: UIMessage[]; // from the browser: never trusted beyond their text
   modelId?: string; // from the picker: checked against the registry
+  thread?: ThreadInput;
+}
+
+export interface TurnSaved {
+  threadId: string;
+  title: string;
+  delta: ModelMessage[]; // what the model exchanged this turn, exactly as sent and returned
+  ui: UIMessage[]; // the whole display copy, built from the stream the server sent
+  summary: RunSummary;
 }
 
 export interface AgentDeps {
@@ -36,6 +56,7 @@ export interface AgentDeps {
   now?: Date;
   source?: AgentSource;
   model?: LanguageModel; // tests inject a mock
+  onTurn?: (turn: TurnSaved) => Promise<void>; // called after a thread's turn finished without an error
 }
 
 export interface RunSummary {
@@ -131,7 +152,32 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
     resolveFinished(summary);
   }
 
+  // The display copy of a saved thread is built from this turn's own stream, starting from what was saved plus the newest
+  // question (text only). If that question can't be read, execute fails with the same error below.
+  let userUi: UIMessage | null = null;
+  if (input.thread) {
+    try {
+      userUi = sanitizeMessages(input.messages.slice(-1))[0] ?? null;
+    } catch {
+      userUi = null;
+    }
+  }
+  let delta: ModelMessage[] = [];
+
   const stream = createUIMessageStream({
+    ...(input.thread && userUi
+      ? {
+          originalMessages: [...input.thread.ui, userUi],
+          onEnd: async ({ messages }: { messages: UIMessage[] }) => {
+            if (summary.status !== "ok" || !deps.onTurn) return;
+            try {
+              await deps.onTurn({ threadId: input.thread!.id, title: input.thread!.title, delta, ui: messages, summary });
+            } catch (e) {
+              console.error("[agent] could not save the thread:", e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200));
+            }
+          },
+        }
+      : {}),
     execute: async ({ writer }) => {
       try {
         const env = deps.env ?? process.env;
@@ -140,17 +186,31 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
         await assertBudget(ctx.tenantId, { db, now: deps.now, env });
         const spec = resolveModel(input.modelId, "chat", env);
         summary.modelId = spec.id;
-        const history = sanitizeMessages(input.messages);
+        const history = sanitizeMessages(input.thread ? input.messages.slice(-1) : input.messages);
         runId = await beginRun(db, { tenantId: ctx.tenantId, userId: ctx.userId, role: ctx.role, source: deps.source ?? "chat", modelId: spec.id });
 
         const win = await loadWindow(db, ctx.tenantId);
-        const context = turnContext({ today: todayFor(shop.timezone, win), timezone: shop.timezone, asOf: win.synced });
-        const modelMessages = await convertToModelMessages(withContext(history, context));
+        const notes = await confirmedNotes(db, ctx.tenantId).catch(() => [] as string[]);
+        const context = turnContext({ today: todayFor(shop.timezone, win), timezone: shop.timezone, asOf: win.synced, notes });
+        let userMessage: ModelMessage | null = null; // what is saved for this question: the text without the per-turn context
+        let modelMessages: ModelMessage[];
+        if (input.thread) {
+          // Replayed as stored; only the newest question is new, with this turn's context in front of it.
+          const text = history.at(-1)!.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+          // The context (today's date, the confirmed notes) goes to the model with this question but is not saved with it, so a
+          // later turn doesn't replay a date that has rolled over or a note that has since been removed.
+          userMessage = { role: "user", content: [{ type: "text", text }] };
+          modelMessages = [...input.thread.history, { role: "user", content: [{ type: "text", text: `${context}\n\n` }, { type: "text", text }] }];
+          writer.write({ type: "data-thread", data: { id: input.thread.id, title: input.thread.title } });
+        } else {
+          modelMessages = await convertToModelMessages(withContext(history, context));
+        }
 
         // What the checker and the provenance popover are built from: this turn's own tool results.
         const results: ToolResult<unknown>[] = [];
         const inputs: unknown[] = [];
         const provenance = new Map<string, ProvenanceEntry>();
+        const calls = new Map<string, TurnCall>();
         let fatal: unknown = null;
         let modelError: unknown = null;
         const dbRef = db;
@@ -159,6 +219,7 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
           onSuccess: ({ tool, input: toolInput, result, latencyMs }) => {
             results.push(result);
             inputs.push(toolInput);
+            calls.set(result.queryId, { tool, input: toolInput, result });
             provenance.set(result.queryId, { queryId: result.queryId, tool, input: toolInput, range: result.range, asOf: result.asOf, definitions: result.definitions, ...(result.truncated ? { truncated: result.truncated } : {}) });
             pending.push(recordStep(dbRef, { runId: runId!, tenantId: ctx.tenantId, stepIndex: summary.steps++, tool, input: toolInput, ok: true, rowCount: Array.isArray(result.data) ? result.data.length : undefined, latencyMs }));
           },
@@ -169,7 +230,15 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
             fatal = error;
           },
         };
-        const tools = buildTools(ctx, hooks, { db });
+        const step = (e: { tool: string; input: unknown; ok: boolean; errorCode?: string; latencyMs: number }) =>
+          pending.push(recordStep(dbRef, { runId: runId!, tenantId: ctx.tenantId, stepIndex: summary.steps++, tool: e.tool, input: e.input, ok: e.ok, errorCode: e.errorCode, latencyMs: e.latencyMs }));
+        const write = (chunk: UIMessageChunk) => writer.write(chunk);
+        const tools = {
+          ...buildTools(ctx, hooks, { db }),
+          render_view: buildRenderViewTool({ calls, write, onStep: step, titleProblems: (title) => checkClaims(title, ledgerFromToolResults(results), inputs).unmatched.map((u) => u.text) }),
+          // Notes can be confirmed only by a Growth Capital admin or partner, so a client viewer is not offered the tool.
+          ...(ctx.role !== "client_viewer" ? { remember: buildRememberTool({ ctx, db, write, onStep: step }) } : {}),
+        };
         const model = deps.model ?? createModel(spec);
         const onError = (e: unknown) => toAppError(e).code;
 
@@ -224,6 +293,7 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
         const one = await settle(first);
         if (modelError) throw toAppError(modelError);
         if (fatal) throw fatal;
+        delta = [...(userMessage ? [userMessage] : []), ...(one?.produced ?? [])];
 
         let answer = one?.steps.at(-1)?.text ?? "";
         const hitCap = !answer || (one?.steps.at(-1)?.toolCalls.length ?? 0) > 0;
@@ -232,16 +302,19 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
           writer.write({ type: "text-start", id: "step-limit" });
           writer.write({ type: "text-delta", id: "step-limit", delta: STEP_LIMIT_TEXT });
           writer.write({ type: "text-end", id: "step-limit" });
+          delta.push({ role: "assistant", content: [{ type: "text", text: STEP_LIMIT_TEXT }] }); // keeps the saved history well formed
         }
 
         if (check && !check.ok && one) {
           summary.repaired = true;
           writer.write({ type: "data-repair", data: { unmatched: check.unmatched.map((u) => u.text) } });
-          const second = callModel([...modelMessages, ...one.produced, { role: "user", content: repairInstruction(check.unmatched.map((u) => u.text)) }], REPAIR_STEPS);
+          const repairMessage: ModelMessage = { role: "user", content: repairInstruction(check.unmatched.map((u) => u.text)) };
+          const second = callModel([...modelMessages, ...one.produced, repairMessage], REPAIR_STEPS);
           writer.merge(second.toUIMessageStream({ sendStart: false, sendFinish: false, onError }));
           const two = await settle(second);
           if (modelError) throw toAppError(modelError);
           if (fatal) throw fatal;
+          delta.push(repairMessage, ...(two?.produced ?? []));
           answer = two?.steps.at(-1)?.text ?? "";
           if (answer) check = verify(answer, 2);
         }

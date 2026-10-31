@@ -1,5 +1,6 @@
 import { ErrorBanner } from "@/components/chat/error-banner";
 import { PacePanel } from "@/components/pace/pace-panel";
+import { PinnedViews } from "@/components/pace/pinned-views";
 import { getDb } from "@/lib/db/client";
 import { AppError, type ErrorCode } from "@/lib/errors";
 import { getPaceView, type PaceView } from "@/lib/pace/view";
@@ -52,6 +53,7 @@ export default async function PacePage() {
         </p>
       ) : null}
       {view && ctx.shop ? <PacePanel view={view} currency={ctx.shop.currency} /> : null}
+      {ctx.shop?.status === "connected" ? <PinnedViews ctx={ctx} /> : null}
     </section>
   );
 }

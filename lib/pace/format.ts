@@ -1,9 +1,12 @@
-import { METRICS, type MetricId } from "../metrics/registry";
+import { METRICS, type MetricId, type MetricUnit } from "../metrics/registry";
 
 // Plain-words figures for the pace screen. Money arrives in cents and rates as fractions.
 
 export function formatValue(metric: MetricId, value: number, currency: string): string {
-  const unit = METRICS[metric].unit;
+  return formatUnit(METRICS[metric].unit, value, currency);
+}
+
+export function formatUnit(unit: MetricUnit, value: number, currency: string): string {
   if (unit === "money") return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value / 100);
   if (unit === "rate") return `${(value * 100).toFixed(1)}%`;
   if (unit === "ratio") return `${value.toFixed(2)}x`;
@@ -29,4 +32,19 @@ export function formatPct(fraction: number | null): string | null {
 export function monthName(month: string): string {
   const [y, m] = month.split("-").map(Number) as [number, number];
   return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, 1)));
+}
+
+// "up 4.0%" or "down 28.3%": a change over the earlier period, in words.
+export function formatMove(fraction: number | null | undefined): string | null {
+  if (fraction === null || fraction === undefined) return null;
+  const pct = (Math.abs(fraction) * 100).toFixed(1);
+  return fraction === 0 ? "no change" : `${fraction > 0 ? "up" : "down"} ${pct}%`;
+}
+
+// "September 1 to 30, 2026" or "September 28 to October 3, 2026".
+export function formatRange(from: string, to: string): string {
+  const day = (ymd: string, withMonth: boolean) => new Intl.DateTimeFormat("en-US", withMonth ? { month: "long", day: "numeric", timeZone: "UTC" } : { day: "numeric", timeZone: "UTC" }).format(new Date(`${ymd}T00:00:00Z`));
+  if (from === to) return `${day(from, true)}, ${from.slice(0, 4)}`;
+  const sameMonth = from.slice(0, 7) === to.slice(0, 7);
+  return `${day(from, true)} to ${day(to, !sameMonth)}, ${to.slice(0, 4)}`;
 }

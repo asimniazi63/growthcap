@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, date, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { EncryptedSecret } from "../crypto/secrets";
+import type { ViewSourceRef } from "../views/types";
 
 // One row per client brand, made only by `npm run tenant:create -- --org <orgId>`. orgId is the Clerk organization id.
 export const tenants = pgTable("tenants", {
@@ -296,4 +297,71 @@ export const planTargets = pgTable(
     value: doublePrecision("value").notNull(),
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.planId, t.month, t.metric] })],
+);
+
+// ---- Saved views, threads and memories (T6).
+// A pinned view keeps what re-runs it (the tool and its input), never the data, so it is fresh every time it loads.
+export const savedViews = pgTable(
+  "saved_views",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    userId: text("user_id").notNull(), // the Clerk user: pinned views are private to a person
+    title: text("title").notNull(),
+    component: text("component").notNull(),
+    sources: jsonb("sources").$type<ViewSourceRef[]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("saved_views_user_idx").on(t.tenantId, t.userId, t.createdAt)],
+);
+
+// A conversation. `ui` is the display copy the server built from its own stream (so it holds only what the server produced),
+// and the model's history lives in thread_messages, exactly as the provider returned it.
+export const threads = pgTable(
+  "threads",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    userId: text("user_id").notNull(),
+    title: text("title").notNull(),
+    ui: jsonb("ui").$type<unknown[]>().notNull().default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("threads_user_idx").on(t.tenantId, t.userId, t.updatedAt)],
+);
+
+// The exact provider messages, in order (assistant tool calls, tool results, reasoning blocks and their signatures
+// included). `turn` groups one question and everything the model did for it, so history can be cut only between turns.
+export const threadMessages = pgTable(
+  "thread_messages",
+  {
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => threads.id),
+    tenantId: tenantRef(),
+    seq: integer("seq").notNull(),
+    turn: integer("turn").notNull(),
+    message: jsonb("message").$type<unknown>().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.threadId, t.seq] })],
+);
+
+export const MEMORY_STATUSES = ["proposed", "confirmed", "dismissed"] as const;
+export type MemoryStatus = (typeof MEMORY_STATUSES)[number];
+
+// A fact or preference about a brand. The agent can only propose one; it is used in answers once a person confirms it.
+export const memories = pgTable(
+  "memories",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    text: text("text").notNull(),
+    status: text("status").$type<MemoryStatus>().notNull().default("proposed"),
+    proposedBy: text("proposed_by").notNull(), // the Clerk user whose chat produced it
+    decidedBy: text("decided_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [index("memories_status_idx").on(t.tenantId, t.status, t.createdAt)],
 );
