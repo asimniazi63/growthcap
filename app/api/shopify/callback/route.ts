@@ -1,3 +1,4 @@
+import { CookieNotFound } from "@shopify/shopify-api";
 import { after, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { shopifyGraphql } from "@/lib/shopify/client";
@@ -20,8 +21,10 @@ export async function GET(request: Request) {
   let grant;
   try {
     grant = await shopify().auth.callback({ rawRequest: request });
-  } catch {
-    return finish("oauth_failed");
+  } catch (e) {
+    // The reason is a class name or a short code, never a token or a query value.
+    console.error("[shopify] the OAuth callback failed:", e instanceof Error ? (e.constructor?.name ?? e.name) : "unknown");
+    return finish(e instanceof CookieNotFound ? "oauth_expired" : "oauth_failed");
   }
   const { session, headers } = grant;
   const cookies = headers as Headers;

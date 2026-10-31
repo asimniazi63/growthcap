@@ -18,6 +18,7 @@ const MESSAGES: Record<string, string> = {
   forbidden: "Only a Growth Capital admin can connect a store.",
   invalid_shop: "That doesn't look like a myshopify.com store address.",
   oauth_failed: "Shopify's response couldn't be verified. Start the connection again.",
+  oauth_expired: "Shopify's permission screen was open too long, so the approval could not be matched to this browser. Start again and approve within a few minutes.",
   shop_unreachable: "Connected to Shopify, but couldn't read the store's settings. Try again.",
   missing_scopes: "The app wasn't granted every permission it needs. Reinstall it and accept all of them.",
   shop_taken: "That store is already connected to another brand.",
