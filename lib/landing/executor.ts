@@ -76,6 +76,21 @@ export function landingMutations(payload: LandingPayload) {
 
 const numericId = (gid: string) => gid.split("/").pop() ?? gid;
 
+const GATED = /access denied for themefilesupsert|exemption/i;
+
+// What an approval returns when Shopify refuses the theme write: not an error, but not written either, and the card says so.
+function notWritten(payload: LandingPayload, theme: ThemeNode, shopDomain: string | undefined) {
+  const only = payload.files.map((f) => `--only ${f.path}`).join(" ");
+  return {
+    written: false,
+    reason: "Shopify lets an app write theme files only after an exemption request, and this app does not have one yet. Nothing was written and no page was created.",
+    themeId: theme.id,
+    themeName: theme.name,
+    files: payload.files.map((f) => f.path),
+    finishByHand: `Save the two files shown on this card into a theme folder, then run: shopify theme push --store ${shopDomain ?? "<store>.myshopify.com"} --theme ${numericId(theme.id)} ${only}`,
+  };
+}
+
 export const landingPageExecutor: Executor<LandingPayload> = {
   kind: LANDING_KIND,
   schema: landingPayloadSchema,
@@ -108,7 +123,16 @@ export const landingPageExecutor: Executor<LandingPayload> = {
     const found = themesResponse.parse(await env.graphql(THEMES_QUERY, {}));
     const theme = pickTheme(found.themes.nodes);
 
-    const upsert = upsertResponse.parse(await env.graphql(THEME_FILES_UPSERT, { themeId: theme.id, files: filesInput(payload) }));
+    let upsertRaw: unknown;
+    try {
+      upsertRaw = await env.graphql(THEME_FILES_UPSERT, { themeId: theme.id, files: filesInput(payload) });
+    } catch (e) {
+      // Shopify lets an app write theme files only after an exemption request. Without it nothing is written and no page is
+      // created (it would point at a template that doesn't exist); the result says so and gives the command that finishes it.
+      if (e instanceof AppError && GATED.test(e.message)) return notWritten(payload, theme, env.ctx.shop?.domain);
+      throw e;
+    }
+    const upsert = upsertResponse.parse(upsertRaw);
     const written = upsert.themeFilesUpsert.upsertedThemeFiles?.map((f) => f.filename) ?? [];
     if (payload.files.some((f) => !written.includes(f.path))) {
       throw new AppError("SHOPIFY_UNAVAILABLE", "Shopify did not confirm that both theme files were written. Nothing was published.", { retryable: true });

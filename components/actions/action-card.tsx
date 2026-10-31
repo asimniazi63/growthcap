@@ -223,7 +223,15 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
       ) : null}
       {view.status === "done" && !dryRun ? (
         <div className="mt-3 text-xs">
-          <p className="text-emerald-700">Done. Approved by {personLabel(view.decidedBy, me)}.</p>
+          {(view.result as { written?: boolean } | null | undefined)?.written === false ? (
+            <div role="status" className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900">
+              <p>Approved by {personLabel(view.decidedBy, me)}, but not written to the theme.</p>
+              <p className="mt-1">{String((view.result as { reason?: string }).reason ?? "")}</p>
+              <p className="mt-1 break-words font-mono">{String((view.result as { finishByHand?: string }).finishByHand ?? "")}</p>
+            </div>
+          ) : (
+            <p className="text-emerald-700">Done. Approved by {personLabel(view.decidedBy, me)}.</p>
+          )}
           {view.result != null ? (
             <details className="mt-1">
               <summary className="cursor-pointer text-sky-800">Result</summary>

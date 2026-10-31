@@ -252,7 +252,7 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
             summary.outputTokens += used?.outputTokens ?? 0;
             provenance.set(queryId, { queryId, tool: call.tool, input: call.input, range: call.result.range, asOf: call.result.asOf, definitions: call.result.definitions, ...(call.result.truncated ? { truncated: call.result.truncated } : {}) });
           }),
-        });
+        }, { singleAgent: env.AGENT_SINGLE_AGENT === "true" });
         const tools = {
           ...buildTools(ctx, hooks, { db }),
           ...extra,

@@ -9,10 +9,12 @@ import type { TurnCall } from "./view-tools";
 // The tools added in the stretch tickets (Why, Act, landing pages), built per turn like render_view and remember.
 // Growth Capital roles get the calendar and call notes, and may ask for a change or a landing page; a client viewer gets
 // only explain_gap, which then uses store data alone.
-export function buildExtraTools(d: ExtraToolDeps): ToolSet {
+// `singleAgent` leaves explain_gap out, so one agent answers "why" with the read tools alone. It exists for the evals, which
+// compare the two (AGENT_SINGLE_AGENT=true), and is not a setting for the app.
+export function buildExtraTools(d: ExtraToolDeps, opts: { singleAgent?: boolean } = {}): ToolSet {
   const gc = d.ctx.role !== "client_viewer";
   return {
-    explain_gap: buildExplainGapTool(d),
+    ...(opts.singleAgent ? {} : { explain_gap: buildExplainGapTool(d) }),
     ...(buildCalendarNotesTools(d) as ToolSet),
     ...(gc ? { propose_action: buildProposeActionTool(d), draft_landing_page: buildDraftLandingPageTool(d) } : {}),
   };

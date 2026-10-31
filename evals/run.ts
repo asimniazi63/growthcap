@@ -4,6 +4,7 @@
 // It makes PAID model calls (a few cents) and prints which model it used. Run it only on purpose.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { UIMessageChunk } from "ai";
 import { setTestNow } from "../lib/clock";
 import { createTestDb } from "../lib/db/test-db";
@@ -145,6 +146,12 @@ async function main(): Promise<void> {
 
   const total = results.reduce((s, r) => s + r.costUsd, 0);
   console.log(`\n${results.filter((r) => r.passed).length}/${results.length} passed. Model ${spec.id}. Estimated cost $${total.toFixed(4)}.`);
+  const out = args("out")[0];
+  if (out) {
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, `${JSON.stringify({ model: spec.id, ranAt: new Date().toISOString(), singleAgent: process.env.AGENT_SINGLE_AGENT === "true", totalCostUsd: total, cases: results }, null, 2)}\n`);
+    console.log(`Wrote ${out}`);
+  }
   if (selected.length === CASES.length) {
     let commit = "unknown";
     try {

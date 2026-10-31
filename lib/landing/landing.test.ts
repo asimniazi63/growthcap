@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActionView, ProposeInput } from "../actions/types";
 import type { ExtraToolDeps } from "../agent/extra-types";
+import { AppError } from "../errors";
 import type { Db } from "../db/client";
 import { calendarEvents, products, tenants } from "../db/schema";
 import { createTestDb } from "../db/test-db";
@@ -232,6 +233,19 @@ describe("landing page executor", () => {
     expect(sent[1]!.variables).toMatchObject({ themeId: "gid://shopify/OnlineStoreTheme/2" });
     expect(result).toMatchObject({ themeId: "gid://shopify/OnlineStoreTheme/2", pageId: "gid://shopify/Page/9", handle: `oasis-${draft.slug}`, published: false });
     expect(String(result.editorUrlHint)).toContain("/store/solenne/themes/2/editor");
+  });
+
+  it("writes nothing and creates no page when Shopify gates theme writes behind an exemption, and says how to finish by hand", async () => {
+    const sent: string[] = [];
+    const graphql = vi.fn(async (query: string) => {
+      sent.push(query);
+      if (query.includes("themeFilesUpsert")) throw new AppError("INVALID_INPUT", "Shopify refused the change: Access denied for themeFilesUpsert field. Required access: write_themes and an exemption from Shopify.");
+      return { themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/2", name: "Copy of Solenne", role: "UNPUBLISHED", processing: false }] } };
+    });
+    const result = (await landingPageExecutor.run(payload, { db, ctx, graphql })) as Record<string, unknown>;
+    expect(result).toMatchObject({ written: false, themeId: "gid://shopify/OnlineStoreTheme/2" });
+    expect(String(result.finishByHand)).toContain("shopify theme push --store solenne.myshopify.com --theme 2");
+    expect(sent.some((q) => q.includes("pageCreate"))).toBe(false);
   });
 
   it("says so when the store has no unpublished theme", async () => {
