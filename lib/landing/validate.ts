@@ -91,7 +91,7 @@ export function lintLanding(files: LandingFile[], opts: LintOptions): string[] {
 // ---- Theme Check
 
 // A theme the linter accepts, with only the files a landing page needs around it.
-const SKELETON: LandingFile[] = [
+export const SKELETON: LandingFile[] = [
   { path: "layout/theme.liquid", content: `<!doctype html>\n<html lang="en">\n<head>\n  <title>{{ page_title }}</title>\n  {{ content_for_header }}\n</head>\n<body>\n  {{ content_for_layout }}\n</body>\n</html>\n` },
   { path: "config/settings_schema.json", content: "[]\n" },
   { path: "config/settings_data.json", content: "{}\n" },

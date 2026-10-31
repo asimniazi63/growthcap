@@ -62,8 +62,8 @@ export function pickTheme(nodes: ThemeNode[]): ThemeNode {
 
 const THEME_PLACEHOLDER = "(the id of the unpublished theme found by the first query)";
 
-const filesInput = (payload: LandingPayload) => payload.files.map((f) => ({ filename: f.path, body: { type: "TEXT", value: f.content } }));
-const pageInput = (payload: LandingPayload) => ({ title: payload.title, handle: pageHandle(payload.slug), body: "", isPublished: false, templateSuffix: templateSuffix(payload.slug) });
+export const filesInput = (payload: LandingPayload) => payload.files.map((f) => ({ filename: f.path, body: { type: "TEXT", value: f.content } }));
+export const pageInput = (payload: LandingPayload) => ({ title: payload.title, handle: pageHandle(payload.slug), body: "", isPublished: false, templateSuffix: templateSuffix(payload.slug) });
 
 // Pure and offline: the Admin GraphQL this payload would send. The theme id is only known once the first query has run.
 export function landingMutations(payload: LandingPayload) {

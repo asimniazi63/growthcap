@@ -24,7 +24,9 @@
     "seed:generate": "tsx scripts/seed/generate.ts",
     "seed:load": "tsx scripts/seed/load.ts",
     "seed:pilot-check": "tsx scripts/spikes/pilot-check.ts",
-    "seed:spike-a": "tsx scripts/spikes/spike-a.ts"
+    "seed:spike-a": "tsx scripts/spikes/spike-a.ts",
+    "landing:push": "tsx scripts/landing-push.ts",
+    "plan-in:try": "tsx scripts/plan-in-try.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.13",
