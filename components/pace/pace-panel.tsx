@@ -1,9 +1,11 @@
 import { ArrowDownRight, ArrowUpRight, CalendarClock, CalendarX, Minus, Target } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PaceChart } from "@/components/pace/pace-chart";
 import { PaceTrack } from "@/components/pace/pace-track";
 import { formatGap, formatPct, formatValue, monthName, type Tone } from "@/lib/pace/format";
 import type { PlanGap, PlanGapMap } from "@/lib/pace/gap";
 import type { PlanMetric } from "@/lib/pace/metrics";
+import type { PaceSeries } from "@/lib/pace/series";
 import type { PaceView } from "@/lib/pace/view";
 import { METRICS } from "@/lib/metrics/registry";
 
@@ -13,6 +15,7 @@ const ICON: Record<Tone, typeof Minus> = { ahead: ArrowUpRight, behind: ArrowDow
 const PACED: PlanMetric[] = ["net_sales", "orders", "new_customer_orders"];
 const COMPARED: PlanMetric[] = ["aov", "returning_customer_rate"];
 const ALL: PlanMetric[] = [...PACED, ...COMPARED];
+const TILES: PlanMetric[] = ["orders", "new_customer_orders", "aov", "returning_customer_rate"];
 
 const monthDay = (ymd: string) => new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(`${ymd}T00:00:00Z`));
 
@@ -52,73 +55,115 @@ function GapCell({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; curr
   );
 }
 
-function PacedCard({ metric, g, currency, primary }: { metric: PlanMetric; g: PlanGap; currency: string; primary: boolean }) {
-  const label = METRICS[metric].label;
-  const money = (v: number) => formatValue(metric, v, currency);
-  const track = <PaceTrack label={label} actual={g.actual} planned={g.planned} target={g.target} projected={g.projected} money={money} size={primary ? "lg" : "md"} />;
-  if (primary) {
-    return (
-      <div className="card p-5 sm:p-7">
-        <div className="grid gap-6 md:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] md:items-center md:gap-10">
-          <div>
-            <p className="section-title">{label}</p>
-            <p className="stat num mt-2 text-4xl sm:text-5xl">{money(g.actual)}</p>
-            <p className="mt-3">
-              <GapBadge metric={metric} g={g} currency={currency} />
-            </p>
-          </div>
-          {track}
-        </div>
-      </div>
-    );
-  }
+// The fallback hero, for when the days can't be drawn: the progress track with the same figures written out.
+function TrackHero({ g, currency }: { g: PlanGap; currency: string }) {
+  const label = METRICS.net_sales.label;
+  const money = (v: number) => formatValue("net_sales", v, currency);
   return (
-    <div className="card card-pad">
-      <p className="text-sm font-medium muted">{label}</p>
-      <p className="stat num mt-1.5 text-3xl">{money(g.actual)}</p>
-      <p className="mt-2.5">
-        <GapBadge metric={metric} g={g} currency={currency} />
-      </p>
-      <div className="mt-4">{track}</div>
+    <div className="card p-5 sm:p-7">
+      <div className="grid gap-6 md:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] md:items-center md:gap-10">
+        <div>
+          <p className="section-title">{label}</p>
+          <p className="stat num mt-2 text-4xl sm:text-5xl">{money(g.actual)}</p>
+          <p className="mt-3">
+            <GapBadge metric="net_sales" g={g} currency={currency} />
+          </p>
+        </div>
+        <PaceTrack label={label} actual={g.actual} planned={g.planned} target={g.target} projected={g.projected} money={money} size="lg" />
+      </div>
     </div>
   );
 }
 
-function CompareTable({ gaps, currency }: { gaps: PlanGapMap; currency: string }) {
-  const rows = COMPARED.filter((m) => gaps[m]);
-  if (rows.length === 0) return null;
+// The hero: net sales so far, whether that is ahead or behind, the three figures to hold it against, and the month drawn day by day.
+function ChartHero({ g, series, currency }: { g: PlanGap; series: PaceSeries; currency: string }) {
+  const money = (v: number) => formatValue("net_sales", v, currency);
   return (
-    <div className="card mt-6 overflow-hidden">
-      <h3 id="held" className="section-title px-5 pt-4 pb-1">
-        Held against the month&apos;s target
-      </h3>
-      <div className="overflow-x-auto">
-        <table className="data-table" aria-labelledby="held">
-          <thead>
-            <tr>
-              <th scope="col">Metric</th>
-              <th scope="col" className="num">Target</th>
-              <th scope="col" className="num">So far</th>
-              <th scope="col" className="num">Gap</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((m) => {
-              const g = gaps[m]!;
-              return (
-                <tr key={m}>
-                  <td>{METRICS[m].label}</td>
-                  <td className="num">{formatValue(m, g.target, currency)}</td>
-                  <td className="num">{formatValue(m, g.actual, currency)}</td>
-                  <td className="num">
-                    <GapCell metric={m} g={g} currency={currency} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+    <div className="card p-5 sm:p-7">
+      <div className="grid gap-6 xl:grid-cols-[16rem_minmax(0,1fr)] xl:gap-10">
+        <div className="min-w-0">
+          <p className="muted font-medium">{METRICS.net_sales.label}</p>
+          <p className="stat num mt-1.5 text-4xl sm:text-5xl">{money(g.actual)}</p>
+          <p className="mt-3">
+            <GapBadge metric="net_sales" g={g} currency={currency} />
+          </p>
+          <dl className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <div>
+              <dt className="faint text-[13px]">Plan so far</dt>
+              <dd className="num text-base font-semibold">{money(g.planned)}</dd>
+            </div>
+            {g.projected !== undefined ? (
+              <div>
+                <dt className="faint text-[13px]">Month-end estimate</dt>
+                <dd className="num flex items-center gap-2 text-base font-semibold">
+                  <span aria-hidden className="hatch h-2.5 w-5 shrink-0 rounded-[3px] border border-dashed border-estimate" />
+                  {money(g.projected)}
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt className="faint text-[13px]">Target for the month</dt>
+              <dd className="num text-base font-semibold">{money(g.target)}</dd>
+            </div>
+          </dl>
+        </div>
+        <div className="min-w-0">
+          <PaceChart series={series} currency={currency} />
+        </div>
       </div>
+    </div>
+  );
+}
+
+// The gap on a centred bar: right of the tick is ahead of plan, left is behind. A quarter either way fills half the bar.
+function VarianceBar({ pct }: { pct: number | null }) {
+  const width = pct === null ? 0 : (Math.min(Math.abs(pct), 0.25) / 0.25) * 50;
+  return (
+    <div aria-hidden>
+      <div className="relative h-2 rounded-full bg-paper-2">
+        {pct !== null && pct > 0 ? <span className="absolute inset-y-0 left-1/2 rounded-r-full bg-ahead" style={{ width: `${width.toFixed(1)}%` }} /> : null}
+        {pct !== null && pct < 0 ? <span className="absolute inset-y-0 right-1/2 rounded-l-full bg-behind" style={{ width: `${width.toFixed(1)}%` }} /> : null}
+        <span className="absolute -inset-y-1 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-ink" />
+      </div>
+      <div className="faint mt-1.5 flex justify-between text-[11.5px]">
+        <span>Behind</span>
+        <span>On plan</span>
+        <span>Ahead</span>
+      </div>
+    </div>
+  );
+}
+
+function MetricTile({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; currency: string }) {
+  const money = (v: number) => formatValue(metric, v, currency);
+  const { tone, text, pct } = gapText(metric, g, currency);
+  const paced = PACED.includes(metric);
+  return (
+    <div className="card flex min-w-0 flex-col p-4 sm:px-[18px]">
+      <p className="text-[13.5px] text-ink-2">{METRICS[metric].label}</p>
+      <p className="stat num mt-1 mb-3 text-3xl">{money(g.actual)}</p>
+      <VarianceBar pct={g.pctGap} />
+      <p className={`mt-2.5 text-[13px] font-semibold ${TEXT_TONE[tone]}`}>
+        {text}
+        {pct}
+      </p>
+      {paced ? (
+        <>
+          <p className="faint mt-1 text-[12.5px]">Plan so far {money(g.planned)}</p>
+          {g.projected !== undefined ? (
+            <p className="faint mt-0.5 flex items-start gap-1.5 text-[12.5px]">
+              <span aria-hidden className="hatch mt-[5px] h-2 w-4 shrink-0 rounded-[2px] border border-dashed border-estimate" />
+              <span>
+                Estimate {money(g.projected)} · target {money(g.target)}
+              </span>
+            </p>
+          ) : (
+            <p className="faint mt-0.5 text-[12.5px]">Target {money(g.target)}</p>
+          )}
+        </>
+      ) : (
+        <p className="faint mt-1 text-[12.5px]">Target {money(g.target)}</p>
+      )}
     </div>
   );
 }
@@ -136,8 +181,8 @@ function SpreadNote({ gaps }: { gaps: PlanGapMap }) {
 export function PacePanel({ view, currency }: { view: PaceView; currency: string }) {
   const thisName = monthName(view.month);
   const thisGaps = view.thisMonth?.gaps;
-  const paced = thisGaps ? PACED.filter((m) => thisGaps[m]) : [];
-  const [first, ...rest] = paced;
+  const net = thisGaps?.net_sales;
+  const tiles = thisGaps ? TILES.filter((m) => thisGaps[m]) : [];
   return (
     <div className="space-y-10">
       <section aria-labelledby="mtd">
@@ -166,16 +211,15 @@ export function PacePanel({ view, currency }: { view: PaceView; currency: string
           <>
             <p className="muted mt-1 text-sm">Complete days only, through {monthDay(view.through)}.</p>
             <div className="mt-4 space-y-4">
-              {first ? <PacedCard metric={first} g={thisGaps[first]!} currency={currency} primary /> : null}
-              {rest.length > 0 ? (
-                <div className={`grid gap-4 ${rest.length > 1 ? "md:grid-cols-2" : ""}`}>
-                  {rest.map((m) => (
-                    <PacedCard key={m} metric={m} g={thisGaps[m]!} currency={currency} primary={false} />
+              {net ? view.series ? <ChartHero g={net} series={view.series} currency={currency} /> : <TrackHero g={net} currency={currency} /> : null}
+              {tiles.length > 0 ? (
+                <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+                  {tiles.map((m) => (
+                    <MetricTile key={m} metric={m} g={thisGaps[m]!} currency={currency} />
                   ))}
                 </div>
               ) : null}
             </div>
-            <CompareTable gaps={thisGaps} currency={currency} />
             <SpreadNote gaps={thisGaps} />
           </>
         )}

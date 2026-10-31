@@ -2,8 +2,11 @@
 
 import { AlertTriangle, ArrowRight, Check, ChevronRight, Clock, FileCode, LayoutTemplate, Loader2, type LucideIcon, ShieldCheck, StickyNote, Target, TicketX, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { RefreshNow } from "@/components/overview/refresh-now";
+import { useToast } from "@/components/ui/toast";
 import type { LedgerView } from "@/lib/actions/ledger";
 import type { ActionKind } from "@/lib/actions/types";
+import { decisionFailure, decisionToast } from "@/lib/overview/messages";
 
 type Status = LedgerView["status"];
 type Mutation = { name: string; query: string; variables: unknown };
@@ -15,7 +18,7 @@ export const KIND_LABEL: Record<ActionKind, string> = {
   landing_page: "Landing page",
 };
 
-const KIND_ICON: Record<ActionKind, LucideIcon> = {
+export const KIND_ICON: Record<ActionKind, LucideIcon> = {
   metric_target: Target,
   annotation: StickyNote,
   discount_deactivate: TicketX,
@@ -139,6 +142,8 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
   const [view, setView] = useState<LedgerView>(action);
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [problem, setProblem] = useState("");
+  const toast = useToast();
+  const [refreshes, setRefreshes] = useState(0);
 
   async function decide(decision: "approve" | "reject") {
     setBusy(decision);
@@ -150,13 +155,14 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
       if (body?.action) {
         setView(body.action);
         onChange?.(body.action);
+        const { message, tone } = decisionToast(decision, body.action);
+        toast.show(message, tone);
+        setRefreshes((n) => n + 1); // read the page again so the sidebar count of changes waiting for approval updates
         return;
       }
     }
-    if (res?.status === 404) return setProblem("This action no longer exists.");
-    if (res?.status === 403) return setProblem("Only a Growth Capital admin or partner can decide this.");
     const body = (await res?.json().catch(() => null)) as { message?: unknown } | null | undefined;
-    setProblem(typeof body?.message === "string" ? body.message : "Couldn't save that. Try again.");
+    setProblem(decisionFailure(res?.status, body));
   }
 
   const { diff } = view;
@@ -171,6 +177,7 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
 
   return (
     <article className="card @container overflow-hidden">
+      {refreshes > 0 ? <RefreshNow key={refreshes} /> : null}
       <div className="space-y-4 p-4 @md:p-5">
         <header className="flex items-start gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-tint text-brand-strong">

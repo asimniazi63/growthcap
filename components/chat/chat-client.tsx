@@ -3,6 +3,7 @@
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { ArrowUp, Boxes, Check, LoaderCircle, MessageSquareText, Plus, Receipt, ShieldCheck, ShoppingBag, Sparkles, TicketPercent, Trash2, TrendingUp, TriangleAlert, Undo2, Users, type LucideIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionView } from "@/lib/actions/types";
 import { linkClaims, type MatchedClaim } from "@/lib/agent/links";
@@ -15,7 +16,10 @@ import { PinButton } from "../views/pin-button";
 import { ViewRenderer } from "../views/view-renderer";
 import { MemoryCard, type MemoryCardState } from "./memory-card";
 import { ERROR_COPY, ErrorBanner, type ChatErrorCode } from "./error-banner";
-import { SafeMarkdown, toolLabel } from "./safe-markdown";
+import { followUps } from "./follow-ups";
+import { ProofDrawerContext, ProofDrawerPanel, useProofDrawerState } from "./proof-drawer";
+import { SafeMarkdown } from "./safe-markdown";
+import { toolLabel } from "./tool-labels";
 
 interface Verification {
   attempt: number;
@@ -25,6 +29,10 @@ interface Verification {
 }
 
 type Part = UIMessage["parts"][number];
+
+// The longest question the input takes. A ?q= question is cut to the same length.
+const MAX_QUESTION = 2000;
+const cleanQuestion = (text: string | undefined): string | null => text?.trim().slice(0, MAX_QUESTION).trim() || null;
 
 // These show their result (a view, a note card, an approval card), not a status line.
 const QUIET_TOOLS = new Set(["render_view", "remember", "propose_action", "draft_landing_page"]);
@@ -55,7 +63,8 @@ function ToolChip({ part }: { part: Part }) {
   );
 }
 
-function AssistantMessage({ message, role, currency, userId }: { message: UIMessage; role: Role; currency: string; userId?: string }) {
+// onAsk is given only to the newest answer once it has finished, so follow-up chips never show on older messages or mid-stream.
+function AssistantMessage({ message, role, currency, userId, onAsk }: { message: UIMessage; role: Role; currency: string; userId?: string; onAsk?: (question: string) => void }) {
   const provenanceList = dataOf<ProvenanceEntry[]>(message, "data-provenance") ?? [];
   const provenance = Object.fromEntries(provenanceList.map((p) => [p.queryId, p]));
   const verification = dataOf<Verification>(message, "data-verification");
@@ -64,6 +73,7 @@ function AssistantMessage({ message, role, currency, userId }: { message: UIMess
   const truncated = provenanceList.filter((p) => p.truncated);
   // A call that failed and was then made again successfully (the model fixing its own arguments) is not worth a red line.
   const toolParts = message.parts.filter((p) => toolName(p) && !QUIET_TOOLS.has(toolName(p)!));
+  const questions = onAsk && verification?.ok !== false && lastText >= 0 ? followUps(message.parts.filter((p) => (p as { state?: string }).state === "output-available").flatMap((p) => toolName(p) ?? [])) : [];
   const chips = toolParts.filter((p, i) => (p as { state?: string }).state !== "output-error" || !toolParts.slice(i + 1).some((q) => toolName(q) === toolName(p) && (q as { state?: string }).state === "output-available"));
 
   return (
@@ -127,6 +137,21 @@ function AssistantMessage({ message, role, currency, userId }: { message: UIMess
           </div>
         )
       ) : null}
+      {onAsk && questions.length > 0 ? (
+        <ul aria-label="Follow-up questions" className="flex flex-wrap gap-2 pt-0.5">
+          {questions.map((q) => (
+            <li key={q}>
+              <button
+                type="button"
+                onClick={() => onAsk(q)}
+                className="cursor-pointer rounded-full border border-line-strong bg-surface px-3.5 py-1.5 text-left text-[0.8125rem] font-semibold leading-snug text-ink-2 transition-colors hover:border-brand hover:bg-brand-tint hover:text-brand-strong"
+              >
+                {q}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -151,11 +176,12 @@ interface ChatProps {
   suggestions: readonly string[];
   currency: string;
   userId?: string; // the signed-in person, so an action card can say "you"
+  initialQuestion?: string; // from /chat?q=..., asked once when the page opens
 }
 
 // One conversation. The server keeps the model's history; the browser sends only the newest question and the thread id,
 // which arrives in the stream (data-thread) once the first answer starts.
-function ChatSession({ role, models, defaultModelId, suggestions, currency, userId, threadId, initial, onSaved, onThread }: ChatProps & { threadId: string | null; initial: UIMessage[]; onSaved: () => void; onThread: (id: string) => void }) {
+function ChatSession({ role, models, defaultModelId, suggestions, currency, userId, threadId, initial, autoAsk, onAutoAsked, onSaved, onThread }: ChatProps & { threadId: string | null; initial: UIMessage[]; autoAsk: string | null; onAutoAsked: () => void; onSaved: () => void; onThread: (id: string) => void }) {
   const threadRef = useRef<string | null>(threadId);
   const transport = useMemo(
     () => new DefaultChatTransport({ api: "/api/chat", prepareSendMessagesRequest: ({ messages, body }) => ({ body: { ...body, messages: messages.slice(-1) } }) }),
@@ -175,122 +201,144 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
   const [input, setInput] = useState("");
   const [modelId, setModelId] = useState(defaultModelId);
   const end = useRef<HTMLDivElement>(null);
+  const proof = useProofDrawerState();
+  const asked = useRef(false);
   const busy = status === "submitted" || status === "streaming";
   const code = codeOf(error);
 
   useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, status]);
 
-  const ask = (text: string) => {
-    const clean = text.trim();
-    if (!clean || busy) return;
-    setInput("");
-    void sendMessage({ text: clean }, { body: { modelId, ...(threadRef.current ? { threadId: threadRef.current } : {}) } });
-  };
+  const ask = useCallback(
+    (text: string) => {
+      const clean = text.trim();
+      if (!clean || busy) return;
+      setInput("");
+      void sendMessage({ text: clean }, { body: { modelId, ...(threadRef.current ? { threadId: threadRef.current } : {}) } });
+    },
+    [busy, modelId, sendMessage],
+  );
+
+  // A question that came in on the address (?q=) is asked once, as an ordinary question. The ref keeps React's strict mode from asking twice.
+  useEffect(() => {
+    if (!autoAsk || asked.current) return;
+    asked.current = true;
+    ask(autoAsk);
+    onAutoAsked();
+  }, [autoAsk, ask, onAutoAsked]);
+
+  const last = messages.at(-1);
+  const latestAnswer = last?.role === "assistant" && !busy && !code ? last.id : null;
 
   return (
-    <div className="flex min-h-[65dvh] min-w-0 flex-col lg:min-h-0">
-      <div className="-mx-1 flex-1 px-1 lg:min-h-0 lg:overflow-y-auto lg:pr-3">
-        <div className="mx-auto w-full max-w-3xl space-y-6 pb-6">
-          {messages.length === 0 ? (
-            <div className="pt-4 lg:pt-10">
-              <div className="flex flex-col items-center text-center">
-                <BrandMark className="size-10" />
-                <h2 className="mt-4 text-[1.625rem] font-semibold leading-tight">What do you want to know about this store?</h2>
-                <p className="muted mt-2 max-w-[52ch]">Ask about this store&apos;s sales, orders, products, stock or customers. Every figure in an answer is checked against the store&apos;s data. Try one of these:</p>
-              </div>
-              <ul className="mt-8 grid gap-2.5 md:grid-cols-2">
-                {suggestions.map((q) => {
-                  const Icon = tileIcon(q);
-                  return (
-                    <li key={q} className="flex">
-                      <button type="button" onClick={() => ask(q)} className="card flex w-full items-start gap-3 p-3.5 text-left text-sm leading-snug transition-colors hover:border-line-strong hover:bg-paper">
-                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-tint text-brand-strong">
-                          <Icon className="size-4" aria-hidden />
-                        </span>
-                        <span className="pt-1">{q}</span>
-                      </button>
+    <ProofDrawerContext.Provider value={proof}>
+      <div className="flex min-h-[65dvh] min-w-0 flex-col lg:min-h-0">
+        {/* The proof drawer sits over the right of this block on large screens (the conversation makes room for it) and below the conversation on small ones. */}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className={`-mx-1 flex-1 px-1 lg:min-h-0 lg:overflow-y-auto ${proof.current ? "lg:pr-[23.5rem]" : "lg:pr-3"}`}>
+            <div className="mx-auto w-full max-w-3xl space-y-6 pb-6">
+              {messages.length === 0 ? (
+                <div className="pt-4 lg:pt-10">
+                  <div className="flex flex-col items-center text-center">
+                    <BrandMark className="size-10" />
+                    <h2 className="mt-4 text-[1.625rem] font-semibold leading-tight">What do you want to know about this store?</h2>
+                    <p className="muted mt-2 max-w-[52ch]">Ask about this store&apos;s sales, orders, products, stock or customers. Every figure in an answer is checked against the store&apos;s data. Try one of these:</p>
+                  </div>
+                  <ul className="mt-8 grid gap-2.5 md:grid-cols-2">
+                    {suggestions.map((q) => {
+                      const Icon = tileIcon(q);
+                      return (
+                        <li key={q} className="flex">
+                          <button type="button" onClick={() => ask(q)} className="card flex w-full items-start gap-3 p-3.5 text-left text-sm leading-snug transition-colors hover:border-line-strong hover:bg-paper">
+                            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-tint text-brand-strong">
+                              <Icon className="size-4" aria-hidden />
+                            </span>
+                            <span className="pt-1">{q}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : (
+                <ol className="space-y-7">
+                  {messages.map((m) => (
+                    <li key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
+                      {m.role === "user" ? (
+                        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-[0.9375rem] leading-6 text-white">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</p>
+                      ) : (
+                        <div className="flex gap-3">
+                          <span className="mt-0.5 shrink-0">
+                            <BrandMark className="size-6" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <AssistantMessage message={m} role={role} currency={currency} userId={userId} onAsk={m.id === latestAnswer ? ask : undefined} />
+                          </div>
+                        </div>
+                      )}
                     </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ) : (
-            <ol className="space-y-7">
-              {messages.map((m) => (
-                <li key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
-                  {m.role === "user" ? (
-                    <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-[0.9375rem] leading-6 text-white">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</p>
-                  ) : (
-                    <div className="flex gap-3">
-                      <span className="mt-0.5 shrink-0">
-                        <BrandMark className="size-6" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <AssistantMessage message={m} role={role} currency={currency} userId={userId} />
-                      </div>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
+                  ))}
+                </ol>
+              )}
 
-          {busy && messages.at(-1)?.role === "user" ? (
-            <div role="status" className="flex items-center gap-3 text-sm text-ink-3">
-              <BrandMark className="size-6" />
-              <span className="inline-flex items-center gap-2">
-                <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-                Thinking…
-              </span>
+              {busy && messages.at(-1)?.role === "user" ? (
+                <div role="status" className="flex items-center gap-3 text-sm text-ink-3">
+                  <BrandMark className="size-6" />
+                  <span className="inline-flex items-center gap-2">
+                    <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+                    Thinking…
+                  </span>
+                </div>
+              ) : null}
+              {code ? <ErrorBanner code={code} role={role} onRetry={() => void regenerate({ body: { modelId, ...(threadRef.current ? { threadId: threadRef.current } : {}) } })} /> : null}
+              <div ref={end} />
             </div>
-          ) : null}
-          {code ? <ErrorBanner code={code} role={role} onRetry={() => void regenerate({ body: { modelId, ...(threadRef.current ? { threadId: threadRef.current } : {}) } })} /> : null}
-          <div ref={end} />
+          </div>
+          <ProofDrawerPanel />
+        </div>
+
+        <div className="sticky bottom-0 z-10 -mx-1 bg-paper px-1 pb-3 pt-2 lg:static lg:shrink-0 lg:pb-0">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              ask(input);
+            }}
+            className="card mx-auto w-full max-w-3xl rounded-2xl p-2 transition-shadow focus-within:border-brand focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-brand)_22%,transparent)]"
+          >
+            <div className="flex items-center gap-2">
+              <label className="sr-only" htmlFor="question">
+                Your question
+              </label>
+              <input
+                id="question"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                maxLength={MAX_QUESTION}
+                placeholder="Ask about sales, orders, stock or customers"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[0.9375rem] outline-none placeholder:text-ink-3"
+              />
+              <button type="submit" disabled={busy || !input.trim()} className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-brand text-white transition-colors enabled:hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-40">
+                <ArrowUp className="size-4.5" strokeWidth={2.5} aria-hidden />
+                <span className="sr-only">Ask</span>
+              </button>
+            </div>
+            {models.length > 1 ? (
+              <div className="mt-1.5 flex items-center border-t border-line px-1 pt-2">
+                <label className="flex items-center gap-2 text-xs text-ink-3">
+                  Model
+                  <select value={modelId} onChange={(e) => setModelId(e.target.value)} className="field w-auto py-1 pl-2.5 text-xs">
+                    {models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+          </form>
         </div>
       </div>
-
-      <div className="sticky bottom-0 z-10 -mx-1 bg-paper px-1 pb-3 pt-2 lg:static lg:shrink-0 lg:pb-0">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            ask(input);
-          }}
-          className="card mx-auto w-full max-w-3xl rounded-2xl p-2 transition-shadow focus-within:border-brand focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-brand)_22%,transparent)]"
-        >
-          <div className="flex items-center gap-2">
-            <label className="sr-only" htmlFor="question">
-              Your question
-            </label>
-            <input
-              id="question"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              maxLength={2000}
-              placeholder="Ask about sales, orders, stock or customers"
-              className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[0.9375rem] outline-none placeholder:text-ink-3"
-            />
-            <button type="submit" disabled={busy || !input.trim()} className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-brand text-white transition-colors enabled:hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-40">
-              <ArrowUp className="size-4.5" strokeWidth={2.5} aria-hidden />
-              <span className="sr-only">Ask</span>
-            </button>
-          </div>
-          {models.length > 1 ? (
-            <div className="mt-1.5 flex items-center border-t border-line px-1 pt-2">
-              <label className="flex items-center gap-2 text-xs text-ink-3">
-                Model
-                <select value={modelId} onChange={(e) => setModelId(e.target.value)} className="field w-auto py-1 pl-2.5 text-xs">
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          ) : null}
-        </form>
-      </div>
-    </div>
+    </ProofDrawerContext.Provider>
   );
 }
 
@@ -305,9 +353,27 @@ async function fetchThreads(): Promise<ThreadItem[] | null> {
 }
 
 export function ChatClient(props: ChatProps) {
+  const router = useRouter();
   const [session, setSession] = useState<{ key: number; threadId: string | null; initial: UIMessage[] }>({ key: 0, threadId: null, initial: [] });
   const [threads, setThreads] = useState<ThreadItem[]>([]);
   const [problem, setProblem] = useState("");
+
+  // A question on the address (/chat?q=...) is asked once in a fresh conversation, then taken off the address. A new one that
+  // arrives while the chat is open (from the command palette) starts a fresh conversation too.
+  const incoming = cleanQuestion(props.initialQuestion);
+  const [autoAsk, setAutoAsk] = useState<string | null>(incoming);
+  const [seen, setSeen] = useState<string | null>(incoming);
+  if (incoming !== seen) {
+    setSeen(incoming);
+    if (incoming) {
+      setSession((s) => ({ key: s.key + 1, threadId: null, initial: [] }));
+      setAutoAsk(incoming);
+    }
+  }
+  const autoAsked = useCallback(() => {
+    setAutoAsk(null);
+    router.replace("/chat", { scroll: false });
+  }, [router]);
 
   const refresh = useCallback(() => fetchThreads().then((list) => list && setThreads(list)), []);
   useEffect(() => {
@@ -421,7 +487,7 @@ export function ChatClient(props: ChatProps) {
         ) : null}
       </aside>
 
-      <ChatSession key={session.key} {...props} threadId={session.threadId} initial={session.initial} onSaved={refresh} onThread={(id) => setSession((s) => (s.threadId === id ? s : { ...s, threadId: id }))} />
+      <ChatSession key={session.key} {...props} threadId={session.threadId} initial={session.initial} autoAsk={autoAsk} onAutoAsked={autoAsked} onSaved={refresh} onThread={(id) => setSession((s) => (s.threadId === id ? s : { ...s, threadId: id }))} />
     </div>
   );
 }

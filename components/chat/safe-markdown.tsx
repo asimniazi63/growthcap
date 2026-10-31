@@ -1,42 +1,40 @@
 "use client";
 
 import { Check, X } from "lucide-react";
-import { Children, cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
-import Markdown from "react-markdown";
+import { Children, cloneElement, createContext, isValidElement, useContext, useId, type ReactElement, type ReactNode } from "react";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { isAllowedLink, provenanceId } from "@/lib/agent/links";
 import type { ProvenanceEntry } from "@/lib/agent/run";
+import { DRAWER_ID, ProofDrawerContext } from "./proof-drawer";
+import { toolLabel } from "./tool-labels";
+
+export { toolLabel };
 
 // Answers are rendered from an allow-list: no images, no raw HTML (react-markdown drops it), and links only to this app
-// and the Shopify admin. A number the checker matched is a button that opens the query behind it.
+// and the Shopify admin. A number the checker matched is a button that opens the query behind it: in the chat it opens
+// the proof drawer; anywhere without a drawer (no provider) it falls back to a small popover.
 const ALLOWED = ["p", "strong", "em", "del", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "code", "pre", "blockquote", "h1", "h2", "h3", "h4", "br", "hr", "a"];
 
-// Friendly names for every tool the assistant can call (the main agent's, the "why did we miss plan" investigators' and
-// the ones that draw or propose something). A name that is not listed falls back to the raw tool name.
-const TOOL_NAMES: Record<string, string> = {
-  query_metric: "Sales metrics",
-  get_orders: "Orders",
-  search_products: "Products",
-  get_inventory: "Inventory",
-  get_customers: "Customers",
-  describe_metrics: "Metric definitions",
-  explain_gap: "Why the month missed plan",
-  zero_sales_days: "Days with no sales",
-  get_calendar: "Marketing calendar",
-  get_notes: "Call notes",
-  render_view: "Chart or table",
-  remember: "Note for this brand",
-  propose_action: "Proposed change",
-  draft_landing_page: "Landing page draft",
-};
+// The queries behind this answer's figures. The link component below reads them from here, so the component map can be
+// one fixed object: a new map on every render would remount every figure each time the page re-rendered.
+const ProvenanceContext = createContext<Record<string, ProvenanceEntry>>({});
 
-export function toolLabel(name: string): string {
-  return TOOL_NAMES[name] ?? name;
-}
-
+// A checked figure. With the proof drawer around it (the chat) a click opens the drawer; without one, a popover.
 function ClaimLink({ entry, children }: { entry: ProvenanceEntry | undefined; children: ReactNode }) {
   const id = useId();
+  const drawer = useContext(ProofDrawerContext);
   if (!entry) return <>{children}</>;
+  if (!drawer) return <PopoverClaim id={id} entry={entry}>{children}</PopoverClaim>;
+  const active = drawer.current?.key === id;
+  return (
+    <button type="button" aria-expanded={active} aria-controls={active ? DRAWER_ID : undefined} onClick={(e) => drawer.open({ claim: textOf(children), entry, key: id, trigger: e.currentTarget })} className="verified-figure">
+      {children}
+    </button>
+  );
+}
+
+function PopoverClaim({ id, entry, children }: { id: string; entry: ProvenanceEntry; children: ReactNode }) {
   const filters = JSON.stringify(entry.input);
   return (
     <>
@@ -134,45 +132,48 @@ function AlignedTable({ children }: { children?: ReactNode }) {
 
 const PROSE_WIDTH = "max-w-[70ch]";
 
+function Anchor({ href, children }: { href?: string; children?: ReactNode }) {
+  const provenance = useContext(ProvenanceContext);
+  const id = provenanceId(href);
+  if (id) return <ClaimLink entry={provenance[id]}>{children}</ClaimLink>;
+  if (href && isAllowedLink(href)) {
+    const external = !href.startsWith("/");
+    return (
+      <a href={href} className="font-medium text-brand-strong underline decoration-brand/40 underline-offset-2 hover:decoration-brand" {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+        {children}
+      </a>
+    );
+  }
+  return <>{children}</>;
+}
+
+const COMPONENTS: Components = {
+  p: ({ children }) => <p className={PROSE_WIDTH}>{children}</p>,
+  h1: ({ children }) => <h2 className={`${PROSE_WIDTH} pt-2 text-xl font-semibold leading-snug`}>{children}</h2>,
+  h2: ({ children }) => <h3 className={`${PROSE_WIDTH} pt-2 text-lg font-semibold leading-snug`}>{children}</h3>,
+  h3: ({ children }) => <h4 className={`${PROSE_WIDTH} pt-1 font-display text-base font-semibold leading-snug`}>{children}</h4>,
+  h4: ({ children }) => <h5 className={`${PROSE_WIDTH} pt-1 text-sm font-semibold text-ink-2`}>{children}</h5>,
+  ul: ({ children }) => <ul className={`${PROSE_WIDTH} list-disc space-y-1.5 pl-5 marker:text-ink-3`}>{children}</ul>,
+  ol: ({ children }) => <ol className={`${PROSE_WIDTH} list-decimal space-y-1.5 pl-5 marker:text-ink-3`}>{children}</ol>,
+  li: ({ children }) => <li className="pl-1">{children}</li>,
+  blockquote: ({ children }) => <blockquote className={`${PROSE_WIDTH} border-l-2 border-line-strong pl-4 text-ink-2`}>{children}</blockquote>,
+  hr: () => <hr className="border-line" />,
+  code: ({ children }) => <code className="rounded-md bg-paper-2 px-1.5 py-0.5 font-mono text-[0.85em]">{children}</code>,
+  pre: ({ children }) => <pre className="inset overflow-x-auto p-3 font-mono text-xs leading-5 [&_code]:bg-transparent [&_code]:p-0">{children}</pre>,
+  table: ({ children }) => <AlignedTable>{children}</AlignedTable>,
+  a: Anchor,
+};
+
+const URL_TRANSFORM = (url: string) => (provenanceId(url) || isAllowedLink(url) ? url : "");
+
 export function SafeMarkdown({ text, provenance = {} }: { text: string; provenance?: Record<string, ProvenanceEntry> }) {
   return (
-    <div className="space-y-3.5 text-[0.9375rem] leading-7 text-ink [&>:first-child]:mt-0">
-      <Markdown
-        remarkPlugins={[remarkGfm]}
-        allowedElements={ALLOWED}
-        unwrapDisallowed
-        urlTransform={(url) => (provenanceId(url) || isAllowedLink(url) ? url : "")}
-        components={{
-          p: ({ children }) => <p className={PROSE_WIDTH}>{children}</p>,
-          h1: ({ children }) => <h2 className={`${PROSE_WIDTH} pt-2 text-xl font-semibold leading-snug`}>{children}</h2>,
-          h2: ({ children }) => <h3 className={`${PROSE_WIDTH} pt-2 text-lg font-semibold leading-snug`}>{children}</h3>,
-          h3: ({ children }) => <h4 className={`${PROSE_WIDTH} pt-1 font-display text-base font-semibold leading-snug`}>{children}</h4>,
-          h4: ({ children }) => <h5 className={`${PROSE_WIDTH} pt-1 text-sm font-semibold text-ink-2`}>{children}</h5>,
-          ul: ({ children }) => <ul className={`${PROSE_WIDTH} list-disc space-y-1.5 pl-5 marker:text-ink-3`}>{children}</ul>,
-          ol: ({ children }) => <ol className={`${PROSE_WIDTH} list-decimal space-y-1.5 pl-5 marker:text-ink-3`}>{children}</ol>,
-          li: ({ children }) => <li className="pl-1">{children}</li>,
-          blockquote: ({ children }) => <blockquote className={`${PROSE_WIDTH} border-l-2 border-line-strong pl-4 text-ink-2`}>{children}</blockquote>,
-          hr: () => <hr className="border-line" />,
-          code: ({ children }) => <code className="rounded-md bg-paper-2 px-1.5 py-0.5 font-mono text-[0.85em]">{children}</code>,
-          pre: ({ children }) => <pre className="inset overflow-x-auto p-3 font-mono text-xs leading-5 [&_code]:bg-transparent [&_code]:p-0">{children}</pre>,
-          table: ({ children }) => <AlignedTable>{children}</AlignedTable>,
-          a: ({ href, children }) => {
-            const id = provenanceId(href);
-            if (id) return <ClaimLink entry={provenance[id]}>{children}</ClaimLink>;
-            if (href && isAllowedLink(href)) {
-              const external = !href.startsWith("/");
-              return (
-                <a href={href} className="font-medium text-brand-strong underline decoration-brand/40 underline-offset-2 hover:decoration-brand" {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
-                  {children}
-                </a>
-              );
-            }
-            return <>{children}</>;
-          },
-        }}
-      >
-        {text}
-      </Markdown>
-    </div>
+    <ProvenanceContext.Provider value={provenance}>
+      <div className="space-y-3.5 text-[0.9375rem] leading-7 text-ink [&>:first-child]:mt-0">
+        <Markdown remarkPlugins={[remarkGfm]} allowedElements={ALLOWED} unwrapDisallowed urlTransform={URL_TRANSFORM} components={COMPONENTS}>
+          {text}
+        </Markdown>
+      </div>
+    </ProvenanceContext.Provider>
   );
 }

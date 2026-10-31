@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Gauge, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, type LucideIcon } from "lucide-react";
+import { FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, type LucideIcon } from "lucide-react";
 
 interface Item {
   href: string;
@@ -12,6 +12,7 @@ interface Item {
 
 // Ask the agent, track the numbers, act on what they say.
 const GROUPS: { label: string; items: Item[] }[] = [
+  { label: "", items: [{ href: "/overview", label: "Overview", icon: LayoutDashboard }] },
   { label: "Ask", items: [{ href: "/chat", label: "Chat", icon: MessagesSquare }] },
   {
     label: "Track",
@@ -33,7 +34,7 @@ const CONNECT: Item = { href: "/connect", label: "Connect", icon: Plug };
 
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
-function SideLink({ item, pathname }: { item: Item; pathname: string }) {
+function SideLink({ item, pathname, pending = 0 }: { item: Item; pathname: string; pending?: number }) {
   const active = isActive(pathname, item.href);
   const Icon = item.icon;
   return (
@@ -46,11 +47,17 @@ function SideLink({ item, pathname }: { item: Item; pathname: string }) {
     >
       <Icon className={`size-[1.125rem] ${active ? "text-brand" : "text-ink-3"}`} aria-hidden />
       {item.label}
+      {pending > 0 && item.href === "/actions" ? (
+        <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1.5 text-xs font-bold text-white">
+          {pending}
+          <span className="sr-only"> waiting for approval</span>
+        </span>
+      ) : null}
     </Link>
   );
 }
 
-function TopLink({ item, pathname }: { item: Item; pathname: string }) {
+function TopLink({ item, pathname, pending = 0 }: { item: Item; pathname: string; pending?: number }) {
   const active = isActive(pathname, item.href);
   const Icon = item.icon;
   return (
@@ -61,18 +68,19 @@ function TopLink({ item, pathname }: { item: Item; pathname: string }) {
     >
       <Icon className="size-4" aria-hidden />
       {item.label}
+      {pending > 0 && item.href === "/actions" ? <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[0.6875rem] font-bold text-white">{pending}</span> : null}
     </Link>
   );
 }
 
-export function Nav({ variant }: { variant: "side" | "top" }) {
+export function Nav({ variant, pending = 0 }: { variant: "side" | "top"; pending?: number }) {
   const pathname = usePathname() ?? "";
 
   if (variant === "top") {
     return (
       <nav aria-label="Main" className="flex gap-1 overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] lg:hidden">
         {[...GROUPS.flatMap((g) => g.items), CONNECT].map((item) => (
-          <TopLink key={item.href} item={item} pathname={pathname} />
+          <TopLink key={item.href} item={item} pathname={pathname} pending={pending} />
         ))}
       </nav>
     );
@@ -82,11 +90,11 @@ export function Nav({ variant }: { variant: "side" | "top" }) {
     <nav aria-label="Main" className="flex flex-1 flex-col">
       {GROUPS.map((g) => (
         <div key={g.label} className="mb-5">
-          <p className="px-3 pb-1.5 text-xs font-medium text-ink-3">{g.label}</p>
+          {g.label ? <p className="px-3 pb-1.5 text-xs font-medium text-ink-3">{g.label}</p> : null}
           <ul className="space-y-0.5">
             {g.items.map((item) => (
               <li key={item.href}>
-                <SideLink item={item} pathname={pathname} />
+                <SideLink item={item} pathname={pathname} pending={pending} />
               </li>
             ))}
           </ul>

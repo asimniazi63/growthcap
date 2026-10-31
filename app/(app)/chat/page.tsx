@@ -21,7 +21,10 @@ async function loadTenant(): Promise<TenantContext | null> {
   }
 }
 
-export default async function ChatPage() {
+export default async function ChatPage({ searchParams }: { searchParams: Promise<{ q?: string | string[] }> }) {
+  // /chat?q=... asks that question when the page opens (the command palette and the Overview links use it). The text is only ever a user question.
+  const { q } = await searchParams;
+  const initialQuestion = Array.isArray(q) ? q[0] : q;
   const ctx = await loadTenant();
   if (!ctx) {
     return (
@@ -65,7 +68,7 @@ export default async function ChatPage() {
         ) : null}
         {!connected ? <ErrorBanner code="STORE_DISCONNECTED" role={ctx.role} /> : null}
 
-        <ChatClient role={ctx.role} models={models} defaultModelId={defaultModelId("chat")} suggestions={SUGGESTED_QUESTIONS} currency={ctx.shop?.currency ?? "USD"} userId={ctx.userId} />
+        <ChatClient role={ctx.role} models={models} defaultModelId={defaultModelId("chat")} suggestions={SUGGESTED_QUESTIONS} currency={ctx.shop?.currency ?? "USD"} userId={ctx.userId} initialQuestion={initialQuestion} />
       </section>
 
       <NotesPanel notes={notes.filter((n) => n.status !== "dismissed").map((n) => ({ id: n.id, text: n.text, status: n.status === "confirmed" ? ("confirmed" as const) : ("proposed" as const) }))} role={ctx.role} />

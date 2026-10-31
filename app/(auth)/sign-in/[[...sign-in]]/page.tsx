@@ -4,6 +4,7 @@ import { SignIn } from "@clerk/nextjs";
 export default function SignInPage() {
   return (
     <SignIn
+      fallbackRedirectUrl="/overview"
       appearance={{
         variables: { colorPrimary: "#0f766e", borderRadius: "10px" },
         elements: { rootBox: "w-full", cardBox: "w-full rounded-2xl border border-line shadow-none" },
