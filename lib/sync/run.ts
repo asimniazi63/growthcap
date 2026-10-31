@@ -3,6 +3,7 @@ import { decryptSecret } from "../crypto/secrets";
 import type { Db } from "../db/client";
 import { shopConnections, syncRuns } from "../db/schema";
 import { shopifyGraphql } from "../shopify/client";
+import { refreshGrantedScopes } from "../shopify/scopes";
 import type { Role } from "../tenancy/context";
 import { syncStore, type GraphqlFn, type SyncResult } from "./sync";
 
@@ -52,6 +53,9 @@ export async function executeSync(db: Db, tenantId: string, runId: string, deps:
       return null;
     }
     const graphql: GraphqlFn = deps.graphql ?? ((query, variables) => shopifyGraphql({ shopDomain: conn.shopDomain, accessToken: decryptSecret(conn.tokenEnc!) }, query, variables));
+    // A real run (not a test with its own graphql) also keeps the stored permissions in step with what Shopify has granted.
+    // It never fails a sync: the Connect page just keeps showing the grant it already had.
+    if (!deps.graphql) await refreshGrantedScopes(db, tenantId, { shopDomain: conn.shopDomain, accessToken: decryptSecret(conn.tokenEnc!) }).catch(() => false);
     return await syncStore({ db, tenantId, timezone: conn.timezone, graphql, runId });
   } catch (e) {
     // syncStore has already marked the run failed; this covers a failure before it started.
