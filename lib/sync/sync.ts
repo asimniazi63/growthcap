@@ -14,6 +14,7 @@ export interface SyncInput {
   tenantId: string; // from the Clerk session, a webhook's verified shop, or the cron job: never from the model
   timezone: string;
   graphql: GraphqlFn;
+  runId?: string; // a run that beginSync already recorded; without one, syncStore records its own
 }
 
 export interface SyncResult {
@@ -107,9 +108,8 @@ async function* pages<T>(graphql: GraphqlFn, query: string, field: "products" | 
 }
 
 // Reads the whole store through ordinary paged queries (not a bulk operation) and upserts it page by page.
-export async function syncStore({ db, tenantId, timezone, graphql }: SyncInput): Promise<SyncResult> {
-  const [run] = await db.insert(syncRuns).values({ tenantId }).returning({ id: syncRuns.id });
-  const runId = run!.id;
+export async function syncStore({ db, tenantId, timezone, graphql, runId: given }: SyncInput): Promise<SyncResult> {
+  const runId = given ?? (await db.insert(syncRuns).values({ tenantId }).returning({ id: syncRuns.id }))[0]!.id;
   const counts = { products: 0, orders: 0 };
   try {
     for await (const nodes of pages<ProductNode>(graphql, SYNC_PRODUCTS, "products")) {

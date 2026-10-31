@@ -1,9 +1,12 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { shopifyGraphql } from "@/lib/shopify/client";
 import { connectShop } from "@/lib/shopify/connect";
 import { shopify } from "@/lib/shopify/oauth";
+import { startSync } from "@/lib/sync/run";
 import { getTenantContext } from "@/lib/tenancy/context";
+
+export const maxDuration = 300; // the first sync runs after the redirect, in this same invocation
 
 // Public route in proxy.ts: Shopify redirects here. The library verifies the state cookie, the HMAC and the shop
 // domain; the tenant still comes from the Clerk session, never from the query string.
@@ -48,5 +51,9 @@ export async function GET(request: Request) {
     scope: session.scope ?? "",
     shopInfo: info,
   });
+  if (result.ok) {
+    // The first sync starts as soon as the store is connected. A failure to start it must not undo the connection.
+    await startSync(getDb(), ctx.tenantId, (work) => after(work)).catch(() => undefined);
+  }
   return finish(result.ok ? null : result.reason, cookies);
 }

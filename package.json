@@ -16,6 +16,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "tenant:create": "tsx scripts/tenant-create.ts",
+    "reconcile:truth": "tsx scripts/reconcile-truth.ts",
     "seed:generate": "tsx scripts/seed/generate.ts",
     "seed:load": "tsx scripts/seed/load.ts",
     "seed:pilot-check": "tsx scripts/spikes/pilot-check.ts",
