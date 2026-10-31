@@ -1,4 +1,5 @@
 import { FileText, Lock } from "lucide-react";
+import { CallNotesPanel } from "@/components/call-notes/call-notes-panel";
 import { ErrorBanner } from "@/components/chat/error-banner";
 import { DocumentCard } from "@/components/plan/document-card";
 import { UploadForm } from "@/components/plan/upload-form";
@@ -20,7 +21,7 @@ const OPEN_SHOWN = 5; // documents waiting for review that are shown in full
 
 export default async function PlanPage() {
   const ctx = await loadTenant();
-  const heading = <PageHeader title="Plan" description="Upload a SOW or a plan sheet, check the targets read from it, and confirm them as the plan that Pace and the agent use." />;
+  const heading = <PageHeader title="Plan" description="Upload a SOW or a plan sheet and confirm its targets as the plan that Pace and the agent use, or a supplier invoice to propose new unit costs for approval." />;
   if (!ctx) {
     return (
       <section>
@@ -55,7 +56,7 @@ export default async function PlanPage() {
   const currency = ctx.shop?.currency ?? "USD";
   // The newest confirmed document is the plan in use: confirming one replaces the one before it.
   const activeId = all
-    .filter((d) => d.status === "confirmed")
+    .filter((d) => d.status === "confirmed" && d.kind !== "invoice")
     .sort((x, y) => (y.decidedAt ?? y.createdAt).localeCompare(x.decidedAt ?? x.createdAt))[0]?.id;
 
   return (
@@ -63,16 +64,17 @@ export default async function PlanPage() {
       {heading}
       <div className="space-y-10">
         <UploadForm />
+        <CallNotesPanel ctx={ctx} />
         <div className="space-y-4">
           <h2 className="section-title">Documents</h2>
           {all.length === 0 ? (
             <EmptyState icon={FileText} title="No documents yet">
-              Upload a SOW or a plan sheet above. Its targets are read for you to review, and nothing changes until you confirm.
+              Upload a SOW, a supplier invoice or a plan sheet above. It is read for you to review, and nothing changes until you confirm.
             </EmptyState>
           ) : (
             <div className="space-y-4">
               {[...shown.values()].map((d) => (
-                <DocumentCard key={d.id} doc={d} currency={currency} canDecide active={d.status === "confirmed" ? d.id === activeId : undefined} />
+                <DocumentCard key={d.id} doc={d} currency={currency} canDecide active={d.status === "confirmed" && d.kind !== "invoice" ? d.id === activeId : undefined} />
               ))}
             </div>
           )}

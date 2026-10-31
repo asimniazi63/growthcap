@@ -112,7 +112,7 @@ export type CoreMetricId =
   | "refund_rate"
   | "discounted_order_share";
 
-export type MetricId = CoreMetricId | "repeat_rate" | "zero_sales_days";
+export type MetricId = CoreMetricId | "repeat_rate" | "zero_sales_days" | "gross_margin";
 
 export interface StorylineCheck {
   metric: MetricId;

@@ -3,7 +3,7 @@ import { json, readJson, withTenant } from "@/lib/api/respond";
 import { getDb } from "@/lib/db/client";
 import { AppError } from "@/lib/errors";
 import { readerDeps } from "@/lib/plan-in/model";
-import { confirmDocument, discardDocument, getDocument, readDocument } from "@/lib/plan-in/store";
+import { confirmDocument, confirmInvoice, discardDocument, getDocument, readDocument } from "@/lib/plan-in/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -18,7 +18,8 @@ export const GET = (_request: Request, { params }: Params) =>
     return doc ? json({ document: doc }) : json({ error: "NOT_FOUND" }, 404);
   });
 
-// A Growth Capital admin or partner confirms (the targets become the brand's active plan), discards, or reads again.
+// A Growth Capital admin or partner confirms (a SOW's or plan sheet's targets become the brand's active plan; an invoice becomes
+// a proposed cost update that waits for approval in the ledger, and nothing is written to Shopify), discards, or reads again.
 // A document that was already decided answers 404 and nothing changes.
 export const POST = (request: Request, { params }: Params) =>
   withTenant(async (ctx) => {
@@ -28,6 +29,11 @@ export const POST = (request: Request, { params }: Params) =>
     const id = (await params).id;
     switch (parsed.data.action) {
       case "confirm": {
+        const existing = await getDocument(db, ctx, id);
+        if (existing?.kind === "invoice") {
+          const proposed = await confirmInvoice(db, ctx, id);
+          return proposed ? json({ status: "confirmed", actionId: proposed.actionId, lines: proposed.lines }) : json({ error: "NOT_FOUND" }, 404);
+        }
         const done = await confirmDocument(db, ctx, id);
         return done ? json({ status: "confirmed", planId: done.planId }) : json({ error: "NOT_FOUND" }, 404);
       }
@@ -35,7 +41,7 @@ export const POST = (request: Request, { params }: Params) =>
         return (await discardDocument(db, ctx, id)) ? json({ status: "discarded" }) : json({ error: "NOT_FOUND" }, 404);
       case "read": {
         const existing = await getDocument(db, ctx, id);
-        const doc = existing ? await readDocument(db, ctx, id, existing.kind === "sow" ? readerDeps() : undefined) : null;
+        const doc = existing ? await readDocument(db, ctx, id, existing.kind === "sow" || existing.kind === "invoice" ? readerDeps() : undefined) : null;
         return doc ? json({ document: doc }) : json({ error: "NOT_FOUND" }, 404);
       }
     }

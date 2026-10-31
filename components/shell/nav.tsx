@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, type LucideIcon } from "lucide-react";
+import { FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, type LucideIcon } from "lucide-react";
 
 interface Item {
   href: string;
@@ -20,6 +20,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
       { href: "/pace", label: "Pace", icon: Gauge },
       { href: "/portfolio", label: "Portfolio", icon: LayoutGrid },
       { href: "/briefs", label: "Briefs", icon: Newspaper },
+      { href: "/audit", label: "Audit", icon: ScanSearch },
     ],
   },
   {

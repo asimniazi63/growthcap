@@ -137,6 +137,20 @@ export function costUsd(spec: ModelSpec, usage: TokenUsage): number {
   return ((usage.inputTokens ?? 0) * spec.inputUsdPerMTok + (usage.outputTokens ?? 0) * spec.outputUsdPerMTok) / 1e6;
 }
 
-// After a timeout or a 5xx the turn is retried once on the same model (the plan's T4 change). A model-specific failure
-// would call for another model; there is only one interim model, so this is the model that failed.
+// After a timeout or a 5xx the turn is retried once on the same model (the plan's T4 change); the SDK does that inside the
+// call. If it still fails before any answer text has streamed, the turn moves once to the fallback model below.
 export const retryModelFor = (spec: ModelSpec): ModelSpec => spec;
+
+// The model a turn moves to when the one that was asked for is down. AGENT_FALLBACK_MODEL_ID (a key in the registry) wins
+// when it is set and available. Otherwise it is Opus 5.5 once Claude 5.5 is approved (BEDROCK_CLAUDE_ENABLED), and Devstral 2
+// until then. It is never the model that just failed; null means there is nothing else to try.
+export function fallbackModelFor(primary: ModelSpec, env: Env = process.env): ModelSpec | null {
+  const available = availableModels(env);
+  const wanted = env.AGENT_FALLBACK_MODEL_ID?.trim();
+  const candidates = [wanted, claudeOn(env) ? "claude-opus-5-5" : undefined, "devstral-2", "claude-sonnet-4-6"];
+  for (const id of candidates) {
+    const spec = id ? available.find((m) => m.id === id) : undefined;
+    if (spec && spec.id !== primary.id) return spec;
+  }
+  return null;
+}

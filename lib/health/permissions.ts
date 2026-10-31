@@ -37,6 +37,7 @@ export function permissionGroups(scopes: string): PermissionGroups {
       { id: "targets", label: "Sales targets", detail: "Set a sales target in Shopify", state: all("write_reports") },
       { id: "annotations", label: "Chart annotations", detail: "Add a dated note to charts", state: all("write_analytics_annotations") },
       { id: "discount_codes", label: "Discount codes", detail: "Turn a code off", state: all("write_discounts") },
+      { id: "unit_costs", label: "Unit costs", detail: "Update a variant's cost after an invoice is approved", state: all("write_inventory") },
       {
         id: "landing_pages",
         label: "Landing pages",

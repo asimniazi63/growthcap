@@ -2,9 +2,9 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight, Minus } from "lucide-react"
 import type { ReactNode } from "react";
 import { PaceTrack } from "@/components/pace/pace-track";
 import { formatGap, formatMove, formatRange, formatUnit } from "@/lib/pace/format";
-import type { GaugeItem, KpiCard, ViewData } from "@/lib/views/types";
+import type { CohortRow, GaugeItem, KpiCard, ViewData } from "@/lib/views/types";
 
-// The six components a chat answer can draw. Each is plain server-safe markup (no chart library), with a label that gives
+// The seven components a chat answer can draw. Each is plain server-safe markup (no chart library), with a label that gives
 // the figures to a screen reader and a table of the numbers behind every chart. Every figure comes from `data`, which the
 // server built from tool results; store text (a product title) is only ever rendered as text.
 
@@ -229,6 +229,95 @@ function Gauge({ g, currency }: { g: GaugeItem; currency: string }) {
   );
 }
 
+const monthLabel = (month: string) => new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00Z`));
+const percent = (share: number) => `${(share * 100).toFixed(1)}%`;
+
+// The cohort heat-grid: a row for each month of first orders, a column for each 30-day month after, a cell shaded by the share
+// of that cohort who ordered again by then (the share is cumulative, so a row can only get darker).
+function Cohort({ data }: { data: Extract<ViewData, { component: "cohort" }> }) {
+  const shares = data.rows.flatMap((r) => r.cells.map((c) => c.repeatShare).filter((x): x is number => x !== null));
+  const max = Math.max(...shares, 0);
+  const shade = (share: number) => `rgba(15, 118, 110, ${(max > 0 ? Math.min(share / max, 1) * 0.55 : 0).toFixed(2)})`;
+  const columns = data.windowMonths;
+  const label = `Repeat rate by first-order month and months since the first order${data.firstOrderCode ? `, first orders with ${data.firstOrderCode}` : ""}: ${data.rows.length} cohorts, ${data.rows[0]?.cohort} to ${data.rows.at(-1)?.cohort}${max > 0 ? `, up to ${percent(max)}` : ""}`;
+  const cellWords = (c: CohortRow["cells"][number]) => (c.repeatShare === null ? "not enough time has passed" : `${percent(c.repeatShare)} of ${c.customers}`);
+  return (
+    <>
+      <div className="overflow-x-auto">
+        <div role="img" aria-label={label} className="grid min-w-max gap-1" style={{ gridTemplateColumns: `6rem repeat(${columns.length}, minmax(4.25rem, 1fr))` }}>
+          <div aria-hidden className="muted px-1 text-xs">First order</div>
+          {columns.map((k) => (
+            <div key={k} aria-hidden className="muted px-1 text-center text-xs">{`${k} ${k === 1 ? "month" : "months"}`}</div>
+          ))}
+          {data.rows.flatMap((r) => [
+            <div key={`${r.cohort}-h`} aria-hidden className="flex flex-col justify-center px-1 text-[13px]">
+              <span className="font-medium">{monthLabel(r.cohort)}</span>
+              <span className="muted text-[11px]">{`${r.cohortCustomers} customers`}</span>
+            </div>,
+            ...columns.map((k) => {
+              const c = r.cells.find((x) => x.monthsSince === k);
+              return (
+                <div
+                  key={`${r.cohort}-${k}`}
+                  aria-hidden
+                  title={`${monthLabel(r.cohort)}, within ${k * 30} days: ${c ? cellWords(c) : "no data"}`}
+                  className="num flex min-h-11 flex-col items-center justify-center rounded-md border border-line text-[13px] font-medium"
+                  style={c && c.repeatShare !== null ? { backgroundColor: shade(c.repeatShare) } : undefined}
+                >
+                  {c && c.repeatShare !== null ? (
+                    <>
+                      <span>{percent(c.repeatShare)}</span>
+                      <span className="muted text-[10.5px] font-normal">{`of ${c.customers}`}</span>
+                    </>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </div>
+              );
+            }),
+          ])}
+        </div>
+      </div>
+      <p className="muted mt-3 text-[13px]">A month here is 30 days. Each cell is the share of that month&apos;s new customers who ordered again within that time; a dash means nobody in the cohort has been a customer that long yet.</p>
+      <details className="group mt-4">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-md text-[13px] font-medium text-brand-strong marker:content-none [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+          Show the numbers
+        </summary>
+        <div className="mt-2 max-h-72 overflow-auto rounded-xl border border-line">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th scope="col">First order</th>
+                <th scope="col" className="num">Customers</th>
+                {columns.map((k) => (
+                  <th key={k} scope="col" className="num">{`${k * 30} days`}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.rows.map((r) => (
+                <tr key={r.cohort}>
+                  <td>{monthLabel(r.cohort)}</td>
+                  <td className="num">{r.cohortCustomers}</td>
+                  {columns.map((k) => {
+                    const c = r.cells.find((x) => x.monthsSince === k);
+                    return (
+                      <td key={k} className="num">
+                        {c && c.repeatShare !== null ? `${percent(c.repeatShare)} of ${c.customers}` : "—"}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </>
+  );
+}
+
 function Waterfall({ data, currency }: { data: Extract<ViewData, { component: "waterfall" }>; currency: string }) {
   const W = 560;
   const H = 240;
@@ -328,6 +417,12 @@ export function ViewRenderer({ data, title, currency }: { data: ViewData; title:
       return (
         <Frame title={title} data={data}>
           <Waterfall data={data} currency={currency} />
+        </Frame>
+      );
+    case "cohort":
+      return (
+        <Frame title={title} data={data}>
+          <Cohort data={data} />
         </Frame>
       );
   }

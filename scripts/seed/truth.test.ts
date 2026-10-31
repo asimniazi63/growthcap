@@ -169,3 +169,21 @@ describe("monthlyMetrics and buildTruth", () => {
     expect(t.storylines[0]?.checks[0]?.expected).toBe(3);
   });
 });
+
+describe("gross_margin", () => {
+  it("is (net sales - today's unit cost x units kept) / net sales, with refunded units not kept", () => {
+    // January net sales 3350. Cost: V_001 300 x (2 sold - 1 refunded), V_003 100 x 1, V_002 600 x 1 = 1000.
+    expect(metricValue(tiny(), "gross_margin", {}, jan)).toBeCloseTo(2350 / 3350, 10);
+  });
+
+  it("leaves a variant with no unit cost out of both parts", () => {
+    const ds = tiny();
+    (ds.variants[2] as { unitCost?: number }).unitCost = undefined; // V_003 sold 1 unit for 450 net
+    expect(metricValue(ds, "gross_margin", {}, jan)).toBeCloseTo((2900 - 900) / 2900, 10);
+  });
+
+  it("is 0 when nothing was sold, and follows a filter", () => {
+    expect(metricValue(tiny(), "gross_margin", {}, { from: "2026-03-01", to: "2026-03-31" })).toBe(0);
+    expect(metricValue(tiny(), "gross_margin", { product: "P_002" }, feb)).toBeCloseTo((1000 - 200) / 1000, 10);
+  });
+});

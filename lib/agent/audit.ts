@@ -19,6 +19,7 @@ export interface RunFinish {
   steps?: number;
   repaired?: boolean;
   flaggedNumbers?: number;
+  modelId?: string; // set when the model that answered is not the one the run began with (a fallback)
 }
 
 export interface StepRecord {
@@ -49,6 +50,7 @@ export async function finishRun(db: Db, runId: string, result: RunFinish): Promi
       status: result.status,
       errorCode: result.errorCode ?? null,
       finishedAt: new Date(),
+      ...(result.modelId ? { modelId: result.modelId } : {}),
       ...(result.inputTokens !== undefined ? { inputTokens: result.inputTokens } : {}),
       ...(result.outputTokens !== undefined ? { outputTokens: result.outputTokens } : {}),
       ...(result.costMicros !== undefined ? { costMicros: result.costMicros } : {}),

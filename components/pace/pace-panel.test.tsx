@@ -106,3 +106,22 @@ describe("PacePanel: last month", () => {
     expect(out).toContain("10.1% behind");
   });
 });
+
+describe("PacePanel: what each remaining day has to bring", () => {
+  it("says how much a day the rest of the month needs, from the figure the tool returned", () => {
+    const v = view();
+    v.thisMonth!.gaps!.net_sales = gap({ target: 650_688, planned: 300_000, actual: 280_000, gap: -20_000, pctGap: -0.0667, projected: 610_000, spread: "last_year", neededPerDay: 5420, daysLeft: 16 });
+    v.thisMonth!.gaps!.orders = gap({ target: 92, planned: 40.5, actual: 44, gap: 3.5, pctGap: 0.0864, projected: 99.9, spread: "even", neededPerDay: 3, daysLeft: 16 });
+    const out = html(v);
+    expect(out).toContain("Need $54.20 a day for the rest of the month");
+    expect(out).toContain("Need 3 orders a day for the rest of the month");
+  });
+
+  it("says the target is met rather than a figure, and shows nothing when the tool gave neither", () => {
+    const v = view();
+    v.thisMonth!.gaps!.net_sales = gap({ target: 100, planned: 50, actual: 120, gap: 70, pctGap: 1.4, projected: 150, spread: "even", targetMet: true, daysLeft: 16 });
+    const out = html(v);
+    expect(out).toContain("Target for the month already met");
+    expect(html(view())).not.toContain("a day for the rest of the month");
+  });
+});

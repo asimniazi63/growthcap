@@ -5,6 +5,7 @@ import { isUuid } from "../ids";
 import { savedViews } from "../db/schema";
 import { AppError } from "../errors";
 import { queryMetric, queryMetricInputSchema } from "../metrics/query";
+import { getCohorts, getCohortsInputSchema } from "../tools/cohorts";
 import type { TenantContext } from "../tenancy/context";
 import { dbFor, parseInput } from "../tools/common";
 import { buildView, type ViewSource } from "./build";
@@ -18,7 +19,7 @@ export const MAX_SAVED_VIEWS = 12;
 const pinInput = z.strictObject({
   title: z.string().trim().min(1).max(80),
   component: z.enum(VIEW_COMPONENTS),
-  sources: z.array(z.strictObject({ tool: z.literal("query_metric"), input: z.unknown() })).min(1).max(3),
+  sources: z.array(z.strictObject({ tool: z.enum(["query_metric", "get_cohorts"]), input: z.unknown() })).min(1).max(3),
 });
 export type PinInput = z.input<typeof pinInput>;
 
@@ -35,7 +36,12 @@ export interface SavedView {
 export async function runSources(ctx: TenantContext, sources: ViewSourceRef[], deps: { db?: Db } = {}): Promise<ViewSource[]> {
   const out: ViewSource[] = [];
   for (const s of sources) {
-    if (s.tool !== "query_metric") throw new AppError("INVALID_INPUT", "Views are drawn from query_metric results only.");
+    if (s.tool === "get_cohorts") {
+      const input = parseInput(getCohortsInputSchema, s.input);
+      out.push({ tool: "get_cohorts", input, result: await getCohorts(ctx, input, deps) });
+      continue;
+    }
+    if (s.tool !== "query_metric") throw new AppError("INVALID_INPUT", "Views are drawn from query_metric results (a cohort grid from get_cohorts) only.");
     const input = parseInput(queryMetricInputSchema, s.input);
     out.push({ tool: "query_metric", input, result: await queryMetric(ctx, input, deps) });
   }

@@ -1,0 +1,19 @@
+{
+  "notice": "FICTIONAL SAMPLE: not a Growth Capital document. All brands, people and figures are invented.",
+  "supplier": { "name": "Harbourlight Cosmetic Labs", "address": "14 Quayside Row, Portsmouth, UK", "contact": "accounts@harbourlight.example" },
+  "billTo": "Solenne (fictional premium clean skincare brand)",
+  "invoiceNumber": "HCL-2026-0412",
+  "invoiceDate": "2026-10-20",
+  "purchaseOrder": "SOL-PO-2026-31",
+  "currency": "USD",
+  "terms": "Net 30. New unit prices apply to this delivery and to every delivery after it.",
+  "lines": [
+    { "page": 1, "sku": "SOL-01A", "description": "Vitamin C serum 15%, 30 ml, filled and boxed", "qty": 600, "unitCostCents": 1240 },
+    { "page": 1, "sku": "SOL-01B", "description": "Vitamin C serum 15%, 50 ml, filled and boxed", "qty": 400, "unitCostCents": 1830 },
+    { "page": 1, "sku": "SOL-02A", "description": "Hyaluronic hydration serum, 30 ml, filled and boxed", "qty": 500, "unitCostCents": 860 },
+    { "page": 2, "sku": "SOL-05A", "description": "Peptide firming serum, 30 ml, filled and boxed", "qty": 300, "unitCostCents": 1620 },
+    { "page": 2, "sku": "SOL-12B", "description": "Overnight recovery mask, 150 ml, filled and boxed", "qty": 250, "unitCostCents": 1580 },
+    { "page": 2, "sku": "SOL-99Z", "description": "Seasonal gift tin with sample set, 100 ml", "qty": 200, "unitCostCents": 640 }
+  ],
+  "shippingCents": 18500
+}

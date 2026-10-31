@@ -1,11 +1,13 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronRight, FileSpreadsheet, FileText, Loader2, Quote } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, FileSpreadsheet, FileText, Loader2, Quote, Receipt } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { METRICS } from "@/lib/metrics/registry";
 import { formatValue, monthName } from "@/lib/pace/format";
-import type { DocumentDetail, DocumentSummary } from "@/lib/plan-in/store";
+import { STATUS_TEXT, type MatchStatus } from "@/lib/plan-in/invoice-match";
+import type { DocumentDetail, DocumentSummary, InvoiceReview } from "@/lib/plan-in/store";
 
 const STATUS: Record<DocumentSummary["status"], { text: string; tone: string }> = {
   uploaded: { text: "Not read yet", tone: "badge-warn" },
@@ -53,6 +55,104 @@ function ChangesTable({ doc, currency }: { doc: DocumentDetail; currency: string
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+const cents = (c: number | null, currency: string) => (c === null ? "no cost set" : new Intl.NumberFormat("en-US", { style: "currency", currency }).format(c / 100));
+const STATUS_TONE: Record<MatchStatus, string> = { ready: "badge-ahead", no_change: "", not_in_store: "badge-behind", ambiguous: "badge-warn", currency_differs: "badge-warn" };
+
+// An invoice's lines next to the variants they match. Product and variant titles are store text, and the quote is invoice
+// text: both are only ever rendered as text.
+function InvoiceLines({ review, open, currency }: { review: InvoiceReview; open: boolean; currency: string }) {
+  const notInStore = review.rows.filter((r) => r.status === "not_in_store");
+  return (
+    <div>
+      {review.rows.length > 0 ? (
+        <div className="mt-4 overflow-x-auto rounded-xl border border-line">
+          <table className="data-table min-w-[44rem]">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Product</th>
+                {open ? <th className="num">Now</th> : null}
+                <th className="num">{open ? "Proposed" : "Cost on the invoice"}</th>
+                <th>From the invoice</th>
+              </tr>
+            </thead>
+            <tbody>
+              {review.rows.map((r) => (
+                <tr key={r.sku}>
+                  <td className="whitespace-nowrap font-medium">{r.sku}</td>
+                  <td>
+                    {r.product ? (
+                      <>
+                        {r.product}
+                        <span className="text-ink-3">, {r.variantTitle}</span>
+                      </>
+                    ) : (
+                      <span className="badge badge-behind">{STATUS_TEXT.not_in_store}</span>
+                    )}
+                    {r.status !== "ready" && r.status !== "not_in_store" ? <span className={`badge ml-1.5 ${STATUS_TONE[r.status]}`}>{STATUS_TEXT[r.status]}</span> : null}
+                  </td>
+                  {open ? <td className="num whitespace-nowrap text-ink-2">{r.status === "not_in_store" ? "n/a" : cents(r.currentCents, currency)}</td> : null}
+                  <td className="num whitespace-nowrap font-medium">{cents(r.proposedCents, r.currency)}</td>
+                  <td className="text-ink-2">
+                    <span className="flex items-start gap-1.5">
+                      <Quote className="mt-0.5 size-3.5 shrink-0 text-ink-3" aria-hidden />
+                      <span className="min-w-0">
+                        {r.quote} <span className="whitespace-nowrap text-ink-3">(page {r.page})</span>
+                      </span>
+                    </span>
+                    {r.note ? <span className="mt-1 block text-sm text-warn">{r.note}</span> : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted mt-4 text-sm">No line items with a SKU and a unit price were found in this invoice.</p>
+      )}
+      {open && notInStore.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-warn/25 bg-warn-tint/60 px-3.5 py-3">
+          <h4 className="flex items-center gap-2 text-sm font-medium text-warn">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden />
+            Not in this store, so not applied
+          </h4>
+          <p className="mt-1.5 text-sm text-ink-2">{notInStore.map((r) => r.sku).join(", ")}</p>
+        </div>
+      ) : null}
+      {review.unapplied.length > 0 ? (
+        <div className="mt-4 rounded-xl border border-warn/25 bg-warn-tint/60 px-3.5 py-3">
+          <h4 className="flex items-center gap-2 text-sm font-medium text-warn">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden />
+            Found, but not applied
+          </h4>
+          <ul className="mt-1.5 space-y-1.5 text-sm text-ink-2">
+            {review.unapplied.map((u, i) => (
+              <li key={i}>
+                {u.sentence} <span className="text-ink-3">(page {u.page})</span>: {u.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {review.unverified.length > 0 ? (
+        <details className="group mt-3 text-sm text-ink-3">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="size-4 shrink-0 transition-transform group-open:rotate-90" aria-hidden />
+            {review.unverified.length} statement{review.unverified.length === 1 ? "" : "s"} ignored: the quote was not found on the page
+          </summary>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-9">
+            {review.unverified.map((u, i) => (
+              <li key={i}>
+                {u.sentence} (page {u.page})
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -107,6 +207,7 @@ export function DocumentCard({ doc, currency, canDecide, active }: { doc: Docume
   const status = STATUS[doc.status];
   const detail = isDetail(doc) ? doc : null;
 
+  const isInvoice = doc.kind === "invoice";
   async function act(action: "confirm" | "discard" | "read") {
     setBusy(true);
     setError(null);
@@ -121,8 +222,8 @@ export function DocumentCard({ doc, currency, canDecide, active }: { doc: Docume
     setBusy(false);
   }
 
-  const KindIcon = doc.kind === "sow" ? FileText : FileSpreadsheet;
-  const badge = doc.status === "confirmed" && active === true ? { text: "Active", tone: "badge-ahead" } : doc.status === "confirmed" && active === false ? { text: "Confirmed", tone: "" } : status;
+  const KindIcon = doc.kind === "sow" ? FileText : isInvoice ? Receipt : FileSpreadsheet;
+  const badge = isInvoice && doc.status === "confirmed" ? { text: "Proposed for approval", tone: "badge-ahead" } : doc.status === "confirmed" && active === true ? { text: "Active", tone: "badge-ahead" } : doc.status === "confirmed" && active === false ? { text: "Confirmed", tone: "" } : status;
   const showActions = canDecide && (doc.status === "read" || doc.status === "uploaded");
 
   return (
@@ -144,28 +245,46 @@ export function DocumentCard({ doc, currency, canDecide, active }: { doc: Docume
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="badge">{doc.kind === "sow" ? "SOW" : "Plan sheet"}</span>
+            <span className="badge">{doc.kind === "sow" ? "SOW" : isInvoice ? "Supplier invoice" : "Plan sheet"}</span>
             <span className={`badge ${badge.tone}`}>{badge.text}</span>
           </div>
         </header>
 
-        {detail && (detail.status === "read" || detail.status === "confirmed") ? <Proposal doc={detail} currency={currency} /> : null}
-        {doc.status === "confirmed" && active !== false ? (
+        {detail?.invoice && (detail.status === "read" || detail.status === "confirmed") ? <InvoiceLines review={detail.invoice} open={detail.status === "read"} currency={currency} /> : null}
+        {detail && !isInvoice && (detail.status === "read" || detail.status === "confirmed") ? <Proposal doc={detail} currency={currency} /> : null}
+        {isInvoice && doc.status === "confirmed" ? (
+          <p className="mt-4 flex items-start gap-2 text-sm text-ahead">
+            <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>
+              The cost updates were proposed. Nothing changes in Shopify until they are approved in{" "}
+              <Link href="/actions" className="font-medium underline underline-offset-2">
+                Actions
+              </Link>
+              .
+            </span>
+          </p>
+        ) : null}
+        {!isInvoice && doc.status === "confirmed" && active !== false ? (
           <p className="mt-4 flex items-start gap-2 text-sm text-ahead">
             <Check className="mt-0.5 size-4 shrink-0" aria-hidden />
             This is now the active plan. The earlier plan is kept, inactive.
           </p>
         ) : null}
-        {doc.status === "confirmed" && active === false ? <p className="muted mt-4 text-sm">A newer plan has replaced this one. It is kept for the record.</p> : null}
-        {!detail && doc.status === "confirmed" && doc.targetCount !== null ? <p className="muted mt-2 text-sm">{doc.targetCount} targets were applied.</p> : null}
+        {!isInvoice && doc.status === "confirmed" && active === false ? <p className="muted mt-4 text-sm">A newer plan has replaced this one. It is kept for the record.</p> : null}
+        {!detail && !isInvoice && doc.status === "confirmed" && doc.targetCount !== null ? <p className="muted mt-2 text-sm">{doc.targetCount} targets were applied.</p> : null}
       </div>
 
       {showActions ? (
         <footer className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line bg-paper/70 px-5 py-3">
           {doc.status === "read" ? (
-            <button type="button" disabled={busy || !detail || detail.changes.length === 0} onClick={() => act("confirm")} className="btn btn-primary btn-sm">
+            <button
+              type="button"
+              disabled={busy || !detail || (isInvoice ? (detail.invoice?.readyCount ?? 0) === 0 : detail.changes.length === 0)}
+              onClick={() => act("confirm")}
+              className="btn btn-primary btn-sm"
+            >
               {busy ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
-              Confirm as the active plan
+              {isInvoice ? `Propose ${detail?.invoice?.readyCount ?? 0} cost ${detail?.invoice?.readyCount === 1 ? "update" : "updates"}` : "Confirm as the active plan"}
             </button>
           ) : (
             <button type="button" disabled={busy} onClick={() => act("read")} className="btn btn-primary btn-sm">
@@ -176,7 +295,11 @@ export function DocumentCard({ doc, currency, canDecide, active }: { doc: Docume
           <button type="button" disabled={busy} onClick={() => act("discard")} className="btn btn-ghost btn-sm">
             Discard
           </button>
-          {doc.status === "read" ? <span className="faint min-w-[12rem] flex-1 text-sm">Confirming replaces the plan that Pace and the agent use. The current plan is kept.</span> : null}
+          {doc.status === "read" ? (
+            <span className="faint min-w-[12rem] flex-1 text-sm">
+              {isInvoice ? "This only proposes the change. A cost is updated in Shopify after a person approves it in Actions." : "Confirming replaces the plan that Pace and the agent use. The current plan is kept."}
+            </span>
+          ) : null}
         </footer>
       ) : null}
       {error ? (

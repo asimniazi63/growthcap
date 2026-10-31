@@ -150,8 +150,40 @@ function zeroSalesDays(ds: Dataset, idx: Index, f: Filter, p: Period): number {
   return count;
 }
 
+// (net sales - unit cost x units kept) / net sales, using each variant's unit cost in the dataset (today's cost). Variants with
+// no cost are left out of both parts. Units kept are the line's units less the units refunded on that order for that variant.
+function grossMargin(ds: Dataset, idx: Index, f: Filter, p: Period): number {
+  const cost = new Map(ds.variants.map((v) => [v.genId, v.unitCost as number | null | undefined]));
+  const hasCost = (variantGenId: string) => cost.get(variantGenId) !== undefined && cost.get(variantGenId) !== null;
+  let net = 0;
+  let cogs = 0;
+  for (const s of selectOrders(ds, idx, f, p)) {
+    const per = idx.refundedQty.get(s.order.genId);
+    for (const i of s.lines) {
+      const l = s.order.lines[i]!;
+      if (!hasCost(l.variantGenId)) continue;
+      net += l.qty * l.unitPrice - (idx.discountAlloc.get(s.order.genId)?.[i] ?? 0);
+      cogs += cost.get(l.variantGenId)! * Math.max(0, l.qty - (per?.get(l.variantGenId) ?? 0));
+    }
+  }
+  for (const r of ds.refunds) {
+    const d = localDate(r.processedAt);
+    if (d < p.from || d > p.to) continue;
+    const o = idx.orderById.get(r.orderGenId);
+    if (!o || !orderPasses(idx, o, f)) continue;
+    for (const rl of r.lines) {
+      const i = o.lines.findIndex((l) => l.variantGenId === rl.variantGenId);
+      if (i < 0 || !lineMatches(idx, rl.variantGenId, f) || !hasCost(rl.variantGenId)) continue;
+      const l = o.lines[i]!;
+      net -= rl.qty === l.qty ? lineNet(idx, o, i) : roundHalfUp((lineNet(idx, o, i) * rl.qty) / l.qty);
+    }
+  }
+  return net <= 0 ? 0 : (net - cogs) / net;
+}
+
 export function metricValue(ds: Dataset, metric: MetricId, filter: Filter, period: Period): number {
   const idx = indexOf(ds);
+  if (metric === "gross_margin") return grossMargin(ds, idx, filter, period);
   if (metric === "repeat_rate") return repeatRate(ds, idx, filter, period);
   if (metric === "zero_sales_days") return zeroSalesDays(ds, idx, filter, period);
 

@@ -90,3 +90,32 @@ describe("planGap: other ranges and metrics", () => {
     expect(await planGap({ ...base, metrics: ["gross_sales"], plan, range: { from: "2026-11-01", to: "2026-11-30" } })).toBeUndefined();
   });
 });
+
+describe("planGap: what each remaining day has to bring (neededPerDay)", () => {
+  const base = { plan, metrics: ["net_sales" as const, "orders" as const], lastYearDaily: noPattern };
+
+  it("is the target less the actual so far, over the days left in the month, in cents for money and one decimal for counts", async () => {
+    // October has 31 days; through the 15th, 16 are left.
+    const g = await planGap({ ...base, range: { from: "2026-10-01", to: "2026-10-15" }, values: { net_sales: 280_000, orders: 40 } });
+    expect(g!.net_sales).toMatchObject({ daysLeft: 16, neededPerDay: Math.round((650_688 - 280_000) / 16) });
+    expect(g!.orders).toMatchObject({ daysLeft: 16, neededPerDay: Math.round(((92 - 40) / 16) * 10) / 10 });
+    expect(g!.net_sales!.targetMet).toBeUndefined();
+  });
+
+  it("is absent once the target is met, which targetMet says, and never negative", async () => {
+    const g = await planGap({ ...base, range: { from: "2026-10-01", to: "2026-10-15" }, values: { net_sales: 700_000, orders: 92 } });
+    expect(g!.net_sales).toMatchObject({ targetMet: true, daysLeft: 16 });
+    expect(g!.net_sales!.neededPerDay).toBeUndefined();
+    expect(g!.orders!.neededPerDay).toBeUndefined();
+  });
+
+  it("is absent for a whole month, a range that doesn't start the month, and a rate or an average", async () => {
+    const whole = await planGap({ ...base, range: { from: "2026-10-01", to: "2026-10-31" }, values: { net_sales: 100, orders: 1 } });
+    expect(whole!.net_sales!.neededPerDay).toBeUndefined();
+    const mid = await planGap({ ...base, range: { from: "2026-10-05", to: "2026-10-15" }, values: { net_sales: 100, orders: 1 } });
+    expect(mid!.net_sales!.neededPerDay).toBeUndefined();
+    const rate = await planGap({ plan, range: { from: "2026-11-01", to: "2026-11-10" }, metrics: ["aov", "returning_customer_rate"], values: { aov: 9_000, returning_customer_rate: 0.3 }, lastYearDaily: noPattern });
+    expect(rate!.aov!.neededPerDay).toBeUndefined();
+    expect(rate!.returning_customer_rate!.neededPerDay).toBeUndefined();
+  });
+});

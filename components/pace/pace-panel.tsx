@@ -1,4 +1,4 @@
-import { ArrowDownRight, ArrowUpRight, CalendarClock, CalendarX, Minus, Target } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, CalendarClock, CalendarX, CircleCheck, Gauge, Minus, Target } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PaceChart } from "@/components/pace/pace-chart";
 import { PaceTrack } from "@/components/pace/pace-track";
@@ -23,6 +23,28 @@ function gapText(metric: PlanMetric, g: PlanGap, currency: string) {
   const gap = formatGap(metric, g.gap, currency);
   const pct = formatPct(g.pctGap);
   return { tone: gap.tone, text: gap.text, pct: pct && METRICS[metric].unit !== "rate" ? ` (${pct})` : "" };
+}
+
+const NEED_NOUN: Partial<Record<PlanMetric, string>> = { orders: " orders", new_customer_orders: " new-customer orders" };
+
+// "Need $54.20 a day for the rest of the month", from the plan gap the tool returned (so the figure is one the checker can match).
+// Absent once the month is over; says so when the target is already met.
+function needLine(metric: PlanMetric, g: PlanGap, currency: string): { text: string; met: boolean } | null {
+  if (g.neededPerDay !== undefined) return { text: `Need ${formatValue(metric, g.neededPerDay, currency)}${NEED_NOUN[metric] ?? ""} a day for the rest of the month`, met: false };
+  if (g.targetMet) return { text: "Target for the month already met", met: true };
+  return null;
+}
+
+function NeedBadge({ metric, g, currency, className = "" }: { metric: PlanMetric; g: PlanGap; currency: string; className?: string }) {
+  const need = needLine(metric, g, currency);
+  if (!need) return null;
+  const Icon = need.met ? CircleCheck : Gauge;
+  return (
+    <p className={`flex items-start gap-1.5 font-medium ${need.met ? "text-ahead" : "text-ink-2"} ${className}`}>
+      <Icon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      <span>{need.text}</span>
+    </p>
+  );
 }
 
 // The gap as a chip: colour and an arrow say ahead or behind, the words say by how much.
@@ -68,6 +90,7 @@ function TrackHero({ g, currency }: { g: PlanGap; currency: string }) {
           <p className="mt-3">
             <GapBadge metric="net_sales" g={g} currency={currency} />
           </p>
+          <NeedBadge metric="net_sales" g={g} currency={currency} className="mt-2.5 text-[13.5px]" />
         </div>
         <PaceTrack label={label} actual={g.actual} planned={g.planned} target={g.target} projected={g.projected} money={money} size="lg" />
       </div>
@@ -87,6 +110,7 @@ function ChartHero({ g, series, currency }: { g: PlanGap; series: PaceSeries; cu
           <p className="mt-3">
             <GapBadge metric="net_sales" g={g} currency={currency} />
           </p>
+          <NeedBadge metric="net_sales" g={g} currency={currency} className="mt-2.5 text-[13.5px]" />
           <dl className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
             <div>
               <dt className="faint text-[13px]">Plan so far</dt>
@@ -149,6 +173,7 @@ function MetricTile({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; c
       </p>
       {paced ? (
         <>
+          <NeedBadge metric={metric} g={g} currency={currency} className="mt-1.5 text-[12.5px]" />
           <p className="faint mt-1 text-[12.5px]">Plan so far {money(g.planned)}</p>
           {g.projected !== undefined ? (
             <p className="faint mt-0.5 flex items-start gap-1.5 text-[12.5px]">

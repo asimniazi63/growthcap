@@ -7,6 +7,7 @@ import { AppError } from "../errors";
 import { proposeMemory } from "../memory/store";
 import type { QueryMetricInput, MetricRow } from "../metrics/query";
 import type { TenantContext } from "../tenancy/context";
+import type { CohortsData, GetCohortsInput } from "../tools/cohorts";
 import type { ToolResult } from "../tools/result";
 import { buildView, type ViewSource } from "../views/build";
 import { VIEW_COMPONENTS, type ViewPayload } from "../views/types";
@@ -46,7 +47,7 @@ const recoverable = (e: unknown) => e instanceof AppError && (e.code === "INVALI
 export function buildRenderViewTool(d: ViewToolDeps) {
   return tool({
     description:
-      "Draw results from this turn as a card or chart in the answer. component is one of kpi (totals), line (a metric by day, week or month), bar (a metric by product, channel, code and so on), table, gauge (month to date against plan; needs a result with gapToPlan) or waterfall (a bridge from the previous period, needs compareTo and a grouping). title is a few words. queryRefs are the queryId values of the query_metric results to draw. The server reads the numbers from those results; you never type them.",
+      "Draw results from this turn as a card or chart in the answer. component is one of kpi (totals), line (a metric by day, week or month), bar (a metric by product, channel, code and so on), table, gauge (month to date against plan; needs a result with gapToPlan), waterfall (a bridge from the previous period, needs compareTo and a grouping) or cohort (a first-order month by months-since grid, drawn from a get_cohorts result). title is a few words. queryRefs are the queryId values of the query_metric or get_cohorts results to draw. The server reads the numbers from those results; you never type them.",
     inputSchema: renderViewInput,
     execute: async (input) => {
       const started = Date.now();
@@ -54,8 +55,9 @@ export function buildRenderViewTool(d: ViewToolDeps) {
         const sources: ViewSource[] = input.queryRefs.map((ref) => {
           const call = d.calls.get(ref);
           if (!call) throw new AppError("INVALID_INPUT", `${ref} is not a query id from this turn. Use the queryId of a result you already have.`);
-          if (call.tool !== "query_metric") throw new AppError("INVALID_INPUT", "Views are drawn from query_metric results only.");
-          return { tool: "query_metric", input: call.input as QueryMetricInput, result: call.result as ToolResult<MetricRow[]> };
+          if (call.tool !== "query_metric" && call.tool !== "get_cohorts") throw new AppError("INVALID_INPUT", "Views are drawn from query_metric or get_cohorts results only.");
+          if (call.tool === "get_cohorts") return { tool: "get_cohorts" as const, input: call.input as GetCohortsInput, result: call.result as ToolResult<CohortsData> };
+          return { tool: "query_metric" as const, input: call.input as QueryMetricInput, result: call.result as ToolResult<MetricRow[]> };
         });
         const stray = d.titleProblems(input.title);
         if (stray.length > 0) throw new AppError("INVALID_INPUT", `The title has numbers that are not in the results (${stray.join(", ")}). Write the title without them.`);

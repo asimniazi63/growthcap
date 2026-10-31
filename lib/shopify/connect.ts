@@ -6,9 +6,9 @@ import { shopConnections } from "../db/schema";
 // The core read scopes. read_all_orders is added only once Shopify approves it (see shopify.app.toml).
 export const REQUIRED_SCOPES = ["read_products", "read_orders", "read_customers", "read_inventory", "read_discounts"] as const;
 
-// What the approved writes need (T8 Act, T9). Asked for at install so the grant covers them, but not required: a store that
+// What the approved writes need (T8 Act, T9; write_inventory is for the unit-cost update, T13). Asked for at install so the grant covers them, but not required: a store that
 // has only the read scopes still connects, and a write that needs a missing scope fails with Shopify's own message.
-export const WRITE_SCOPES = ["write_discounts", "write_reports", "write_analytics_annotations", "read_themes", "write_themes", "write_content"] as const;
+export const WRITE_SCOPES = ["write_discounts", "write_reports", "write_analytics_annotations", "read_themes", "write_themes", "write_content", "write_inventory"] as const;
 export const REQUESTED_SCOPES = [...REQUIRED_SCOPES, ...WRITE_SCOPES] as const;
 
 export type ConnectResult =

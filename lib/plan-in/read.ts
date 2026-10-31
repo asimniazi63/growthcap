@@ -58,10 +58,10 @@ List every KPI target the document states, one sentence each: what is measured, 
 For each one give the page number and a quote: a run of text copied exactly from that page (same characters and order, no added or removed words, no table bars or markup).
 Do not calculate, convert, sum or infer any figure the page does not state. Skip a statement that has no figure.`;
 
-const pagesPrompt = (pages: string[]) => pages.map((p, i) => `Page ${i + 1}\n"""\n${p}\n"""`).join("\n\n");
+export const pagesPrompt = (pages: string[]) => pages.map((p, i) => `Page ${i + 1}\n"""\n${p}\n"""`).join("\n\n");
 
 // Lower case, one run of characters, typographic marks made plain: the PDF's line breaks and spacing don't count.
-const squash = (s: string) =>
+export const squash = (s: string) =>
   s
     .normalize("NFKC")
     .replace(/[‘’‛]/g, "'")
@@ -110,7 +110,7 @@ Every sentence number must appear in targets or in unapplied.`;
 
 const claimsPrompt = (claims: Claim[]) => claims.map((c, i) => `${i + 1}. (page ${c.page}) ${c.sentence}`).join("\n");
 
-const numbersIn = (text: string): number[] => [...text.matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => Number(m[0].replace(/,/g, "")));
+export const numbersIn = (text: string): number[] => [...text.matchAll(/\d[\d,]*(?:\.\d+)?/g)].map((m) => Number(m[0].replace(/,/g, "")));
 
 // The figure as it is written in a document: dollars for money, a percentage for a rate.
 function figureAsWritten(metric: PlanMetric, value: number): number {
@@ -121,7 +121,7 @@ function figureAsWritten(metric: PlanMetric, value: number): number {
 // A figure the model gives must appear in the quoted text, so it can't have been worked out or made up.
 const figureInQuote = (metric: PlanMetric, value: number, quote: string) => numbersIn(quote).some((n) => Math.abs(n - figureAsWritten(metric, value)) < 0.005);
 
-async function ask<T>(deps: ReaderDeps, schema: z.ZodType<T>, system: string, prompt: string): Promise<T> {
+export async function ask<T>(deps: ReaderDeps, schema: z.ZodType<T>, system: string, prompt: string): Promise<T> {
   try {
     const { output } = await generateText({
       model: deps.model,

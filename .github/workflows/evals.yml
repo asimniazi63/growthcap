@@ -1,0 +1,78 @@
+name: Evals
+
+# Runs the agent evals against the real model. These are PAID calls, so they run on demand and on pull requests that
+# change the agent, its tools, the prompt or the model registry, with a cost cap per run. Pull requests from forks get no
+# secrets, so they skip the run.
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_cost_usd:
+        description: "Stop starting new cases once the estimated cost reaches this many US dollars"
+        required: false
+        default: "3"
+      model:
+        description: "Model id from lib/agent/models.ts (empty = the default)"
+        required: false
+        default: ""
+  pull_request:
+    paths:
+      - "lib/agent/**"
+      - "lib/tools/**"
+      - "lib/agent/prompt.ts"
+      - "lib/agent/models.ts"
+      - "evals/**"
+      - ".github/workflows/evals.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evals:
+    # A fork's pull request has no access to secrets: skip it instead of failing.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The Bedrock API key the app uses (a bearer token), or an IAM key pair: set one of the two in Actions secrets.
+      AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      BEDROCK_CLAUDE_ENABLED: ${{ vars.BEDROCK_CLAUDE_ENABLED }}
+      # The cost cap per run (US dollars, estimated prices). A pull request uses the repository variable, default 3.
+      EVAL_MAX_COST_USD: ${{ github.event.inputs.max_cost_usd || vars.EVAL_MAX_COST_USD || '3' }}
+      EVAL_MODEL: ${{ github.event.inputs.model }}
+      # Optional: traces of the eval run in Langfuse (route "eval").
+      LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+      LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+      LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run the evals
+        run: |
+          if [ -n "$EVAL_MODEL" ]; then
+            npm run eval -- --max-cost "$EVAL_MAX_COST_USD" --model "$EVAL_MODEL"
+          else
+            npm run eval -- --max-cost "$EVAL_MAX_COST_USD"
+          fi
+      - name: Add the scoreboard to the job summary
+        if: always()
+        run: |
+          if [ -f docs/evals/scoreboard.md ]; then cat docs/evals/scoreboard.md >> "$GITHUB_STEP_SUMMARY"; else echo "No scoreboard was written (the run stopped before a case finished)." >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: Upload the eval results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evals-${{ github.run_id }}
+          path: docs/evals
+          if-no-files-found: warn

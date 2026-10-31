@@ -43,6 +43,20 @@
       "when": 1793466918513,
       "tag": "0005_absent_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793483661381,
+      "tag": "0006_flat_xorn",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793483732145,
+      "tag": "0007_tan_valeria_richards",
+      "breakpoints": true
     }
   ]
 }

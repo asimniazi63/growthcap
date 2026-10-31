@@ -1,4 +1,5 @@
 import { FlaskConical } from "lucide-react";
+import { OpenItems } from "@/components/action-items/open-items";
 import { ErrorBanner } from "@/components/chat/error-banner";
 import { PacePanel } from "@/components/pace/pace-panel";
 import { PinnedViews } from "@/components/pace/pinned-views";
@@ -52,6 +53,7 @@ export default async function PacePage() {
           </p>
         ) : null}
         {view && ctx.shop ? <PacePanel view={view} currency={ctx.shop.currency} /> : null}
+        <OpenItems ctx={ctx} />
         {ctx.shop?.status === "connected" ? <PinnedViews ctx={ctx} /> : null}
       </div>
     </section>

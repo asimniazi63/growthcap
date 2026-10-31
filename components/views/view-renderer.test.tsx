@@ -152,3 +152,28 @@ describe("waterfall", () => {
     expect(out).not.toContain("-$");
   });
 });
+
+describe("cohort", () => {
+  const data: ViewData = {
+    component: "cohort",
+    windowMonths: [1, 2],
+    rows: [
+      { cohort: "2026-03", cohortCustomers: 40, cells: [{ monthsSince: 1, customers: 40, repeaters: 6, repeatShare: 0.15 }, { monthsSince: 2, customers: 40, repeaters: 10, repeatShare: 0.25 }] },
+      { cohort: "2026-09", cohortCustomers: 50, cells: [{ monthsSince: 1, customers: 50, repeaters: 5, repeatShare: 0.1 }, { monthsSince: 2, customers: 0, repeaters: 0, repeatShare: null }] },
+    ],
+    ...basis,
+  };
+  it("draws a heat grid with the figures printed, a label for a screen reader and a table of the numbers", () => {
+    const out = html(data, "Repeat rate by first-order month");
+    expect(out).toContain('role="img"');
+    expect(out).toMatch(/aria-label="Repeat rate by first-order month and months since the first order/);
+    expect(out).toContain("15.0%");
+    expect(out).toContain("25.0%");
+    expect(out).toContain("Show the numbers");
+    expect(out).toContain("60 days");
+    expect(out).toContain("rgba(15, 118, 110");
+  });
+  it("shows a dash, not a zero, where nobody is old enough yet", () => {
+    expect(html(data)).toContain("—");
+  });
+});

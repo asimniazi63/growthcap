@@ -1,4 +1,5 @@
-// `npm run eval -- [--case <id>]... [--model <id>]`
+// `npm run eval -- [--case <id>]... [--model <id>] [--max-cost <usd>] [--out <file>]`
+// --max-cost (or EVAL_MAX_COST_USD) stops starting new cases once the estimated cost reaches the cap, and says so.
 // Asks the real model each case's question against the fixture data (an in-memory database, today pinned), grades the
 // answer with deterministic checks, and writes docs/evals/latest.md and latest.json when every case was run.
 // It makes PAID model calls (a few cents) and prints which model it used. Run it only on purpose.
@@ -19,6 +20,8 @@ import { STORES } from "../scripts/seed/stores.js";
 import type { StoreKey } from "../scripts/seed/types.js";
 import { CASES, type EvalCase, type EvalEnv } from "./cases";
 import { gradeAsync, numbersIn, type Check, type EvalRun } from "./graders";
+import { buildScoreboard, writeScoreboard } from "./scoreboard";
+import { flushTraces, startTracing } from "../lib/ops/tracing";
 
 const args = (name: string) => process.argv.flatMap((a, i) => (a === `--${name}` && process.argv[i + 1] ? [process.argv[i + 1]!] : []));
 
@@ -61,12 +64,14 @@ interface CaseResult {
   answer: string;
   control?: { answer: string; numbers: number[] };
   costUsd: number;
+  latencyMs: number;
   tokens: { input: number; output: number };
 }
 
 async function runCase(c: EvalCase, env: EvalEnv, modelId: string | undefined): Promise<CaseResult> {
   setTestNow(c.now);
   await env.db.delete(memories);
+  const started = Date.now();
   let cost = 0;
   const tokens = { input: 0, output: 0 };
   const count = (s: RunSummary) => {
@@ -87,7 +92,7 @@ async function runCase(c: EvalCase, env: EvalEnv, modelId: string | undefined): 
   await env.db.delete(memories);
 
   const checks = await gradeAsync(run, c.expect(env));
-  return { id: c.id, category: c.category, passed: checks.every((k) => k.ok), checks, answer: run.answer, ...(control ? { control } : {}), costUsd: cost, tokens };
+  return { id: c.id, category: c.category, passed: checks.every((k) => k.ok), checks, answer: run.answer, ...(control ? { control } : {}), costUsd: cost, latencyMs: Date.now() - started, tokens };
 }
 
 function markdown(results: CaseResult[], meta: { commit: string; model: string; ranAt: string }): string {
@@ -114,11 +119,17 @@ function markdown(results: CaseResult[], meta: { commit: string; model: string; 
 
 async function main(): Promise<void> {
   if (existsSync(".env.local")) process.loadEnvFile(".env.local");
-  if (!process.env.AWS_BEARER_TOKEN_BEDROCK) throw new Error("AWS_BEARER_TOKEN_BEDROCK is not set (put it in .env.local). The evals call the real model.");
+  if (!process.env.AWS_BEARER_TOKEN_BEDROCK && !(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)) {
+    throw new Error("AWS_BEARER_TOKEN_BEDROCK (or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY) is not set (put it in .env.local). The evals call the real model.");
+  }
   const ids = args("case");
   const selected = ids.length > 0 ? CASES.filter((c) => ids.includes(c.id)) : CASES;
   if (selected.length === 0) throw new Error(`No such case. Cases: ${CASES.map((c) => c.id).join(", ")}`);
   const modelId = args("model")[0];
+  const capText = args("max-cost")[0] ?? process.env.EVAL_MAX_COST_USD?.trim();
+  const maxCost = capText ? Number(capText) : null;
+  if (maxCost !== null && (!Number.isFinite(maxCost) || maxCost <= 0)) throw new Error(`--max-cost must be a positive number of US dollars, got ${JSON.stringify(capText)}.`);
+  startTracing(); // no-op unless the LANGFUSE_* variables are set; the traces are tagged route "eval"
   const spec = resolveModel(modelId, "chat", process.env);
   console.log(`Model: ${spec.id}. ${selected.length} case${selected.length === 1 ? "" : "s"}. These are paid model calls.`);
 
@@ -135,7 +146,14 @@ async function main(): Promise<void> {
   }
 
   const results: CaseResult[] = [];
+  let stoppedByCostCap = false;
   for (const c of selected) {
+    const spentSoFar = results.reduce((sum, r) => sum + r.costUsd, 0);
+    if (maxCost !== null && spentSoFar >= maxCost) {
+      stoppedByCostCap = true;
+      console.log(`Cost cap reached ($${spentSoFar.toFixed(4)} of $${maxCost.toFixed(2)}): not starting ${c.id} or the ${selected.length - results.length - 1} after it.`);
+      break;
+    }
     process.stdout.write(`${c.id} ... `);
     const r = await runCase(c, envs.get(c.store)!, modelId);
     results.push(r);
@@ -147,25 +165,32 @@ async function main(): Promise<void> {
   const total = results.reduce((s, r) => s + r.costUsd, 0);
   console.log(`\n${results.filter((r) => r.passed).length}/${results.length} passed. Model ${spec.id}. Estimated cost $${total.toFixed(4)}.`);
   const out = args("out")[0];
+  const meta0 = { ranAt: new Date().toISOString(), planned: selected.length, stoppedByCostCap, maxCostUsd: maxCost };
   if (out) {
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, `${JSON.stringify({ model: spec.id, ranAt: new Date().toISOString(), singleAgent: process.env.AGENT_SINGLE_AGENT === "true", totalCostUsd: total, cases: results }, null, 2)}\n`);
     console.log(`Wrote ${out}`);
   }
-  if (selected.length === CASES.length) {
-    let commit = "unknown";
-    try {
-      commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
-    } catch {
-      /* not a git checkout */
-    }
-    const meta = { commit, model: spec.id, ranAt: new Date().toISOString() };
+  let commit = "unknown";
+  try {
+    commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
+  } catch {
+    /* not a git checkout */
+  }
+  const meta = { commit, model: spec.id, ranAt: meta0.ranAt };
+  // The scoreboard is written for any run that finished at least one case (a capped run says so in it). latest.md and
+  // latest.json stay what they were: the record of a full run of every case.
+  if (results.length > 0 && !args("case").length) writeScoreboard(buildScoreboard(results, { ...meta, ...meta0 }));
+  if (selected.length === CASES.length && results.length === CASES.length) {
     mkdirSync("docs/evals", { recursive: true });
     writeFileSync("docs/evals/latest.md", markdown(results, meta));
     writeFileSync("docs/evals/latest.json", `${JSON.stringify({ ...meta, totalCostUsd: total, cases: results }, null, 2)}\n`);
-    console.log("Wrote docs/evals/latest.md and latest.json");
+    console.log("Wrote docs/evals/latest.md, latest.json and scoreboard.md/json");
+  } else if (results.length > 0 && !args("case").length) {
+    console.log("Wrote docs/evals/scoreboard.md and scoreboard.json (a partial run: latest.md and latest.json are unchanged)");
   }
-  process.exit(results.every((r) => r.passed) ? 0 : 1);
+  await flushTraces();
+  process.exit(results.length > 0 && results.every((r) => r.passed) ? 0 : 1);
 }
 
 main().catch((e: unknown) => {

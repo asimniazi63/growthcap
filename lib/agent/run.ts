@@ -10,9 +10,11 @@ import { requireConnectedShop, type ToolResult } from "../tools/result";
 import { beginRun, finishRun, recordStep } from "./audit";
 import { assertBudget } from "./budget";
 import { checkClaims, ledgerFromToolResults } from "./checker";
-import { costUsd, resolveModel } from "./models";
+import { fallbackReason, shouldFallback } from "./fallback";
+import { costUsd, fallbackModelFor, resolveModel, type ModelSpec } from "./models";
 import { repairInstruction, SYSTEM_PROMPT, turnContext } from "./prompt";
 import { createModel, providerOptionsFor } from "./provider";
+import { telemetryFor, withTrace } from "../ops/tracing";
 import { buildExtraTools, trackedCalls } from "./extra-tools";
 import { buildTools, type ToolHooks } from "./tools";
 import { buildRememberTool, buildRenderViewTool, type TurnCall } from "./view-tools";
@@ -23,6 +25,8 @@ import { buildRememberTool, buildRenderViewTool, type TurnCall } from "./view-to
 export const MAX_STEPS = 8;
 const REPAIR_STEPS = 4;
 const TURN_TIMEOUT_MS = 90_000;
+const FALLBACK_MIN_MS = 15_000; // a fallback attempt gets what is left of the route's 120 s, but at least this long
+const ROUTE_BUDGET_MS = 115_000;
 const MAX_MESSAGES = 20;
 const MAX_TEXT_CHARS = 4000;
 const STEP_LIMIT_TEXT = "I couldn't finish that within my step limit. Try a narrower question, such as one metric for one period.";
@@ -58,13 +62,15 @@ export interface AgentDeps {
   now?: Date;
   source?: AgentSource;
   model?: LanguageModel; // tests inject a mock
+  fallbackModel?: LanguageModel; // tests inject a mock; with `model` injected and no fallback given, a failed turn is not retried elsewhere
   onTurn?: (turn: TurnSaved) => Promise<void>; // called after a thread's turn finished without an error
 }
 
 export interface RunSummary {
   status: "ok" | "error";
   errorCode?: ErrorCode;
-  modelId: string;
+  modelId: string; // the model that answered: the fallback's id after a fallback
+  fallback?: { from: string; to: string; reason: string }; // set when the turn moved to the fallback model
   repaired: boolean;
   flaggedNumbers: number;
   steps: number;
@@ -132,6 +138,10 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
   let db: Db | undefined;
   let runId: string | null = null;
   const pending: Promise<unknown>[] = [];
+  let primary: ModelSpec | undefined; // the model the turn started on
+  let fallbackAdjustUsd = 0; // what the fallback model's own tokens cost beyond the primary's prices
+  // Both attempts count: the tokens of every attempt are in the summary, priced at the model that spent them.
+  const spendMicros = () => (primary ? Math.round((costUsd(primary, summary) + fallbackAdjustUsd) * 1e6) : 0);
 
   async function close(error?: AppError): Promise<void> {
     if (error) {
@@ -149,6 +159,7 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
         steps: summary.steps,
         repaired: summary.repaired,
         flaggedNumbers: summary.flaggedNumbers,
+        ...(summary.fallback ? { modelId: summary.modelId } : {}), // the audit row names the model that answered
       }).catch(() => undefined);
     }
     resolveFinished(summary);
@@ -187,6 +198,7 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
         const shop = requireConnectedShop(ctx);
         await assertBudget(ctx.tenantId, { db, now: deps.now, env });
         const spec = resolveModel(input.modelId, "chat", env);
+        primary = spec;
         summary.modelId = spec.id;
         const history = sanitizeMessages(input.thread ? input.messages.slice(-1) : input.messages);
         runId = await beginRun(db, { tenantId: ctx.tenantId, userId: ctx.userId, role: ctx.role, source: deps.source ?? "chat", modelId: spec.id });
@@ -237,6 +249,9 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
           pending.push(recordStep(dbRef, { runId: runId!, tenantId: ctx.tenantId, stepIndex: summary.steps++, tool: e.tool, input: e.input, ok: e.ok, errorCode: e.errorCode, latencyMs: e.latencyMs }));
         const write = (chunk: UIMessageChunk) => writer.write(chunk);
         const model = deps.model ?? createModel(spec);
+        // The fallback exists unless a test injected a model and no fallback: that must never reach the real provider.
+        const fbSpec = deps.model && !deps.fallbackModel ? null : fallbackModelFor(spec, env);
+        const route = deps.source ?? "chat";
         const extra = buildExtraTools({
           ctx,
           db,
@@ -264,24 +279,39 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
           // Notes can be confirmed only by a Growth Capital admin or partner, so a client viewer is not offered the tool.
           ...(ctx.role !== "client_viewer" ? { remember: buildRememberTool({ ctx, db, write, onStep: step }) } : {}),
         };
-        const onError = (e: unknown) => toAppError(e).code;
+        // The model answering now, and what the current attempt has done (for the fallback decision).
+        let active: { spec: ModelSpec; model: LanguageModel } = { spec, model };
+        let fellBack = false;
+        let textStreamed = false; // answer text of the current attempt has reached the browser
+        let attemptError: unknown; // the raw error the current attempt's stream reported
+        let attemptMessages: ModelMessage[] = []; // what the current attempt's finished steps added to the conversation
+        let attemptSteps = 0;
+        let attemptIn = 0;
+        let attemptOut = 0;
+        const turnStart = Date.now();
+        const toolNames = Object.keys(tools);
 
-        const callModel = (messages: ModelMessage[], maxSteps: number) =>
-          streamText({
-            model,
+        const callModel = (messages: ModelMessage[], maxSteps: number, timeoutMs = TURN_TIMEOUT_MS) =>
+          withTrace({ tenantId: ctx.tenantId, route, modelId: active.spec.id, toolNames }, () => streamText({
+            model: active.model,
             system: SYSTEM_PROMPT,
             messages,
             tools,
             stopWhen: [isStepCount(maxSteps), () => fatal !== null],
             maxRetries: 1, // after a timeout or a 5xx, one retry on the same model
-            timeout: { totalMs: TURN_TIMEOUT_MS },
-            providerOptions: providerOptionsFor(spec),
+            timeout: { totalMs: timeoutMs },
+            providerOptions: providerOptionsFor(active.spec),
+            telemetry: telemetryFor({ tenantId: ctx.tenantId, route, modelId: active.spec.id, toolNames }),
             onError: ({ error }) => {
               modelError ??= error;
             },
             // A call whose arguments fail validation never reaches our tool code, so it is recorded here. The model sees
             // the validation error and usually tries again, as it did on the live site.
             onStepFinish: (step) => {
+              attemptMessages.push(...step.response.messages);
+              attemptSteps++;
+              attemptIn += step.usage?.inputTokens ?? 0;
+              attemptOut += step.usage?.outputTokens ?? 0;
               for (const part of step.content) {
                 if (part.type !== "tool-call" || !("invalid" in part) || !part.invalid) continue;
                 const detail = (part as { error?: { message?: string } }).error?.message ?? "";
@@ -289,21 +319,88 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
                 pending.push(recordStep(dbRef, { runId: runId!, tenantId: ctx.tenantId, stepIndex: summary.steps++, tool: part.toolName, input: part.input, ok: false, errorCode: "INVALID_INPUT", latencyMs: 0 }));
               }
             },
-          });
+          }));
 
         // Settles a model call: its steps, usage and what it added to the conversation, or the error that ended it.
+        // The tokens an attempt spent are priced at the model that spent them: a fallback attempt's difference from the
+        // primary's prices is kept apart, and added to the cost at the end.
+        const spent = (inputTokens: number, outputTokens: number) => {
+          summary.inputTokens += inputTokens;
+          summary.outputTokens += outputTokens;
+          if (active.spec.id !== spec.id) fallbackAdjustUsd += costUsd(active.spec, { inputTokens, outputTokens }) - costUsd(spec, { inputTokens, outputTokens });
+        };
         const settle = async (r: ReturnType<typeof callModel>) => {
           try {
             const [steps, usage] = await Promise.all([r.steps, r.totalUsage]);
-            summary.inputTokens += usage.inputTokens ?? 0;
-            summary.outputTokens += usage.outputTokens ?? 0;
+            spent(usage.inputTokens ?? 0, usage.outputTokens ?? 0);
             // Each step's response holds only that step's messages (the tool call and its result, or the answer), so the
             // conversation this call produced is all of them in order.
             return { steps, produced: steps.flatMap((s) => s.response.messages) };
           } catch (e) {
             modelError ??= e;
+            spent(attemptIn, attemptOut); // a failed call still used what its finished steps cost
             return null;
           }
+        };
+
+        // Moving to the fallback model is allowed once per turn, only for a timeout, a 5xx or an unavailable provider, and
+        // only while no answer text of this attempt has reached the browser. Budget, validation and tool errors never qualify.
+        let startSent = false;
+        const canFallBack = (e: unknown) => !fellBack && fbSpec !== null && !textStreamed && fatal === null && e !== undefined && shouldFallback(e);
+        const onModelError = (e: unknown) => {
+          attemptError ??= e;
+          return toAppError(e).code;
+        };
+        // Watches the attempt's stream. The error chunk of an attempt that is about to move to the fallback is held back,
+        // so the browser sees one answer and no error.
+        const watch = (source: ReadableStream<UIMessageChunk>) =>
+          source.pipeThrough(
+            new TransformStream<UIMessageChunk, UIMessageChunk>({
+              transform(chunk, controller) {
+                if (chunk.type === "start") startSent = true;
+                if (chunk.type === "text-delta" && chunk.delta) textStreamed = true;
+                if (chunk.type === "error" && canFallBack(attemptError)) return;
+                controller.enqueue(chunk);
+              },
+            }),
+          );
+        const resetAttempt = () => {
+          textStreamed = false;
+          attemptError = undefined;
+          attemptMessages = [];
+          attemptSteps = 0;
+          attemptIn = 0;
+          attemptOut = 0;
+          modelError = null;
+        };
+
+        // One model call, merged into the stream. If it fails in a way the fallback can help with, the turn moves once to the
+        // fallback model and carries on from the steps that had finished (their tools are not run again).
+        const runModel = async (messages: ModelMessage[], maxSteps: number, sendStart: boolean) => {
+          resetAttempt();
+          const call = callModel(messages, maxSteps);
+          writer.merge(watch(call.toUIMessageStream({ sendStart: sendStart && !startSent, sendFinish: false, onError: onModelError })));
+          const done = await settle(call);
+          if (!modelError) return done;
+          if (!canFallBack(modelError)) throw toAppError(modelError);
+
+          const carried = attemptMessages;
+          const stepsDone = attemptSteps;
+          const to = fbSpec!;
+          const reason = fallbackReason(modelError);
+          console.warn(`[agent] ${active.spec.id} failed (${reason}); the turn moves to ${to.id}`);
+          fellBack = true;
+          summary.fallback = { from: active.spec.id, to: to.id, reason };
+          step({ tool: "model_fallback", input: { from: active.spec.id, to: to.id, reason }, ok: true, latencyMs: Date.now() - turnStart });
+          active = { spec: to, model: deps.fallbackModel ?? createModel(to) };
+          summary.modelId = to.id;
+          resetAttempt();
+          const timeoutMs = Math.max(FALLBACK_MIN_MS, Math.min(TURN_TIMEOUT_MS, ROUTE_BUDGET_MS - (Date.now() - turnStart)));
+          const again = callModel([...messages, ...carried], Math.max(1, maxSteps - stepsDone), timeoutMs);
+          writer.merge(watch(again.toUIMessageStream({ sendStart: !startSent, sendFinish: false, onError: onModelError })));
+          const result = await settle(again);
+          if (modelError) throw toAppError(modelError);
+          return result && { steps: result.steps, produced: [...carried, ...result.produced] };
         };
 
         const verify = (answer: string, attempt: number) => {
@@ -312,10 +409,7 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
           return check;
         };
 
-        const first = callModel(modelMessages, MAX_STEPS);
-        writer.merge(first.toUIMessageStream({ sendFinish: false, onError }));
-        const one = await settle(first);
-        if (modelError) throw toAppError(modelError);
+        const one = await runModel(modelMessages, MAX_STEPS, true);
         if (fatal) throw fatal;
         delta = [...(userMessage ? [userMessage] : []), ...(one?.produced ?? [])];
 
@@ -333,10 +427,7 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
           summary.repaired = true;
           writer.write({ type: "data-repair", data: { unmatched: check.unmatched.map((u) => u.text) } });
           const repairMessage: ModelMessage = { role: "user", content: repairInstruction(check.unmatched.map((u) => u.text)) };
-          const second = callModel([...modelMessages, ...one.produced, repairMessage], REPAIR_STEPS);
-          writer.merge(second.toUIMessageStream({ sendStart: false, sendFinish: false, onError }));
-          const two = await settle(second);
-          if (modelError) throw toAppError(modelError);
+          const two = await runModel([...modelMessages, ...one.produced, repairMessage], REPAIR_STEPS, false);
           if (fatal) throw fatal;
           delta.push(repairMessage, ...(two?.produced ?? []));
           answer = two?.steps.at(-1)?.text ?? "";
@@ -346,11 +437,11 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
 
         writer.write({ type: "data-provenance", data: [...provenance.values()] });
         writer.write({ type: "finish" });
-        summary.costMicros = Math.round(costUsd(spec, summary) * 1e6);
+        summary.costMicros = spendMicros();
         await close();
       } catch (e) {
         const error = toAppError(e);
-        if (db && summary.modelId) summary.costMicros = Math.round(costUsd(resolveModel(summary.modelId, "chat", deps.env ?? process.env), summary) * 1e6);
+        if (db) summary.costMicros = spendMicros();
         await close(error);
         throw error;
       }

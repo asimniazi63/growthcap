@@ -6,19 +6,20 @@ import { useRef, useState } from "react";
 
 const MAX_MB = 4;
 
-// Uploads a SOW (PDF) or a plan sheet (CSV). The server checks the file again; this only saves a round trip.
+// Uploads a SOW or a supplier invoice (PDF) or a plan sheet (CSV). The server checks the file again; this only saves a round trip.
 export function UploadForm() {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pdfKind, setPdfKind] = useState<"sow" | "invoice">("sow");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const file = input.current?.files?.[0];
     if (!file) return setError("Choose a PDF or a CSV file first.");
-    const kind = /\.pdf$/i.test(file.name) ? "sow" : /\.csv$/i.test(file.name) ? "plan_sheet" : null;
-    if (!kind) return setError("Only a PDF (a SOW) or a CSV (a plan sheet) can be uploaded.");
+    const kind = /\.pdf$/i.test(file.name) ? pdfKind : /\.csv$/i.test(file.name) ? "plan_sheet" : null;
+    if (!kind) return setError("Only a PDF (a SOW or a supplier invoice) or a CSV (a plan sheet) can be uploaded.");
     if (file.size > MAX_MB * 1024 * 1024) return setError(`A file can be at most ${MAX_MB} MB.`);
     setBusy(true);
     setError(null);
@@ -44,10 +45,24 @@ export function UploadForm() {
         </span>
         <div className="min-w-0 flex-1">
           <label htmlFor="plan-file" className="block font-display font-semibold text-ink">
-            Upload a SOW (PDF) or a plan sheet (CSV)
+            Upload a SOW, a supplier invoice or a plan sheet
           </label>
-          <p className="muted mt-0.5 text-sm">PDF or CSV, up to {MAX_MB} MB. The targets are read for you to review; nothing changes until you confirm.</p>
+          <p className="muted mt-0.5 text-sm">
+            PDF or CSV, up to {MAX_MB} MB. The targets or unit costs are read for you to review; nothing changes until you confirm, and a cost change also needs approval in Actions.
+          </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-ink-2">
+              A PDF is a
+              <select
+                value={pdfKind}
+                disabled={busy}
+                onChange={(e) => setPdfKind(e.target.value === "invoice" ? "invoice" : "sow")}
+                className="rounded-[10px] border border-line-strong bg-surface px-2.5 py-1.5 text-sm text-ink disabled:opacity-60"
+              >
+                <option value="sow">SOW</option>
+                <option value="invoice">Supplier invoice</option>
+              </select>
+            </label>
             <input
               id="plan-file"
               ref={input}

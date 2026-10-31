@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, Check, ChevronRight, Clock, FileCode, LayoutTemplate, Loader2, type LucideIcon, ShieldCheck, StickyNote, Target, TicketX, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, ChevronRight, Clock, Coins, FileCode, LayoutTemplate, Loader2, type LucideIcon, ShieldCheck, StickyNote, Target, TicketX, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { RefreshNow } from "@/components/overview/refresh-now";
 import { useToast } from "@/components/ui/toast";
@@ -16,6 +16,7 @@ export const KIND_LABEL: Record<ActionKind, string> = {
   annotation: "Calendar note",
   discount_deactivate: "Turn off a discount",
   landing_page: "Landing page",
+  unit_cost_update: "Unit costs",
 };
 
 export const KIND_ICON: Record<ActionKind, LucideIcon> = {
@@ -23,6 +24,7 @@ export const KIND_ICON: Record<ActionKind, LucideIcon> = {
   annotation: StickyNote,
   discount_deactivate: TicketX,
   landing_page: LayoutTemplate,
+  unit_cost_update: Coins,
 };
 
 export const STATUS_LABEL: Record<Status, string> = {

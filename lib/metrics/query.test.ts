@@ -12,6 +12,9 @@ import type { CoreMetricId, Dataset, StoreKey, Truth } from "../../scripts/seed/
 import { CORE_METRIC_IDS } from "./registry";
 import { getPaceView } from "../pace/view";
 import { queryMetric, type QueryMetricInput } from "./query";
+import { getCohorts } from "../tools/cohorts";
+import { getZeroSalesDays } from "../tools/zero-sales-days";
+import { getUnitEconomics } from "../tools/unit-economics";
 
 let db: Db;
 const fixtures = {} as Record<StoreKey, { dataset: Dataset; truth: Truth }>;
@@ -485,5 +488,126 @@ describe("the pace view: the morning after the data ends", () => {
     const view = await getPaceView(noAds, { db });
     expect(view).toMatchObject({ hasPlan: false, planLabel: null });
     expect(view.thisMonth?.gaps).toBeUndefined();
+  });
+});
+
+// ---- T12: gross margin, repeat rate, zero-sales days, the cohort grid, unit economics and "need $X a day". Expected values come
+// from the independent truth helper (scripts/seed/truth.ts) and plan.csv, never from the code under test.
+describe.each(["solenne", "tidepool"] as const)("%s: gross_margin equals truth", (store) => {
+  it("matches the independent computation for every month, and says how many variants had no cost", async () => {
+    for (const month of Object.keys(fixtures[store].truth.monthly)) {
+      const period = monthPeriod(month);
+      const res = await run(store, { metrics: ["gross_margin"], ...period });
+      expect(res.data[0]!.values.gross_margin!, month).toBeCloseTo(metricValue(fixtures[store].dataset, "gross_margin", {}, period), 4);
+      expect(res.data[0]!.costCoverage).toEqual({ variantsWithoutCost: 0, unitsWithoutCost: 0 });
+    }
+  });
+});
+
+describe.each(["solenne", "tidepool"] as const)("%s: repeat_rate and zero_sales_days equal truth", (store) => {
+  it("get_cohorts matches every repeat_rate storyline check", async () => {
+    let checked = 0;
+    for (const sl of fixtures[store].truth.storylines) {
+      for (const c of sl.checks.filter((x) => x.metric === "repeat_rate")) {
+        const f = c.filter;
+        const res = await getCohorts(
+          ctxs[store],
+          {
+            from: c.period.from,
+            to: c.period.to,
+            windowDays: Number(f.window_days ?? 30) as 30 | 60 | 180,
+            ...(f.first_order_code ? { firstOrderCode: f.first_order_code } : {}),
+            ...(f.exclude_first_order_code ? { excludeFirstOrderCode: f.exclude_first_order_code } : {}),
+            ...(f.exclude_tag ? { excludeTags: [f.exclude_tag] } : {}),
+            grid: false,
+          },
+          { db },
+        );
+        expect(res.data.summary.repeatRate ?? 0, `${sl.id} ${JSON.stringify(f)}`).toBeCloseTo(metricValue(fixtures[store].dataset, "repeat_rate", f, c.period), 4);
+        expect(res.data.summary.repeatRate ?? 0).toBeCloseTo(c.expected, 2);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(0);
+  });
+
+  it("get_zero_sales_days matches every zero_sales_days storyline check", async () => {
+    for (const sl of fixtures[store].truth.storylines) {
+      for (const c of sl.checks.filter((x) => x.metric === "zero_sales_days")) {
+        const variantId = shopifyId.variant(c.filter.variant!);
+        const res = await getZeroSalesDays(ctxs[store], { from: c.period.from, to: c.period.to, variantIds: [variantId] }, { db });
+        const days = res.data.find((r) => r.variantId === variantId)?.zeroSalesDays ?? 0;
+        expect(days, `${sl.id}`).toBe(metricValue(fixtures[store].dataset, "zero_sales_days", c.filter, c.period));
+        expect(days).toBe(c.expected);
+      }
+    }
+  });
+});
+
+describe("the cohort grid", () => {
+  it("each cell is the repeat share for that first-order month and window, and shares only grow along a row", async () => {
+    const ds = fixtures.solenne.dataset;
+    const res = await getCohorts(ctxs.solenne, { from: "2026-01-01", to: "2026-06-30", maxMonthsSince: 3 }, { db });
+    expect(res.data.cells).toHaveLength(6 * 3);
+    for (const cell of res.data.cells) {
+      const period = monthPeriod(cell.cohort);
+      expect(cell.repeatShare ?? 0, `${cell.cohort} +${cell.monthsSince}`).toBeCloseTo(metricValue(ds, "repeat_rate", { window_days: String(cell.windowDays) }, period), 4);
+    }
+    for (const cohort of new Set(res.data.cells.map((c) => c.cohort))) {
+      const row = res.data.cells.filter((c) => c.cohort === cohort).sort((a, b) => a.monthsSince - b.monthsSince);
+      for (let i = 1; i < row.length; i++) if (row[i]!.repeatShare !== null && row[i - 1]!.repeatShare !== null) expect(row[i]!.repeatShare!).toBeGreaterThanOrEqual(row[i - 1]!.repeatShare!);
+    }
+  });
+
+  it("leaves a cell null when nobody in the cohort has been a customer long enough", async () => {
+    const res = await getCohorts(ctxs.solenne, { from: "2026-10-01", to: "2026-10-31", maxMonthsSince: 6 }, { db });
+    expect(res.data.cells.at(-1)!.repeatShare).toBeNull();
+  });
+
+  it("rejects a tenant, and a grid wider than 24 first-order months", async () => {
+    await expect(getCohorts(ctxs.solenne, { tenantId: "other" } as never, { db })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(getCohorts(ctxs.solenne, { from: "2024-01-01", to: "2026-10-31" }, { db })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+});
+
+describe("unit economics", () => {
+  it("contribution margin is net sales less cost of goods less ad spend, per month", async () => {
+    const res = await getUnitEconomics(ctxs.solenne, { from: "2026-08-01", to: "2026-09-30" }, { db });
+    for (const m of res.data.months) {
+      expect(m.netSalesCents).toBe(fixtures.solenne.truth.monthly[m.month]!.net_sales);
+      expect(m.contributionMarginCents).toBe(m.netSalesCents - m.costOfGoodsCents - m.adSpendCents);
+      expect(m.costOfGoodsCents).toBeGreaterThan(0);
+    }
+    expect(res.definitions.contributionMargin).toMatch(/today's unit cost/i);
+  });
+
+  it("a cohort's payback is the first month its cumulative gross margin covers the new-customer CAC", async () => {
+    const res = await getUnitEconomics(ctxs.solenne, { from: "2026-03-01", to: "2026-09-30" }, { db });
+    expect(res.data.payback.length).toBeGreaterThan(0);
+    for (const c of res.data.payback) {
+      if (c.paybackMonths === null) expect(c.curve.every((p) => p.cumulativeGrossMarginCents < c.acquisitionCostCents)).toBe(true);
+      else {
+        expect(c.curve.find((p) => p.monthsSince === c.paybackMonths)!.cumulativeGrossMarginCents).toBeGreaterThanOrEqual(c.acquisitionCostCents);
+        expect(c.curve.filter((p) => p.monthsSince < c.paybackMonths!).every((p) => p.cumulativeGrossMarginCents < c.acquisitionCostCents)).toBe(true);
+      }
+    }
+  });
+});
+
+describe.each(["solenne", "tidepool"] as const)("%s: need X a day to hit plan", (store) => {
+  it("is the remaining target over the remaining days, never negative, and absent when the month is over", async () => {
+    const plan = planRow(store, "2026-10")!;
+    const through = metricValue(fixtures[store].dataset, "net_sales", {}, { from: "2026-10-01", to: "2026-10-15" });
+    const res = await run(store, { metrics: ["net_sales", "orders"], from: "2026-10-01", to: "2026-10-15" });
+    const g = res.data[0]!.gapToPlan!;
+    expect(g.net_sales!.daysLeft).toBe(16);
+    if (through < plan.net_sales) expect(g.net_sales!.neededPerDay).toBe(Math.round((plan.net_sales - through) / 16));
+    else expect(g.net_sales).toMatchObject({ targetMet: true });
+    expect(g.net_sales!.neededPerDay ?? 0).toBeGreaterThanOrEqual(0);
+
+    const whole = await run(store, { metrics: ["net_sales"], from: "2026-10-01", to: "2026-10-31" });
+    expect(whole.data[0]!.gapToPlan!.net_sales!.neededPerDay).toBeUndefined();
+    const lateStart = await run(store, { metrics: ["net_sales"], from: "2026-10-05", to: "2026-10-15" });
+    expect(lateStart.data[0]!.gapToPlan!.net_sales!.neededPerDay).toBeUndefined();
   });
 });

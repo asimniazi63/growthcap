@@ -1,3 +1,4 @@
+import type { CohortCell } from "../tools/cohorts";
 import { describe, expect, it } from "vitest";
 import type { MetricRow } from "../metrics/query";
 import type { QueryMetricInput } from "../metrics/query";
@@ -201,5 +202,29 @@ describe("buildView: sources", () => {
   });
   it("refuses a component outside the six", () => {
     fails(() => buildView("pie" as never, [src({ metrics: ["orders"] }, [row({}, { orders: 1 })])]), /component/);
+  });
+});
+
+describe("cohort", () => {
+  const cohortSource = (cells: CohortCell[]): ViewSource => ({
+    tool: "get_cohorts",
+    input: { from: "2026-03-01", to: "2026-04-30" },
+    result: { data: { summary: { windowDays: 30, cohortCustomers: 0, customers: 0, repeaters: 0, repeatRate: null, notYetObserved: 0 }, cells }, queryId: "q_cccccccccccc", range: { from: "2026-03-01", to: "2026-04-30" }, definitions: {}, asOf: "2026-10-31T10:00:00.000Z" },
+  });
+  const cell = (cohort: string, monthsSince: number, repeatShare: number | null): CohortCell => ({ cohort, monthsSince, windowDays: monthsSince * 30, cohortCustomers: 10, customers: 10, repeaters: repeatShare === null ? 0 : repeatShare * 10, repeatShare });
+
+  it("copies the cells into one row per first-order month, oldest first, with the months since as columns", () => {
+    const data = buildView("cohort", [cohortSource([cell("2026-04", 1, 0.2), cell("2026-03", 2, 0.3), cell("2026-03", 1, 0.1), cell("2026-04", 2, null)])]);
+    expect(data).toMatchObject({ component: "cohort", windowMonths: [1, 2], queryIds: ["q_cccccccccccc"] });
+    if (data.component !== "cohort") throw new Error("not a cohort");
+    expect(data.rows.map((r) => r.cohort)).toEqual(["2026-03", "2026-04"]);
+    expect(data.rows[0]!.cells.map((c) => c.repeatShare)).toEqual([0.1, 0.3]);
+    expect(data.rows[1]!.cells[1]!.repeatShare).toBeNull();
+  });
+
+  it("refuses a result with no grid, and any other tool's result", () => {
+    fails(() => buildView("cohort", [cohortSource([])]), /grid/);
+    fails(() => buildView("cohort", [src({ metrics: ["orders"] }, [])]), /get_cohorts/);
+    fails(() => buildView("bar", [cohortSource([cell("2026-03", 1, 0.1)])]), /query_metric/);
   });
 });

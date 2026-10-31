@@ -1,7 +1,14 @@
 import { tool, type ToolSet } from "ai";
 import type { z } from "zod";
 import type { Db } from "../db/client";
+import { getActionItemsTool } from "../action-items/tool";
+import { runGrowthAuditTool } from "../audit/tool";
 import { AppError } from "../errors";
+import { getDataHealthTool } from "../health/tool";
+import { askDocumentTool } from "../plan-in/ask-tool";
+import { getCohortsTool } from "../tools/cohorts";
+import { getUnitEconomicsTool } from "../tools/unit-economics";
+import { getZeroSalesDaysTool } from "../tools/zero-sales-days";
 import { queryMetric, queryMetricInputSchema } from "../metrics/query";
 import type { TenantContext } from "../tenancy/context";
 import { getCustomers, getCustomersInputSchema } from "../tools/customers";
@@ -25,7 +32,7 @@ interface ToolDef {
 export const TOOL_DEFS: Record<string, ToolDef> = {
   query_metric: {
     description:
-      "Totals, trends, breakdowns and period comparisons for the store's sales. Metrics: gross_sales, discounts, refunds, net_sales, orders, aov, units, new_customer_orders, returning_customer_rate, refund_rate, discounted_order_share. Use period (last_7_days, last_30_days, this_month, last_month, this_year) or from and to (store-local dates). groupBy splits by day, week, month, product, variant, channel, discount_code, customer_type or tag. filters narrow the orders: tags keeps ONLY orders carrying a tag, excludeTags drops them (for 'with and without wholesale' run once with no filters and once with excludeTags). With no period the last 30 days are used. When the range is part or all of one month and nothing is grouped or filtered, the row also carries gapToPlan against the brand's plan: target, planned so far, actual, gap, pctGap and, for a month to date, projected (an estimate of where the month will land), with spread saying how the target was spread over the days. compareTo gives the previous period or year with change and percent change. Results carry change, percent change and share so you never compute them.",
+      "Totals, trends, breakdowns and period comparisons for the store's sales. Metrics: gross_sales, discounts, refunds, net_sales, orders, aov, units, new_customer_orders, returning_customer_rate, refund_rate, discounted_order_share, gross_margin (uses today's unit cost; each row carries costCoverage with the variants left out for having no cost). Use period (last_7_days, last_30_days, this_month, last_month, this_year) or from and to (store-local dates). groupBy splits by day, week, month, product, variant, channel, discount_code, customer_type or tag. filters narrow the orders: tags keeps ONLY orders carrying a tag, excludeTags drops them (for 'with and without wholesale' run once with no filters and once with excludeTags). With no period the last 30 days are used. When the range is part or all of one month and nothing is grouped or filtered, the row also carries gapToPlan against the brand's plan: target, planned so far, actual, gap, pctGap and, for a month to date, projected (an estimate of where the month will land) and neededPerDay with daysLeft (what each remaining day must bring to hit the target; targetMet is true when it is already met), with spread saying how the target was spread over the days. compareTo gives the previous period or year with change and percent change. Results carry change, percent change and share so you never compute them.",
     schema: queryMetricInputSchema,
     run: queryMetric as unknown as Run,
   },
@@ -52,6 +59,13 @@ export const TOOL_DEFS: Record<string, ToolDef> = {
     schema: getCustomersInputSchema,
     run: getCustomers as unknown as Run,
   },
+  ask_document: askDocumentTool as unknown as ToolDef,
+  get_cohorts: getCohortsTool as unknown as ToolDef,
+  get_unit_economics: getUnitEconomicsTool as unknown as ToolDef,
+  get_zero_sales_days: getZeroSalesDaysTool as unknown as ToolDef,
+  get_action_items: getActionItemsTool as unknown as ToolDef,
+  get_data_health: getDataHealthTool as unknown as ToolDef,
+  run_growth_audit: runGrowthAuditTool as unknown as ToolDef,
   describe_metrics: {
     description: "What each metric means, the groupings and periods the tools accept, and how money and rates are written. Use it when the user asks what a metric is.",
     schema: describeMetricsInputSchema,
@@ -69,9 +83,14 @@ export interface ToolHooks {
   onFatal?: (error: unknown) => void;
 }
 
+// Tools for Growth Capital roles only. A client viewer's agent is never given them (each also refuses a viewer when run).
+const GC_ONLY_TOOLS = new Set(["get_action_items", "run_growth_audit", "ask_document"]);
+
 export function buildTools(ctx: TenantContext, hooks: ToolHooks = {}, deps: { db?: Db } = {}): ToolSet {
   return Object.fromEntries(
-    Object.entries(TOOL_DEFS).map(([name, def]) => [
+    Object.entries(TOOL_DEFS)
+      .filter(([name]) => !(GC_ONLY_TOOLS.has(name) && ctx.role === "client_viewer"))
+      .map(([name, def]) => [
       name,
       tool({
         description: def.description,

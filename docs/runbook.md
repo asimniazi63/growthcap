@@ -112,7 +112,7 @@ Reviewer demo logins: `reviewer-gc+clerk_test@example.com` is `gc_partner` in bo
 - Turn it on only after AWS has granted Claude access to the account. Until then every Claude call fails with an access error. See [decisions/0000-setup.md](decisions/0000-setup.md). After flipping it, run `npm run eval`.
 - Prices in the registry feed only the spend cap, and they are estimates. Claude's reasoning effort is set through `output_config.effort`, which has not been verified on Bedrock.
 - **Spend cap.** `TENANT_DAILY_BUDGET_USD` is the cap per brand per UTC day (default 5, the same for every brand). A missing or invalid value gives the default, never no cap. It counts chat runs only (not eval or brief runs). The chat warns at 80% and answers `BUDGET_EXCEEDED` at 100% until midnight UTC.
-- **Loop.** At most 8 steps and a 90-second turn limit. A timeout or 5xx is retried once on the same model. The number checker compares every number in the answer with this turn's tool results, sends one repair turn if any are unmatched, and flags what is still unmatched.
+- **Loop.** At most 8 steps and a 90-second turn limit. A timeout or 5xx is retried once on the same model, and then once on the fallback model (section 9a). The number checker compares every number in the answer with this turn's tool results, sends one repair turn if any are unmatched, and flags what is still unmatched.
 - **Audit.** `agent_runs` (one per turn: model, tokens, cost in millionths of a dollar, status, error code) and `agent_steps` (one per tool call, with the model's own arguments). Prompts, answers and tool results are not stored. Provider error text goes to the server log only.
 - `npm run chat:try -- --store solenne|tidepool --q "<question>" [--model <id>]` **[paid]** asks the real agent one question against the synced data and prints the answer, tool steps, number check and cost.
 
@@ -123,8 +123,28 @@ Reviewer demo logins: `reviewer-gc+clerk_test@example.com` is `gc_partner` in bo
 - The cases are in `evals/cases.ts` and `evals/why-cases.ts` (eight today: pacing gauge, remembered note, MER, and five "why" cases).
 - It writes `docs/evals/latest.md` and `latest.json` only when every case was run (no `--case`). The committed files are from the full 24-case run on Sonnet 4.6 (22 of 24; see the README for the two that failed). `--out` writes the run's JSON to a path you choose.
 - `AGENT_SINGLE_AGENT=true` leaves out `explain_gap`, to compare one agent with the multi-agent "why". It is for evals only.
-- Run it when you change `lib/agent`, `lib/tools`, prompts or `models.ts`. CI does not run it.
+- Run it when you change `lib/agent`, `lib/tools`, prompts or `models.ts`. CI runs it on those pull requests and on demand (section 9a). `--max-cost <usd>` (or `EVAL_MAX_COST_USD`) stops starting new cases once the estimated cost reaches the cap. A full run also writes `docs/evals/scoreboard.md` and `.json`.
 - `docs/evals/reconciliation.md` comes from `reconcile:truth` (section 4), not from this.
+
+## 9a. Ops: tracing, model fallback and evals in CI
+
+**Model fallback.** If the chat model times out, returns a 5xx, throttles or is unavailable before any answer text has streamed, the turn moves once to a fallback model and carries on from the tool steps that had finished (their tools are not run again). It never retries after text has started streaming, never after a budget, validation or tool error, and never twice. `AGENT_FALLBACK_MODEL_ID` names the fallback (a key in `lib/agent/models.ts`). Unset, it is Devstral 2, or Opus 5.5 once `BEDROCK_CLAUDE_ENABLED=true`. The run's `agent_runs.model_id` holds the model that answered, an `agent_steps` row with the tool name `model_fallback` records the from, to and reason (for example `http_503`), and the spend of both attempts is on the run, so it counts against the brand's daily cap. The decision is `lib/agent/fallback.ts`.
+
+**Langfuse tracing.** Off unless all three of `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL` are set (no errors and no network without them). To turn it on:
+
+1. Create a project at cloud.langfuse.com (or your own Langfuse) and an API key pair under Settings, API keys.
+2. Put the three variables in `.env.local` and in the Vercel project's environment variables (`LANGFUSE_BASE_URL` is the host, for example `https://cloud.langfuse.com`). Redeploy.
+3. Open a chat and look for the trace. It is named `oasis-pace.chat`, tagged `tenant:<id>`, `route:<chat|brief|audit|eval>` and `model:<id>`, with the tenant id as the Langfuse user and the tool names in the metadata. The `execute_tool` spans name the tools that ran.
+
+Prompts, answers and tool arguments or results are never recorded (`recordInputs` and `recordOutputs` are off on every call). The chat route flushes in `after()`, and `npm run eval` flushes before it exits. The code is `lib/ops/tracing.ts`, started from `instrumentation.ts`.
+
+**Evals in CI** (`.github/workflows/evals.yml`). Runs on demand (Actions, Evals, Run workflow) and on pull requests that change `lib/agent/**`, `lib/tools/**`, the prompt, `models.ts` or `evals/**`. Pull requests from forks skip it, because they get no secrets. Add these in GitHub, Settings, Secrets and variables, Actions:
+
+- Secret `AWS_BEARER_TOKEN_BEDROCK` (the Bedrock API key the app uses), or the pair `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (an IAM user allowed to invoke the models). Secret `AWS_REGION` (for example `eu-central-1`).
+- Optional secrets `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, to trace the runs.
+- Optional variables `EVAL_MAX_COST_USD` (the cap per run in US dollars, default 3) and `BEDROCK_CLAUDE_ENABLED`.
+
+A run stops starting new cases once the estimated cost reaches the cap and says so (`npm run eval -- --max-cost 3`, or `EVAL_MAX_COST_USD`). The scoreboard (accuracy, cost, average and p95 latency per category and overall) is in the job summary and in `docs/evals/scoreboard.md` and `.json`, uploaded with the rest of `docs/evals` as the `evals-<run id>` artifact. CI does not commit anything back: to keep a scoreboard, download the artifact and commit it.
 
 ## 10. Approved writes
 

@@ -38,6 +38,11 @@ export const queryMetricInputSchema = z.strictObject({
 export type QueryMetricInput = z.input<typeof queryMetricInputSchema>;
 
 export type Values = Partial<Record<MetricId, number>>;
+// Gross margin leaves out variants with no unit cost. These are the figures the answer can quote about what was left out.
+export interface CostCoverage {
+  variantsWithoutCost: number;
+  unitsWithoutCost: number;
+}
 export interface MetricRow {
   group: Record<string, string>;
   values: Values;
@@ -46,6 +51,7 @@ export interface MetricRow {
   pctChange?: Partial<Record<MetricId, number | null>>;
   share?: Values; // each group's part of the total, for metrics that add up
   gapToPlan?: PlanGapMap; // against the brand's plan, for an ungrouped, unfiltered range inside one month
+  costCoverage?: CostCoverage; // set when gross_margin is asked for: how much of the sales had a unit cost
   untrusted?: { product?: string; variant?: string }; // store text: the titles for a product or variant group, so no second lookup is needed
 }
 
@@ -114,6 +120,10 @@ interface Acc {
   refundsAmount: number;
   refundedUnits: number;
   adSpend: number; // cents of ad spend on the days this group covers; set only when an ad metric is asked for
+  costedNet: number; // net sales on variants that have a unit cost (the base of gross margin)
+  costOfGoods: number; // today's unit cost times units kept, on those variants
+  uncostedVariants: Set<string>;
+  uncostedUnits: number;
 }
 
 const blank = (group: Record<string, string>): Acc => ({
@@ -128,6 +138,10 @@ const blank = (group: Record<string, string>): Acc => ({
   refundsAmount: 0,
   refundedUnits: 0,
   adSpend: 0,
+  costedNet: 0,
+  costOfGoods: 0,
+  uncostedVariants: new Set(),
+  uncostedUnits: 0,
 });
 
 function valuesOf(a: Acc, metrics: MetricId[]): Values {
@@ -146,6 +160,7 @@ function valuesOf(a: Acc, metrics: MetricId[]): Values {
     discounted_order_share: orders === 0 ? 0 : a.discounted.size / orders,
     mer: a.adSpend === 0 ? 0 : (a.gross - a.discounts - a.refundsAmount) / a.adSpend,
     new_customer_cac: a.adSpend === 0 || a.newOrders.size === 0 ? 0 : a.adSpend / a.newOrders.size,
+    gross_margin: a.costedNet <= 0 ? 0 : (a.costedNet - a.costOfGoods) / a.costedNet,
   };
   return Object.fromEntries(metrics.map((m) => [m, all[m]])) as Values;
 }
@@ -156,6 +171,7 @@ interface Source {
   firstOrder: Map<string, string>;
   refundFacts: RefundFact[]; // every refund, whenever it was made
   refundedQty: Map<string, number>; // order line -> units refunded so far
+  unitCost: Map<string, number | null>; // variant -> today's unit cost in cents (null when the store has none)
 }
 
 async function loadSource(db: Db, tenantId: string): Promise<Source> {
@@ -189,7 +205,9 @@ async function loadSource(db: Db, tenantId: string): Promise<Source> {
   const refundFacts: RefundFact[] = rows.map((r) => ({ ...r, isFirst: r.customerId !== null && firstOrder.get(r.customerId) === r.orderId }));
   const refundedQty = new Map<string, number>();
   for (const r of refundFacts) if (r.lineId) refundedQty.set(r.lineId, (refundedQty.get(r.lineId) ?? 0) + r.qty);
-  return { db, tenantId, firstOrder, refundFacts, refundedQty };
+  const costRows = await db.select({ id: variants.id, cost: variants.unitCostCents }).from(variants).where(eq(variants.tenantId, tenantId));
+  const unitCost = new Map(costRows.map((r) => [r.id, r.cost]));
+  return { db, tenantId, firstOrder, refundFacts, refundedQty, unitCost };
 }
 
 async function lineFacts(src: Source, range: { from: string; to: string }): Promise<LineFact[]> {
@@ -238,13 +256,27 @@ async function aggregate(src: Source, range: { from: string; to: string }, filte
       a.gross += f.gross;
       a.discounts += f.discount;
       a.units += f.qty;
-      a.refundedUnits += src.refundedQty.get(f.lineId) ?? 0;
+      const refundedUnits = src.refundedQty.get(f.lineId) ?? 0;
+      a.refundedUnits += refundedUnits;
+      const cost = f.variantId ? src.unitCost.get(f.variantId) : undefined;
+      if (cost === undefined || cost === null) {
+        a.uncostedVariants.add(f.variantId ?? "unknown");
+        a.uncostedUnits += f.qty;
+      } else {
+        a.costedNet += f.gross - f.discount;
+        a.costOfGoods += cost * Math.max(0, f.qty - refundedUnits);
+      }
     }
   }
   // A refund counts on the day it was made, so it lands in that day's, week's or month's group.
   for (const r of src.refundFacts) {
     if (r.date < range.from || r.date > range.to || !passes(r, filters)) continue;
-    for (const g of groupsFor(r, dims)) slot(g).refundsAmount += r.amount;
+    const cost = r.variantId ? src.unitCost.get(r.variantId) : undefined;
+    for (const g of groupsFor(r, dims)) {
+      const a = slot(g);
+      a.refundsAmount += r.amount;
+      if (cost !== undefined && cost !== null) a.costedNet -= r.amount;
+    }
   }
   return groups;
 }
@@ -369,7 +401,12 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
   if (dims.length === 0 && groups.size === 0) groups.set("", blank({}));
   if (adMetrics) for (const a of groups.values()) setAdSpend(a, timeDim, range, spendNow);
 
-  let rows: MetricRow[] = [...groups.values()].map((a) => ({ group: a.group, values: valuesOf(a, metrics) }));
+  const withMargin = metrics.includes("gross_margin");
+  let rows: MetricRow[] = [...groups.values()].map((a) => ({
+    group: a.group,
+    values: valuesOf(a, metrics),
+    ...(withMargin ? { costCoverage: { variantsWithoutCost: a.uncostedVariants.size, unitsWithoutCost: a.uncostedUnits } } : {}),
+  }));
 
   if (dims.length > 0 && !timeDim) {
     for (const m of metrics.filter((m) => METRICS[m].additive)) {
@@ -421,7 +458,10 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
     data: rows,
     queryId: queryIdFor("query_metric", ctx.tenantId, input, asOf),
     range,
-    definitions: Object.fromEntries(metrics.map((m) => [m, METRICS[m].definition])),
+    definitions: {
+      ...Object.fromEntries(metrics.map((m) => [m, METRICS[m].definition])),
+      ...(withMargin ? { costCoverage: "Gross margin leaves out variants that have no unit cost: costCoverage gives how many variants and units that is, per row." } : {}),
+    },
     asOf,
     ...(total > rows.length ? { truncated: { shown: rows.length, total } } : {}),
   };

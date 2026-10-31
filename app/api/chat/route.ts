@@ -4,6 +4,7 @@ import { z } from "zod";
 import { runAgent } from "@/lib/agent/run";
 import { detach } from "@/lib/api/stream";
 import { getDb } from "@/lib/db/client";
+import { flushTraces } from "@/lib/ops/tracing";
 import { appendTurn, createThread, openOrStart } from "@/lib/threads/store";
 import { getTenantContext } from "@/lib/tenancy/context";
 
@@ -60,5 +61,6 @@ export async function POST(request: Request) {
   // The server reads its own copy to the end, so a closed tab doesn't lose a turn that was already paid for.
   const { client, finished } = detach(stream);
   after(finished);
+  after(finished.then(() => flushTraces(), () => flushTraces())); // sends the Langfuse spans once the turn is over; does nothing when tracing is off
   return createUIMessageStreamResponse({ stream: client });
 }

@@ -207,7 +207,7 @@ export const syncRuns = pgTable(
 
 // ---- The agent's audit log (T4). One row per run and one per step. Tool inputs are recorded (they are the model's own
 // arguments: dates, filters, ids); prompts, answers and tool results are not.
-export const AGENT_SOURCES = ["chat", "eval", "brief"] as const;
+export const AGENT_SOURCES = ["chat", "eval", "brief", "audit"] as const;
 export type AgentSource = (typeof AGENT_SOURCES)[number];
 export const AGENT_RUN_STATUSES = ["running", "ok", "error"] as const;
 
@@ -395,7 +395,7 @@ export const callNotes = pgTable(
   (t) => [index("call_notes_idx").on(t.tenantId, t.heldOn)],
 );
 
-export const DOCUMENT_KINDS = ["sow", "plan_sheet"] as const;
+export const DOCUMENT_KINDS = ["sow", "plan_sheet", "invoice", "call_note"] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 export const DOCUMENT_STATUSES = ["uploaded", "read", "confirmed", "discarded"] as const;
 export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
@@ -422,7 +422,51 @@ export const documents = pgTable(
   (t) => [index("documents_idx").on(t.tenantId, t.createdAt)],
 );
 
-export const ACTION_KINDS = ["metric_target", "annotation", "discount_deactivate", "landing_page"] as const;
+export const AUDIT_STATUSES = ["draft", "blocked"] as const;
+export type AuditStatus = (typeof AUDIT_STATUSES)[number];
+
+// A growth audit of one brand: fixed checks run in code (`findings`, each with its figures and source query ids) and a write-up
+// from the agent loop (`body`). `blocked` means the number checker found a figure no tool result holds. Growth Capital roles only.
+export const audits = pgTable(
+  "audits",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    status: text("status").$type<AuditStatus>().notNull(),
+    body: text("body").notNull(),
+    findings: jsonb("findings").$type<unknown>().notNull(),
+    unmatched: jsonb("unmatched").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("audits_idx").on(t.tenantId, t.createdAt)],
+);
+
+export const ACTION_ITEM_STATUSES = ["open", "done"] as const;
+export type ActionItemStatus = (typeof ACTION_ITEM_STATUSES)[number];
+
+// A follow-up read from a call note and confirmed by a Growth Capital admin or partner: who owns it and when it is due.
+// `owner` is a team member's first name or role as written in the note, never a contact detail. `quote` is the sentence it
+// came from, checked against the note's text.
+export const actionItems = pgTable(
+  "action_items",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    title: text("title").notNull(),
+    owner: text("owner").notNull(),
+    dueOn: date("due_on", { mode: "string" }),
+    status: text("status").$type<ActionItemStatus>().notNull().default("open"),
+    sourceDocumentId: uuid("source_document_id").references(() => documents.id),
+    quote: text("quote").notNull().default(""),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    doneAt: timestamp("done_at", { withTimezone: true }),
+  },
+  (t) => [index("action_items_idx").on(t.tenantId, t.status, t.dueOn)],
+);
+
+export const ACTION_KINDS = ["metric_target", "annotation", "discount_deactivate", "landing_page", "unit_cost_update"] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
 export const ACTION_STATUSES = ["proposed", "approved", "running", "done", "failed", "rejected"] as const;
 export type ActionStatus = (typeof ACTION_STATUSES)[number];

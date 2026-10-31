@@ -18,14 +18,23 @@ export const CORE_METRIC_IDS = [
 // Ad metrics need the brand's ad spend (T6), which comes from a file, not from Shopify. They are not part of the 11 that
 // are checked against the order data alone.
 export const AD_METRIC_IDS = ["mer", "new_customer_cac"] as const;
-export const METRIC_IDS = [...CORE_METRIC_IDS, ...AD_METRIC_IDS] as const;
+// Margin needs today's unit cost from the variants (set by the store, or by an approved cost update), not the order data.
+export const MARGIN_METRIC_IDS = ["gross_margin"] as const;
+export const METRIC_IDS = [...CORE_METRIC_IDS, ...AD_METRIC_IDS, ...MARGIN_METRIC_IDS] as const;
+
+// Cohort and stockout measures don't fit query_metric: repeat_rate needs a cohort period, an optional first-order code and a
+// window; zero_sales_days is reported per variant. They are defined here, once, and answered by get_cohorts and
+// get_zero_sales_days. They are not in METRIC_IDS, so query_metric can't be asked for them.
+export const TOOL_METRIC_IDS = ["repeat_rate", "zero_sales_days"] as const;
+export const REPEAT_WINDOWS = [30, 60, 180] as const;
 
 export type CoreMetricId = (typeof CORE_METRIC_IDS)[number];
 export type MetricId = (typeof METRIC_IDS)[number];
+export type ToolMetricId = (typeof TOOL_METRIC_IDS)[number];
 export type MetricUnit = "money" | "count" | "rate" | "ratio";
 
 export interface MetricDef {
-  id: MetricId;
+  id: MetricId | ToolMetricId;
   label: string;
   unit: MetricUnit; // money is in cents, a rate is a fraction (0.18 means 18%), a ratio is a plain multiple (2.5 means 2.5 times)
   additive: boolean; // groups add up to the whole, so a share is meaningful
@@ -94,6 +103,30 @@ const defs: MetricDef[] = [
     additive: false,
     definition: "Ad spend on all channels divided by the number of new-customer orders in the period: what each first order cost in ads. 0 when there were no new-customer orders or no ad spend.",
   },
+  {
+    id: "gross_margin",
+    label: "Gross margin",
+    unit: "rate",
+    additive: false,
+    definition:
+      "(Net sales minus unit cost times units kept) divided by net sales, where units kept excludes refunded units. It uses today's unit cost from the product catalogue, because Shopify's API doesn't keep the cost at the time of sale. Variants with no unit cost are left out of both parts, and costCoverage says how many. 0 when there are no costed sales.",
+  },
+  {
+    id: "repeat_rate",
+    label: "Repeat rate",
+    unit: "rate",
+    additive: false,
+    definition:
+      "The share of a cohort that orders again within 30, 60 or 180 days of the first order. The cohort is the customers whose first order in this store falls in the chosen period, optionally with a given discount code on that first order. Only customers whose first order is at least that many days old are counted. A month in the cohort grid is 30 days.",
+  },
+  {
+    id: "zero_sales_days",
+    label: "Zero-sales days",
+    unit: "count",
+    additive: false,
+    definition:
+      "Days with no sales for a variant that averaged at least 0.5 units a day over the previous 28 days: a suspected stockout. Reported per variant, not as a store total. Units sold are counted before refunds, and cancelled orders are left out.",
+  },
 ];
 
-export const METRICS = Object.fromEntries(defs.map((d) => [d.id, d])) as Record<MetricId, MetricDef>;
+export const METRICS = Object.fromEntries(defs.map((d) => [d.id, d])) as Record<MetricId | ToolMetricId, MetricDef>;

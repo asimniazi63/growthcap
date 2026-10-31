@@ -29,6 +29,12 @@ export interface PlanGap {
   pctGap: number | null; // gap as a fraction of planned (null when nothing is planned yet)
   projected?: number; // month to date only: where the month will land (an estimate)
   spread?: "last_year" | "even"; // how the target was spread over the days (totals and counts only)
+  // Month to date only, for totals and counts: what each remaining day has to bring to land on the month's target. Cents for
+  // net sales, a count for orders and new-customer orders. Never negative. Absent once the target is met (targetMet says so)
+  // and when no day of the month is left. It is a plain average of what is left over the days left, not the plan's day shape.
+  neededPerDay?: number;
+  daysLeft?: number; // the days of the month after throughDate, in the store's calendar, today included
+  targetMet?: boolean; // true when the actual so far is already at or over the month's target
   throughDate: string; // the last day counted
 }
 export type PlanGapMap = Partial<Record<PlanMetric, PlanGap>>;
@@ -74,7 +80,13 @@ export async function planGap(input: PlanGapInput): Promise<PlanGapMap | undefin
     let plannedRaw = target;
     let projectedRaw: number | undefined;
     let spread: PlanGap["spread"];
+    let need: Pick<PlanGap, "neededPerDay" | "daysLeft" | "targetMet"> = {};
     if (isPaced(metric)) {
+      if (fromDay === 1 && toDay < days) {
+        const daysLeft = days - toDay;
+        const remaining = target - actualRaw;
+        need = remaining > 0 ? { neededPerDay: roundFor(metric, remaining / daysLeft), daysLeft } : { targetMet: true, daysLeft };
+      }
       const daily = await input.lastYearDaily(month, metric);
       spread = daily && daily.some((v) => v > 0) ? "last_year" : "even";
       const weights = dayWeights(days, daily);
@@ -99,6 +111,7 @@ export async function planGap(input: PlanGapInput): Promise<PlanGapMap | undefin
       pctGap: planned === 0 ? null : Math.round((gap / planned) * 1e4) / 1e4,
       ...(projectedRaw !== undefined ? { projected: roundFor(metric, projectedRaw) } : {}),
       ...(spread ? { spread } : {}),
+      ...need,
       throughDate: range.to,
     };
   }

@@ -2,24 +2,32 @@ import { AppError } from "../errors";
 import type { MetricRow, QueryMetricInput } from "../metrics/query";
 import { METRICS, type MetricId } from "../metrics/registry";
 import { PLAN_METRICS } from "../pace/metrics";
+import type { CohortsData, GetCohortsInput } from "../tools/cohorts";
 import type { ToolResult } from "../tools/result";
-import { VIEW_COMPONENTS, type Basis, type GaugeItem, type KpiCard, type TableColumn, type ViewComponent, type ViewData } from "./types";
+import { VIEW_COMPONENTS, type Basis, type CohortRow, type GaugeItem, type KpiCard, type TableColumn, type ViewComponent, type ViewData } from "./types";
 
 // Turns tool results into what a component draws. The numbers are copied from the results; nothing here accepts a value
 // from the model. Used when the model asks for a view, and again when a pinned view re-runs its queries.
 
-export interface ViewSource {
-  tool: string;
+export interface MetricViewSource {
+  tool: "query_metric";
   input: QueryMetricInput;
   result: ToolResult<MetricRow[]>;
 }
+// The cohort grid is drawn from get_cohorts, the only other tool a view can be drawn from.
+export interface CohortViewSource {
+  tool: "get_cohorts";
+  input: GetCohortsInput;
+  result: ToolResult<CohortsData>;
+}
+export type ViewSource = MetricViewSource | CohortViewSource;
 
 const TIME_DIMS = new Set(["day", "week", "month"]);
 const bad = (message: string): never => {
   throw new AppError("INVALID_INPUT", message);
 };
 const dimLabel = (dim: string) => dim.charAt(0).toUpperCase() + dim.slice(1).replace(/_/g, " ");
-const metricsOf = (s: ViewSource): MetricId[] => [...new Set(s.input.metrics)];
+const metricsOf = (s: MetricViewSource): MetricId[] => [...new Set(s.input.metrics)];
 
 function labelOf(row: MetricRow, dims: string[]): string {
   const dim = dims[0]!;
@@ -29,7 +37,7 @@ function labelOf(row: MetricRow, dims: string[]): string {
   return row.group[dim] ?? "unknown";
 }
 
-function basisOf(sources: ViewSource[]): Basis {
+function basisOf(sources: { result: ToolResult<unknown> }[]): Basis {
   return {
     queryIds: sources.map((s) => s.result.queryId),
     range: { from: sources.map((s) => s.result.range.from).sort()[0]!, to: sources.map((s) => s.result.range.to).sort().at(-1)! },
@@ -40,7 +48,31 @@ function basisOf(sources: ViewSource[]): Basis {
 export function buildView(component: ViewComponent, sources: ViewSource[]): ViewData {
   if (!(VIEW_COMPONENTS as readonly string[]).includes(component)) bad(`component must be one of ${VIEW_COMPONENTS.join(", ")}.`);
   if (sources.length === 0) bad("Give at least one result to draw (a query id from this turn).");
-  if (sources.some((s) => s.tool !== "query_metric")) bad("Views are drawn from query_metric results only.");
+  if (component === "cohort") return buildCohort(sources);
+  const metricSources = sources.filter((s): s is MetricViewSource => s.tool === "query_metric");
+  if (metricSources.length !== sources.length) bad("Views are drawn from query_metric results only (a cohort grid from a get_cohorts result).");
+  return buildMetricView(component, metricSources);
+}
+
+// The cohort grid: first-order month against months since, copied from a get_cohorts result.
+function buildCohort(sources: ViewSource[]): ViewData {
+  const first = sources[0]!;
+  if (sources.length !== 1 || first.tool !== "get_cohorts") return bad("A cohort grid draws one get_cohorts result; give one queryRef.");
+  const cells = first.result.data.cells;
+  if (cells.length === 0) return bad("This get_cohorts result has no grid. Ask get_cohorts again with the grid on.");
+  const byCohort = new Map<string, CohortRow>();
+  for (const c of cells) {
+    const row = byCohort.get(c.cohort) ?? { cohort: c.cohort, cohortCustomers: c.cohortCustomers, cells: [] };
+    row.cells.push({ monthsSince: c.monthsSince, customers: c.customers, repeaters: c.repeaters, repeatShare: c.repeatShare });
+    byCohort.set(c.cohort, row);
+  }
+  const rows = [...byCohort.values()].sort((a, b) => a.cohort.localeCompare(b.cohort));
+  for (const r of rows) r.cells.sort((a, b) => a.monthsSince - b.monthsSince);
+  const windowMonths = [...new Set(cells.map((c) => c.monthsSince))].sort((a, b) => a - b);
+  return { component: "cohort", windowMonths, rows, ...(first.input.firstOrderCode ? { firstOrderCode: first.input.firstOrderCode } : {}), ...basisOf(sources) };
+}
+
+function buildMetricView(component: ViewComponent, sources: MetricViewSource[]): ViewData {
   if (component !== "kpi" && sources.length > 1) bad(`A ${component} draws one result; give one queryRef.`);
   if (sources.length > 3) bad("Give at most three results.");
 
@@ -123,5 +155,8 @@ export function buildView(component: ViewComponent, sources: ViewSource[]): View
       ];
       return { component, metric, label: METRICS[metric].label, unit: METRICS[metric].unit, dimension: dims[0]!, steps, ...basis };
     }
+
+    case "cohort":
+      return bad("A cohort grid is drawn from a get_cohorts result.");
   }
 }

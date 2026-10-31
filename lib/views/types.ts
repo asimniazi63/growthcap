@@ -1,8 +1,8 @@
 import type { PlanGap } from "../pace/gap";
 import type { MetricId, MetricUnit } from "../metrics/registry";
 
-// The six components a chat answer can draw. The set is closed: render_view rejects anything else.
-export const VIEW_COMPONENTS = ["kpi", "line", "bar", "table", "gauge", "waterfall"] as const;
+// The seven components a chat answer can draw. The set is closed: render_view rejects anything else.
+export const VIEW_COMPONENTS = ["kpi", "line", "bar", "table", "gauge", "waterfall", "cohort"] as const;
 export type ViewComponent = (typeof VIEW_COMPONENTS)[number];
 
 export interface Basis {
@@ -41,12 +41,21 @@ export interface TableColumn {
   unit?: MetricUnit; // set for a metric column
 }
 
+// One row of the cohort grid: the customers whose first order was in `cohort`, and how many of them ordered again within each
+// number of 30-day months. A null share means nobody in the cohort is old enough yet to be counted.
+export interface CohortRow {
+  cohort: string; // YYYY-MM
+  cohortCustomers: number;
+  cells: { monthsSince: number; customers: number; repeaters: number; repeatShare: number | null }[];
+}
+
 export type ViewData =
   | ({ component: "kpi"; cards: KpiCard[] } & Basis)
   | ({ component: "gauge"; gauges: GaugeItem[] } & Basis)
   | ({ component: "line"; metric: MetricId; label: string; unit: MetricUnit; dimension: string; points: { x: string; y: number }[] } & Basis)
   | ({ component: "bar"; metric: MetricId; label: string; unit: MetricUnit; dimension: string; bars: { label: string; value: number; share?: number }[]; truncated?: { shown: number; total: number } } & Basis)
   | ({ component: "table"; columns: TableColumn[]; rows: Record<string, string | number | null>[]; truncated?: { shown: number; total: number } } & Basis)
+  | ({ component: "cohort"; windowMonths: number[]; rows: CohortRow[]; firstOrderCode?: string } & Basis)
   | ({ component: "waterfall"; metric: MetricId; label: string; unit: MetricUnit; dimension: string; steps: { label: string; value: number; kind: "start" | "delta" | "end" }[] } & Basis);
 
 // What the model asks for. `queryRefs` are query ids from this turn's tool results.

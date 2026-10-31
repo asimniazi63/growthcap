@@ -1,14 +1,19 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { extractText, getDocumentProxy } from "unpdf";
 import type { Db } from "../db/client";
 import { DOCUMENT_KINDS, documents, planTargets, plans, tenants, type DocumentKind, type DocumentStatus } from "../db/schema";
 import { assertBudget } from "../agent/budget";
+import { localDate } from "../clock";
+import { addDays } from "../metrics/dates";
+import { loadWindow, todayFor } from "../tools/common";
 import { AppError } from "../errors";
 import { isUuid } from "../ids";
 import { NotAllowedError } from "../memory/store";
 import { loadPlan } from "../pace/gap";
 import type { PlanMetric } from "../pace/metrics";
 import type { TenantContext } from "../tenancy/context";
+import { invoiceProposalSchema, readInvoicePages, type InvoiceProposal } from "./invoice";
+import { matchInvoiceLines, updatesFrom, type InvoiceRow } from "./invoice-match";
 import { MAX_PAGES, MAX_TEXT_CHARS, proposalSchema, readPages, readPlanSheet, type Proposal, type ReaderDeps } from "./read";
 
 // SOWs and plan sheets a Growth Capital admin or partner uploads to set a brand's targets. Only the text is kept (per page),
@@ -89,10 +94,19 @@ export interface Change {
   page: number;
 }
 
+// An invoice read for review: each line next to the variant it matches in this store (or why it doesn't).
+export interface InvoiceReview {
+  rows: InvoiceRow[];
+  unapplied: InvoiceProposal["unapplied"];
+  unverified: InvoiceProposal["unverified"];
+  readyCount: number; // lines that would become a cost update if confirmed
+}
+
 export interface DocumentDetail extends DocumentSummary {
   proposal: Proposal | null;
   changes: Change[];
   currentPlan: { id: string; label: string } | null;
+  invoice?: InvoiceReview; // only for an invoice
 }
 
 type Row = typeof documents.$inferSelect;
@@ -102,7 +116,28 @@ function parseProposal(raw: unknown): Proposal | null {
   return parsed.success ? parsed.data : null;
 }
 
+function parseInvoice(raw: unknown): InvoiceProposal | null {
+  const parsed = invoiceProposalSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
 function summarize(row: Pick<Row, "id" | "kind" | "label" | "byteSize" | "status" | "pages" | "proposal" | "planId" | "createdAt" | "decidedAt">): DocumentSummary {
+  if (row.kind === "invoice") {
+    const invoice = parseInvoice(row.proposal);
+    return {
+      id: row.id,
+      kind: row.kind,
+      label: row.label,
+      byteSize: row.byteSize,
+      status: row.status,
+      pageCount: row.pages.length,
+      targetCount: invoice ? invoice.lines.length : null,
+      unappliedCount: invoice ? invoice.unapplied.length : 0,
+      planId: null,
+      createdAt: row.createdAt.toISOString(),
+      decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
+    };
+  }
   const proposal = parseProposal(row.proposal);
   return {
     id: row.id,
@@ -123,15 +158,15 @@ function summarize(row: Pick<Row, "id" | "kind" | "label" | "byteSize" | "status
 export async function uploadDocument(db: Db, ctx: TenantContext, input: { kind: string; label: string; bytes: Uint8Array }): Promise<DocumentSummary> {
   assertCanManagePlan(ctx);
   const kind = DOCUMENT_KINDS.find((k) => k === input.kind);
-  if (!kind) throw new AppError("INVALID_INPUT", "kind must be sow or plan_sheet.");
+  if (!kind || kind === "call_note") throw new AppError("INVALID_INPUT", "kind must be sow, invoice or plan_sheet.");
   const { bytes } = input;
   if (bytes.length === 0) throw new AppError("INVALID_INPUT", "That file is empty.");
   if (bytes.length > MAX_BYTES) throw new AppError("INVALID_INPUT", `A file can be at most ${MAX_BYTES / 1024 / 1024} MB.`);
   const label = cleanLabel(input.label);
 
   let pages: string[];
-  if (kind === "sow") {
-    if (!/\.pdf$/i.test(label) || !startsWithPdfMagic(bytes)) throw new AppError("INVALID_INPUT", "A SOW must be a PDF file.");
+  if (kind === "sow" || kind === "invoice") {
+    if (!/\.pdf$/i.test(label) || !startsWithPdfMagic(bytes)) throw new AppError("INVALID_INPUT", `${kind === "sow" ? "A SOW" : "An invoice"} must be a PDF file.`);
     pages = await pdfPages(bytes);
   } else {
     if (!/\.csv$/i.test(label) || startsWithPdfMagic(bytes)) throw new AppError("INVALID_INPUT", "A plan sheet must be a CSV file.");
@@ -157,10 +192,12 @@ export async function readDocument(db: Db, ctx: TenantContext, id: string, deps?
   // read is a paid model call. (A read that failed leaves the status at "uploaded", so it can be tried again.)
   if (doc.status !== "uploaded") throw new AppError("INVALID_INPUT", doc.status === "read" ? "That document has already been read. Upload it again to read it again." : "That document has already been decided.");
   if (doc.kind !== "plan_sheet") await assertBudget(ctx.tenantId, { db, env: process.env });
-  let proposal: Proposal;
+  let proposal: Proposal | InvoiceProposal;
   if (doc.kind === "plan_sheet") proposal = readPlanSheet(doc.pages.join("\n"));
   else if (!deps) throw new AppError("INTERNAL_ERROR", "No model is set up to read this document.");
-  else proposal = await readPages(doc.pages, deps);
+  else if (doc.kind === "invoice") proposal = await readInvoicePages(doc.pages, deps);
+  else if (doc.kind === "sow") proposal = await readPages(doc.pages, deps);
+  else throw new AppError("INVALID_INPUT", "That kind of document is not read here.");
 
   const done = await db
     .update(documents)
@@ -173,7 +210,8 @@ export async function readDocument(db: Db, ctx: TenantContext, id: string, deps?
 
 export async function listDocuments(db: Db, ctx: TenantContext): Promise<DocumentSummary[]> {
   assertCanManagePlan(ctx);
-  const rows = await db.select().from(documents).where(eq(documents.tenantId, ctx.tenantId)).orderBy(desc(documents.createdAt), desc(documents.id)).limit(50);
+  // Call notes are stored as documents too, but they have their own panel on the Plan page.
+  const rows = await db.select().from(documents).where(and(eq(documents.tenantId, ctx.tenantId), ne(documents.kind, "call_note"))).orderBy(desc(documents.createdAt), desc(documents.id)).limit(50);
   return rows.map(summarize);
 }
 
@@ -182,6 +220,12 @@ export async function getDocument(db: Db, ctx: TenantContext, id: string): Promi
   assertCanManagePlan(ctx);
   const doc = await ownDocument(db, ctx, id);
   if (!doc) return null;
+  if (doc.kind === "invoice") {
+    const parsed = parseInvoice(doc.proposal);
+    const rows = parsed ? await matchInvoiceLines(db, ctx.tenantId, ctx.shop?.currency ?? null, parsed.lines) : [];
+    const invoice: InvoiceReview = { rows, unapplied: parsed?.unapplied ?? [], unverified: parsed?.unverified ?? [], readyCount: updatesFrom(rows).length };
+    return { ...summarize(doc), proposal: null, changes: [], currentPlan: null, invoice };
+  }
   const proposal = parseProposal(doc.proposal);
   const open = doc.status === "read";
   const active = open ? await loadPlan(db, ctx.tenantId) : null;
@@ -240,4 +284,34 @@ export async function discardDocument(db: Db, ctx: TenantContext, id: string): P
     .where(and(eq(documents.id, id), eq(documents.tenantId, ctx.tenantId), inArray(documents.status, ["uploaded", "read"])))
     .returning({ id: documents.id });
   return done.length > 0;
+}
+
+// Confirming an invoice does not write to Shopify. It proposes one "unit_cost_update" action (only the lines that match exactly
+// one variant of this store and change its cost), which appears as an approval card in the ledger; a person approves it there.
+// Null when there is no such document or it was already decided (so a second confirm does nothing, and the ledger dedupes).
+export async function confirmInvoice(db: Db, ctx: TenantContext, id: string): Promise<{ actionId: string; lines: number } | null> {
+  assertCanManagePlan(ctx);
+  const doc = await ownDocument(db, ctx, id);
+  if (!doc || doc.kind !== "invoice" || doc.status !== "read") return null;
+  const parsed = parseInvoice(doc.proposal);
+  if (!parsed || parsed.lines.length === 0) throw new AppError("INVALID_INPUT", "There are no costs to apply from this invoice.");
+  const updates = updatesFrom(await matchInvoiceLines(db, ctx.tenantId, ctx.shop?.currency ?? null, parsed.lines));
+  if (updates.length === 0) throw new AppError("INVALID_INPUT", "None of the invoice lines match a variant in this store with a different cost, so there is nothing to change.");
+
+  const today = ctx.shop ? todayFor(ctx.shop.timezone, await loadWindow(db, ctx.tenantId)) : localDate(Date.now(), "UTC");
+  const { proposeAction } = await import("../actions/ledger");
+  const action = await proposeAction(db, ctx, {
+    kind: "unit_cost_update",
+    title: `Update unit costs from ${doc.label}`.slice(0, 120),
+    payload: { updates },
+    hypothesis: "The supplier invoice gives new unit costs, so gross margin should be worked out from them.",
+    metric: "gross_margin",
+    checkOn: addDays(today, 14),
+  });
+  const done = await db
+    .update(documents)
+    .set({ status: "confirmed", decidedBy: ctx.userId, decidedAt: new Date() })
+    .where(and(eq(documents.id, doc.id), eq(documents.tenantId, ctx.tenantId), eq(documents.status, "read")))
+    .returning({ id: documents.id });
+  return done.length > 0 ? { actionId: action.id, lines: updates.length } : null;
 }

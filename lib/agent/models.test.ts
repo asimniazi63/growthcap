@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableModels, costUsd, defaultModelId, MODELS, resolveModel, retryModelFor } from "./models";
+import { availableModels, costUsd, defaultModelId, fallbackModelFor, MODELS, resolveModel, retryModelFor } from "./models";
 
 const OFF = {} as Record<string, string | undefined>;
 const CLAUDE_ON = { BEDROCK_CLAUDE_ENABLED: "true" };
@@ -58,5 +58,24 @@ describe("retryModelFor", () => {
   it("retries once on the same model", () => {
     const m = MODELS[0]!;
     expect(retryModelFor(m)).toBe(m);
+  });
+});
+
+describe("fallbackModelFor", () => {
+  const sonnet = MODELS.find((m) => m.id === "claude-sonnet-4-6")!;
+  const devstral = MODELS.find((m) => m.id === "devstral-2")!;
+  it("is Devstral 2 until Claude 5.5 is approved, and Opus 5.5 after", () => {
+    expect(fallbackModelFor(sonnet, OFF)?.id).toBe("devstral-2");
+    expect(fallbackModelFor(sonnet, CLAUDE_ON)?.id).toBe("claude-opus-5-5");
+  });
+  it("uses AGENT_FALLBACK_MODEL_ID when it names an available model, and ignores one that does not", () => {
+    expect(fallbackModelFor(sonnet, { AGENT_FALLBACK_MODEL_ID: "minimax-m2-5" })?.id).toBe("minimax-m2-5");
+    expect(fallbackModelFor(sonnet, { AGENT_FALLBACK_MODEL_ID: "claude-opus-5-5" })?.id).toBe("devstral-2");
+    expect(fallbackModelFor(sonnet, { AGENT_FALLBACK_MODEL_ID: "gpt-9" })?.id).toBe("devstral-2");
+  });
+  it("is never the model that failed", () => {
+    expect(fallbackModelFor(devstral, OFF)?.id).toBe("claude-sonnet-4-6");
+    const opus = MODELS.find((m) => m.id === "claude-opus-5-5")!;
+    expect(fallbackModelFor(opus, CLAUDE_ON)?.id).toBe("devstral-2");
   });
 });

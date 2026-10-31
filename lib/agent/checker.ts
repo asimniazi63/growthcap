@@ -1,6 +1,7 @@
 import { daysBetween } from "../metrics/dates";
 import { METRICS, type MetricId } from "../metrics/registry";
 import type { ToolResult } from "../tools/result";
+import { documentFigureEntries } from "../plan-in/figures";
 
 // The number checker. Every figure in an answer must equal a value from that turn's tool results, with the same unit
 // (money, count or percent) and after rounding to the precision shown. Nothing is derived: a sum or ratio the model
@@ -23,7 +24,7 @@ export interface ClaimLedger {
 
 const METRIC_MAPS = new Set(["values", "previous", "change"]);
 const RATE_MAPS = new Set(["pctChange", "share"]);
-const RATE_KEYS = new Set(["marginRate"]);
+const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate"]);
 
 function classify(key: string, parentKey: string | undefined, raw: number): { value: number; unit: ClaimUnit } {
   if (parentKey && METRIC_MAPS.has(parentKey)) {
@@ -45,7 +46,7 @@ function walkPlanGaps(node: unknown, path: string, queryId: string, out: ClaimEn
     if (!def || !gap || typeof gap !== "object") continue;
     for (const [field, raw] of Object.entries(gap)) {
       if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
-      const unit: ClaimUnit = field === "pctGap" ? "rate" : def.unit === "money" ? "money" : def.unit === "rate" ? "rate" : "count";
+      const unit: ClaimUnit = field === "pctGap" ? "rate" : field === "daysLeft" ? "count" : def.unit === "money" ? "money" : def.unit === "rate" ? "rate" : "count";
       const value = unit === "money" ? raw / 100 : unit === "rate" ? raw * 100 : raw;
       out.push({ value, unit, queryId, path: `${path}.${metric}.${field}` });
     }
@@ -95,6 +96,7 @@ export function ledgerFromToolResults(results: ToolResult<unknown>[]): ClaimLedg
     walk(r.data, "data", "data", undefined, r.queryId, entries);
     if (r.truncated) walk(r.truncated, "truncated", "truncated", undefined, r.queryId, entries);
     collectNames(r.data, "data", undefined, false, names);
+    entries.push(...documentFigureEntries(r)); // page text returned by ask_document: what the document states, with its page
   });
   return { entries, names: [...names], rangeDays: [...rangeDays] };
 }
