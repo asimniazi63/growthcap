@@ -4,6 +4,7 @@ import type { TenantContext } from "../lib/tenancy/context";
 import type { ViewData } from "../lib/views/types";
 import { readFixtureFile } from "../scripts/fixtures/load-pace";
 import { metricValue, monthPeriod } from "../scripts/seed/truth.js";
+import { WHY_CASES } from "./why-cases";
 import type { Dataset, StoreKey, Truth } from "../scripts/seed/types.js";
 import type { Expectation } from "./graders";
 
@@ -112,4 +113,5 @@ export const CASES: EvalCase[] = [
       };
     },
   },
+  ...WHY_CASES,
 ];

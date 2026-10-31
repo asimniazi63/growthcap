@@ -1,12 +1,13 @@
 // `npm run fixtures:load -- [--store solenne|tidepool|both] [--check]`
-// Loads each store's plan.csv and ad-spend.csv into the brand's tenant in the database (.env.local's DATABASE_URL).
-// Safe to run again: the same files leave the same rows. `--check` only reads and validates the files, and writes nothing.
-// (Calendar and call notes belong to the Why ticket, T7.)
+// Loads each store's plan.csv, ad-spend.csv, calendar.csv and call-notes/*.md into the brand's tenant in the database
+// (.env.local's DATABASE_URL). Safe to run again: the same files leave the same rows. `--check` only reads and validates the
+// files, and writes nothing.
 import { existsSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { getDb } from "../lib/db/client";
 import { shopConnections } from "../lib/db/schema";
 import { loadAdSpend, loadPlan, parseAdSpend, parsePlan, readFixtureFile } from "./fixtures/load-pace";
+import { loadCalendar, loadCallNotes, parseCalendar, parseCallNotes, readCallNoteFiles } from "./fixtures/load-why";
 import { STORES } from "./seed/stores.js";
 import type { StoreKey } from "./seed/types.js";
 
@@ -25,8 +26,12 @@ async function main(): Promise<void> {
   for (const store of stores) {
     const plan = readFixtureFile(store, "plan.csv");
     const spend = readFixtureFile(store, "ad-spend.csv");
+    const calendar = readFixtureFile(store, "calendar.csv");
+    const noteFiles = readCallNoteFiles(store);
     if (checkOnly) {
-      console.log(`${store}: plan ${new Set(parsePlan(plan).map((t) => t.month)).size} months, ad spend ${parseAdSpend(spend).length} rows: files are valid, nothing written.`);
+      console.log(
+        `${store}: plan ${new Set(parsePlan(plan).map((t) => t.month)).size} months, ad spend ${parseAdSpend(spend).length} rows, calendar ${parseCalendar(calendar).length} events, call notes ${parseCallNotes(noteFiles).length}: files are valid, nothing written.`,
+      );
       continue;
     }
     const shopDomain = process.env[STORES[store].shopDomainEnv];
@@ -35,7 +40,9 @@ async function main(): Promise<void> {
     if (!conn) throw new Error(`${STORES[store].shopDomainEnv} is not connected to any brand.`);
     const p = await loadPlan(db, conn.tenantId, plan, `${STORES[store].name} plan (fixture)`);
     const a = await loadAdSpend(db, conn.tenantId, spend);
-    console.log(`${store}: plan ${p.months} months, ad spend ${a.rows} rows loaded.`);
+    const c = await loadCalendar(db, conn.tenantId, calendar);
+    const n = await loadCallNotes(db, conn.tenantId, noteFiles);
+    console.log(`${store}: plan ${p.months} months, ad spend ${a.rows} rows, calendar ${c.events} events, call notes ${n.notes} loaded.`);
   }
   process.exit(0);
 }
