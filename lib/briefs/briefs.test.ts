@@ -77,7 +77,7 @@ describe("drafting a brief through the agent loop", () => {
   it("asks a fixed question for the Monday of the week the job ran", () => {
     expect(mondayOf(new Date("2026-11-02T06:00:00Z"))).toBe("2026-11-02");
     expect(mondayOf(new Date("2026-11-04T06:00:00Z"))).toBe("2026-11-02");
-    expect(briefQuestion("2026-11-02")).toContain("Under 150 words");
+    expect(briefQuestion("2026-11-02")).toContain("under 120 words");
   });
 });
 

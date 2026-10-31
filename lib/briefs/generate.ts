@@ -36,7 +36,7 @@ export const mondayOf = (now: Date): string => mondayOnOrBefore(now.toISOString(
 
 // Fixed and written by the server: nothing in a request or in store data reaches this text.
 export function briefQuestion(weekStart: string): string {
-  return `Write this brand's Monday brief for the week starting ${formatRange(weekStart, weekStart)}: month-to-date against plan with the month-end estimate, the biggest movers vs last week, and one thing to watch. Under 150 words. Plain text, no tables.`;
+  return `Write this brand's Monday brief for the week starting ${formatRange(weekStart, weekStart)}. Use exactly two query_metric calls and no other tool. First: metrics net_sales, orders, aov and new_customer_orders with period this_month (the net_sales row carries gapToPlan: target, planned so far, actual, gap and projected). Second: the same four metrics with period last_7_days and compareTo previous_period. Then write three short parts in plain text, no tables, under 120 words in all: where the month stands against plan, with the month-end projection called an estimate; the biggest change against the week before; one thing to watch. Use only figures from those two results, and write money in dollars (money fields are in cents).`;
 }
 
 interface Verification {
