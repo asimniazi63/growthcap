@@ -1,0 +1,240 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import { setTestNow } from "../clock";
+import type { Db } from "../db/client";
+import { tenants } from "../db/schema";
+import { createTestDb } from "../db/test-db";
+import type { TenantContext } from "../tenancy/context";
+import { loadDataset, readFixture, shopifyId } from "../../scripts/fixtures/load-db";
+import { monthPeriod, monthlyMetrics, metricValue } from "../../scripts/seed/truth.js";
+import { STORES } from "../../scripts/seed/stores.js";
+import type { CoreMetricId, Dataset, StoreKey, Truth } from "../../scripts/seed/types.js";
+import { CORE_METRIC_IDS } from "./registry";
+import { queryMetric, type QueryMetricInput } from "./query";
+
+let db: Db;
+const fixtures = {} as Record<StoreKey, { dataset: Dataset; truth: Truth }>;
+const ctxs = {} as Record<StoreKey, TenantContext>;
+
+beforeAll(async () => {
+  db = await createTestDb();
+  for (const store of ["solenne", "tidepool"] as const) {
+    const [t] = await db.insert(tenants).values({ orgId: `org_${store}`, name: STORES[store].name }).returning();
+    fixtures[store] = readFixture(store);
+    await loadDataset(db, t!.id, store, fixtures[store].dataset);
+    ctxs[store] = {
+      tenantId: t!.id,
+      orgId: `org_${store}`,
+      userId: "user_test",
+      role: "gc_admin",
+      shop: { domain: `${store}.myshopify.com`, timezone: STORES[store].timezone, currency: "USD", status: "connected" },
+    };
+  }
+}, 240_000);
+
+const run = (store: StoreKey, input: QueryMetricInput) => queryMetric(ctxs[store], input, { db });
+
+// Counts exactly, money to the cent, rates to 4 decimal places.
+function expectMetric(metric: CoreMetricId, actual: number, expected: number, where: string) {
+  const exact = ["gross_sales", "discounts", "refunds", "net_sales", "orders", "units", "new_customer_orders"].includes(metric);
+  if (exact) expect(actual, `${where} ${metric}`).toBe(expected);
+  else expect(actual, `${where} ${metric}`).toBeCloseTo(expected, metric === "aov" ? 2 : 4);
+}
+
+describe.each(["solenne", "tidepool"] as const)("%s: every metric equals truth.json", (store) => {
+  it("matches every month of the data window for all 11 metrics", async () => {
+    const months = Object.entries(fixtures[store].truth.monthly);
+    expect(months.length).toBeGreaterThan(1);
+    for (const [month, expected] of months) {
+      const { from, to } = monthPeriod(month);
+      const res = await run(store, { metrics: [...CORE_METRIC_IDS], from, to });
+      expect(res.data).toHaveLength(1);
+      for (const m of CORE_METRIC_IDS) expectMetric(m, res.data[0]!.values[m]!, expected[m], month);
+    }
+  });
+
+  it("matches the storyline checks the core metrics can answer", async () => {
+    let checked = 0;
+    for (const sl of fixtures[store].truth.storylines) {
+      for (const c of sl.checks) {
+        if (!(CORE_METRIC_IDS as readonly string[]).includes(c.metric)) continue; // repeat_rate and zero_sales_days: T12
+        const f = c.filter;
+        const filters: NonNullable<QueryMetricInput["filters"]> = {};
+        if (f.discount_code) filters.discountCodes = [f.discount_code];
+        if (f.channel) filters.channels = [f.channel];
+        if (f.tag) filters.tags = [f.tag];
+        if (f.exclude_tag) filters.excludeTags = [f.exclude_tag];
+        if (f.customer_type) filters.customerType = f.customer_type as "new" | "returning";
+        if (f.product) filters.productIds = [shopifyId.product(f.product)];
+        if (f.variant) filters.variantIds = [shopifyId.variant(f.variant)];
+        const res = await run(store, { metrics: [c.metric as CoreMetricId], from: c.period.from, to: c.period.to, filters });
+        const actual = res.data[0]!.values[c.metric as CoreMetricId]!;
+        expect(Math.abs(actual - c.expected), `${sl.id} ${c.metric} ${JSON.stringify(f)}`).toBeLessThanOrEqual(c.tolerance);
+        // And it agrees with the independent truth computation on the dataset itself.
+        expect(actual).toBeCloseTo(metricValue(fixtures[store].dataset, c.metric as CoreMetricId, f, c.period), 4);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(0);
+  });
+});
+
+describe("dates", () => {
+  it("counts an order on its store-local date at the edges of a day (00:30 and 23:30)", async () => {
+    // Solenne is New York: pick every order within an hour of local midnight and compare day by day with truth.
+    const { dataset } = fixtures.solenne;
+    const edge = dataset.orders.filter((o) => /T(23:[34]|00:[0-5])/.test(o.processedAt.slice(10)));
+    expect(edge.length).toBeGreaterThan(0);
+    for (const o of edge.slice(0, 5)) {
+      const day = o.processedAt.slice(0, 10);
+      const res = await run("solenne", { metrics: ["orders"], from: day, to: day });
+      expect(res.data[0]!.values.orders).toBe(metricValue(dataset, "orders", {}, { from: day, to: day }));
+    }
+  });
+
+  it("fills empty days with zeros inside the data window, so a quiet stretch shows as 0", async () => {
+    const res = await run("solenne", { metrics: ["orders", "units"], from: "2026-07-01", to: "2026-07-31", groupBy: ["day"] });
+    expect(res.data).toHaveLength(31);
+    expect(res.data.map((r) => r.group.day)).toEqual([...res.data.map((r) => r.group.day)].sort());
+    const total = res.data.reduce((s, r) => s + r.values.orders!, 0);
+    expect(total).toBe(metricValue(fixtures.solenne.dataset, "orders", {}, { from: "2026-07-01", to: "2026-07-31" }));
+  });
+
+  it("answers NO_DATA outside the data window, for both stores", async () => {
+    await expect(run("solenne", { metrics: ["orders"], from: "2025-01-01", to: "2025-01-31" })).rejects.toMatchObject({ code: "NO_DATA" });
+    await expect(run("tidepool", { metrics: ["orders"], from: "2025-09-01", to: "2025-10-31" })).rejects.toMatchObject({ code: "NO_DATA" });
+    await expect(run("solenne", { metrics: ["orders"], from: "2027-01-01", to: "2027-01-31" })).rejects.toMatchObject({ code: "NO_DATA" });
+  });
+
+  it("resolves named periods with the store's clock, pinned to the end of the data", async () => {
+    setTestNow("2026-11-02T12:00:00-05:00");
+    try {
+      const res = await run("solenne", { metrics: ["orders"], period: "last_month" });
+      expect(res.range).toEqual({ from: "2026-09-01", to: "2026-09-30" }); // "today" is the end of the data: 2026-10-31
+      const def = await run("solenne", { metrics: ["orders"] });
+      expect(def.range.to).toBe("2026-10-31");
+      expect(def.range.from).toBe("2026-10-02");
+    } finally {
+      setTestNow(null);
+    }
+  });
+});
+
+describe("refunds across months", () => {
+  it("puts a refund in the month it was made for `refunds`, and in the order's month for `refund_rate`", async () => {
+    const { dataset } = fixtures.solenne;
+    const order = new Map(dataset.orders.map((o) => [o.genId, o]));
+    const late = dataset.refunds.find((r) => order.get(r.orderGenId)!.processedAt.slice(0, 7) !== r.processedAt.slice(0, 7));
+    expect(late, "the dataset has a refund in a later month than its order").toBeDefined();
+    const refundMonth = monthPeriod(late!.processedAt.slice(0, 7));
+    const orderMonth = monthPeriod(order.get(late!.orderGenId)!.processedAt.slice(0, 7));
+    const inRefundMonth = await run("solenne", { metrics: ["refunds"], ...refundMonth });
+    expect(inRefundMonth.data[0]!.values.refunds).toBe(metricValue(dataset, "refunds", {}, refundMonth));
+    const inOrderMonth = await run("solenne", { metrics: ["refund_rate"], ...orderMonth });
+    expect(inOrderMonth.data[0]!.values.refund_rate).toBeCloseTo(metricValue(dataset, "refund_rate", {}, orderMonth), 4);
+    expect(inOrderMonth.data[0]!.values.refund_rate).toBeGreaterThan(0);
+  });
+});
+
+describe("grouping, comparing and sharing", () => {
+  it("groups by channel and gives each group's share, which adds up to 1", async () => {
+    const res = await run("solenne", { metrics: ["gross_sales", "orders"], from: "2026-05-01", to: "2026-05-31", groupBy: ["channel"] });
+    expect(res.data.length).toBeGreaterThan(1);
+    const shares = res.data.map((r) => r.share!.gross_sales!);
+    expect(shares.reduce((s, x) => s + x, 0)).toBeCloseTo(1, 6);
+    const total = res.data.reduce((s, r) => s + r.values.gross_sales!, 0);
+    expect(total).toBe(metricValue(fixtures.solenne.dataset, "gross_sales", {}, { from: "2026-05-01", to: "2026-05-31" }));
+  });
+
+  it("compares with the previous period and returns the change, so the model never subtracts", async () => {
+    const res = await run("solenne", { metrics: ["net_sales"], from: "2026-05-01", to: "2026-05-31", compareTo: "previous_period" });
+    const row = res.data[0]!;
+    const april = metricValue(fixtures.solenne.dataset, "net_sales", {}, monthPeriod("2026-04"));
+    expect(row.previous!.net_sales).toBe(april);
+    expect(row.change!.net_sales).toBe(row.values.net_sales! - april);
+    expect(row.pctChange!.net_sales).toBeCloseTo((row.values.net_sales! - april) / april, 6);
+  });
+
+  it("compares with the same dates a year earlier", async () => {
+    const res = await run("solenne", { metrics: ["orders"], from: "2026-09-01", to: "2026-09-30", compareTo: "previous_year" });
+    expect(res.data[0]!.previous!.orders).toBe(metricValue(fixtures.solenne.dataset, "orders", {}, monthPeriod("2025-09")));
+  });
+
+  it("limits grouped rows and says what was cut", async () => {
+    const res = await run("solenne", { metrics: ["units"], from: "2025-09-01", to: "2026-10-31", groupBy: ["variant"], limit: 5 });
+    expect(res.data).toHaveLength(5);
+    expect(res.truncated).toMatchObject({ shown: 5 });
+    expect(res.truncated!.total).toBeGreaterThan(5);
+    const units = res.data.map((r) => r.values.units!);
+    expect(units).toEqual([...units].sort((a, b) => b - a));
+  });
+});
+
+describe("results carry what the agent must quote", () => {
+  it("returns definitions, a query id, the range and when the data was last synced", async () => {
+    const res = await run("solenne", { metrics: ["aov", "refund_rate"], from: "2026-05-01", to: "2026-05-31" });
+    expect(Object.keys(res.definitions).sort()).toEqual(["aov", "refund_rate"]);
+    expect(res.definitions.aov).toMatch(/net sales|order/i);
+    expect(res.queryId).toMatch(/^q_[0-9a-f]{12}$/);
+    expect(res.range).toEqual({ from: "2026-05-01", to: "2026-05-31" });
+    expect(Date.parse(res.asOf)).not.toBeNaN();
+    const again = await run("solenne", { metrics: ["aov", "refund_rate"], from: "2026-05-01", to: "2026-05-31" });
+    expect(again.queryId).toBe(res.queryId);
+  });
+});
+
+describe("isolation and access", () => {
+  it("never returns another tenant's rows: both stores share one database, and each answers only for itself", async () => {
+    const t = fixtures.tidepool.dataset;
+    const s = fixtures.solenne.dataset;
+    const full = { from: "2025-09-01", to: "2026-10-31" };
+    const tidepoolAll = await run("tidepool", { metrics: ["orders", "gross_sales"], ...full });
+    expect(tidepoolAll.data[0]!.values.orders).toBe(metricValue(t, "orders", {}, full));
+    expect(tidepoolAll.data[0]!.values.gross_sales).toBe(metricValue(t, "gross_sales", {}, full));
+    expect(metricValue(s, "orders", {}, full)).toBeGreaterThan(tidepoolAll.data[0]!.values.orders! * 5);
+  });
+
+  it("finds nothing for Tidepool when handed Solenne-only discount codes, or any grouping that would list Solenne rows", async () => {
+    const tidepoolCodes = new Set(fixtures.tidepool.dataset.discounts.map((d) => d.code));
+    const solenneOnly = fixtures.solenne.dataset.discounts.map((d) => d.code).filter((c) => !tidepoolCodes.has(c));
+    expect(solenneOnly.length).toBeGreaterThan(0);
+    const res = await run("tidepool", { metrics: ["orders"], from: "2025-11-01", to: "2026-10-31", filters: { discountCodes: solenneOnly } });
+    expect(res.data[0]!.values.orders).toBe(0);
+    const byCode = await run("tidepool", { metrics: ["orders"], from: "2025-11-01", to: "2026-10-31", groupBy: ["discount_code"] });
+    const codes = byCode.data.map((r) => r.group.discount_code);
+    expect(codes.filter((c) => solenneOnly.includes(c!))).toEqual([]);
+  });
+
+  it("throws STORE_DISCONNECTED when the store is disconnected or missing", async () => {
+    const input = { metrics: ["orders"], from: "2026-05-01", to: "2026-05-31" } satisfies QueryMetricInput;
+    await expect(queryMetric({ ...ctxs.solenne, shop: { ...ctxs.solenne.shop!, status: "disconnected" } }, input, { db })).rejects.toMatchObject({ code: "STORE_DISCONNECTED" });
+    await expect(queryMetric({ ...ctxs.solenne, shop: null }, input, { db })).rejects.toMatchObject({ code: "STORE_DISCONNECTED" });
+  });
+});
+
+describe("input validation", () => {
+  const bad = (input: unknown) => expect(queryMetric(ctxs.solenne, input as QueryMetricInput, { db })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  it("rejects an unknown metric or dimension, a malformed date, from after to, and unknown keys", async () => {
+    await bad({ metrics: ["profit"] });
+    await bad({ metrics: [] });
+    await bad({ metrics: ["orders"], groupBy: ["zodiac"] });
+    await bad({ metrics: ["orders"], from: "05/01/2026", to: "2026-05-31" });
+    await bad({ metrics: ["orders"], from: "2026-02-30", to: "2026-03-01" });
+    await bad({ metrics: ["orders"], from: "2026-06-01", to: "2026-05-01" });
+    await bad({ metrics: ["orders"], period: "last_30_days", tenantId: "other" });
+    await bad({ metrics: ["orders"], filters: { shop: "other.myshopify.com" } });
+  });
+  it("caps a limit of 500 at 200 rows and marks the result truncated", async () => {
+    const res = await run("solenne", { metrics: ["orders"], from: "2025-09-01", to: "2026-10-31", groupBy: ["day"], limit: 500 });
+    expect(res.data).toHaveLength(200);
+    expect(res.truncated).toMatchObject({ shown: 200 });
+    expect(res.truncated!.total).toBeGreaterThan(200);
+  });
+});
+
+// Keeps the independent truth helper honest: it must agree with the stored monthly figures.
+describe("truth helper", () => {
+  it("monthlyMetrics reproduces truth.json", () => {
+    const { dataset, truth } = fixtures.tidepool;
+    expect(monthlyMetrics(dataset)["2026-03"]).toEqual(truth.monthly["2026-03"]);
+  });
+});
