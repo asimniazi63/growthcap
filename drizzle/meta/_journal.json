@@ -36,6 +36,13 @@
       "when": 1793463434386,
       "tag": "0004_high_the_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793466918513,
+      "tag": "0005_absent_vulcan",
+      "breakpoints": true
     }
   ]
 }

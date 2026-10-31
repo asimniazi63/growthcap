@@ -19,6 +19,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link href="/pace" className="hover:text-neutral-900">
               Pace
             </Link>
+            <Link href="/plan" className="hover:text-neutral-900">
+              Plan
+            </Link>
+            <Link href="/actions" className="hover:text-neutral-900">
+              Actions
+            </Link>
+            <Link href="/portfolio" className="hover:text-neutral-900">
+              Portfolio
+            </Link>
+            <Link href="/briefs" className="hover:text-neutral-900">
+              Briefs
+            </Link>
             <Link href="/connect" className="hover:text-neutral-900">
               Connect
             </Link>

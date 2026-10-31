@@ -365,3 +365,113 @@ export const memories = pgTable(
   },
   (t) => [index("memories_status_idx").on(t.tenantId, t.status, t.createdAt)],
 );
+
+// ---- Stretch tickets T7-T10. One migration for all of them, so parallel work never clashes on numbering.
+// Calendar events and call notes come from fixture files today. Both are text from outside the app: the agent treats them as data.
+export const calendarEvents = pgTable(
+  "calendar_events",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    dateFrom: date("date_from", { mode: "string" }).notNull(),
+    dateTo: date("date_to", { mode: "string" }).notNull(),
+    title: text("title").notNull(),
+    type: text("type").notNull(), // launch, promo, ...
+    channel: text("channel").notNull(),
+    details: text("details").notNull().default(""),
+  },
+  (t) => [index("calendar_events_idx").on(t.tenantId, t.dateFrom)],
+);
+
+export const callNotes = pgTable(
+  "call_notes",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    heldOn: date("held_on", { mode: "string" }).notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+  },
+  (t) => [index("call_notes_idx").on(t.tenantId, t.heldOn)],
+);
+
+export const DOCUMENT_KINDS = ["sow", "plan_sheet"] as const;
+export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+export const DOCUMENT_STATUSES = ["uploaded", "read", "confirmed", "discarded"] as const;
+export type DocumentStatus = (typeof DOCUMENT_STATUSES)[number];
+
+// An uploaded SOW or plan sheet. The file itself is not kept: only its text per page, and what was read from it.
+// `proposal` holds the targets read from it (each with the sentence and page it came from) until a GC role confirms.
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    kind: text("kind").$type<DocumentKind>().notNull(),
+    label: text("label").notNull(), // the file's name as uploaded
+    byteSize: integer("byte_size").notNull(),
+    pages: jsonb("pages").$type<string[]>().notNull(), // extracted text, one entry per page (one entry for a CSV)
+    status: text("status").$type<DocumentStatus>().notNull().default("uploaded"),
+    proposal: jsonb("proposal").$type<unknown>(),
+    planId: uuid("plan_id").references(() => plans.id), // the plan made when it was confirmed
+    uploadedBy: text("uploaded_by").notNull(),
+    decidedBy: text("decided_by"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [index("documents_idx").on(t.tenantId, t.createdAt)],
+);
+
+export const ACTION_KINDS = ["metric_target", "annotation", "discount_deactivate", "landing_page"] as const;
+export type ActionKind = (typeof ACTION_KINDS)[number];
+export const ACTION_STATUSES = ["proposed", "approved", "running", "done", "failed", "rejected"] as const;
+export type ActionStatus = (typeof ACTION_STATUSES)[number];
+
+// The action ledger: every write the agent proposes, who approved it, and what happened. `payload` is the exact input the
+// executor runs and `payloadHash` is its hash when it was proposed, so a payload changed after approval is refused.
+export const actions = pgTable(
+  "actions",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    kind: text("kind").$type<ActionKind>().notNull(),
+    status: text("status").$type<ActionStatus>().notNull().default("proposed"),
+    title: text("title").notNull(),
+    payload: jsonb("payload").$type<unknown>().notNull(),
+    payloadHash: text("payload_hash").notNull(),
+    diff: jsonb("diff").$type<unknown>().notNull(), // what the approval card shows, built on the server
+    hypothesis: text("hypothesis").notNull(),
+    metric: text("metric").notNull(),
+    checkOn: date("check_on", { mode: "string" }).notNull(), // when to look at whether it worked
+    owner: text("owner").notNull(), // the Clerk user who asked for it
+    decidedBy: text("decided_by"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    dryRun: boolean("dry_run").notNull().default(false), // approved by a reviewer login: recorded, never sent to Shopify
+    result: jsonb("result").$type<unknown>(),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("actions_idx").on(t.tenantId, t.status, t.createdAt)],
+);
+
+export const BRIEF_STATUSES = ["draft", "blocked", "approved"] as const;
+export type BriefStatus = (typeof BRIEF_STATUSES)[number];
+
+// A weekly brief for one brand. `blocked` means the number checker found a figure no tool result holds, so it can't be approved.
+export const briefs = pgTable(
+  "briefs",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    weekStart: date("week_start", { mode: "string" }).notNull(), // the Monday it covers from
+    status: text("status").$type<BriefStatus>().notNull(),
+    body: text("body").notNull(),
+    unmatched: jsonb("unmatched").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    approvedBy: text("approved_by"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    delivered: boolean("delivered").notNull().default(false), // true once it has been handed to the delivery function (the log today)
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("briefs_one_per_week").on(t.tenantId, t.weekStart)],
+);
