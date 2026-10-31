@@ -79,6 +79,10 @@ describe("checkClaims: what is not a claim", () => {
     expect(unmatched("On 2026-03-02 at 10:30 am, in 2026 and in March 2026, and on May 14th.", empty)).toEqual([]);
     expect(unmatched("From 2026-05-01 to 2026-05-31, or 2026-05.", empty)).toEqual([]);
   });
+  it("skips ISO timestamps, as a model may copy one from a tool result (found in the first live run)", () => {
+    expect(unmatched("The data is as of 2026-10-31T10:34:26.451Z.", empty)).toEqual([]);
+    expect(unmatched("Synced 2026-10-31T10:34:26+00:00 and 2026-10-31 10:34:26.", empty)).toEqual([]);
+  });
   it("skips codes, ids, SKUs and ordinals", () => {
     expect(unmatched("WELCOME10, VIPGLOW25 and BFCM25 on order #1042 by CUST_8f3a19c2 for SKU SOL-01A and P_007, 1st and 2nd.", empty)).toEqual([]);
   });

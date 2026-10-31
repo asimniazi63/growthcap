@@ -45,7 +45,14 @@ async function main(): Promise<void> {
   }
   const summary = await finished;
 
-  const answer = chunks.flatMap((c) => (c.type === "text-delta" ? [c.delta] : [])).join("");
+  // The answer is the last text block: an earlier one is a first draft that the number check sent back for repair.
+  const blocks: string[] = [];
+  for (const c of chunks) {
+    if (c.type === "text-start") blocks.push("");
+    else if (c.type === "text-delta" && blocks.length > 0) blocks[blocks.length - 1] += c.delta;
+  }
+  const answer = blocks.at(-1) ?? "";
+  if (blocks.length > 1) console.log(`(${blocks.length - 1} earlier draft${blocks.length > 2 ? "s" : ""} replaced after the number check)`);
   const error = chunks.find((c) => c.type === "error") as { errorText?: string } | undefined;
   const verification = chunks.filter((c) => c.type === "data-verification").map((c) => (c as unknown as { data: { ok: boolean; unmatched: { text: string }[] } }).data);
 

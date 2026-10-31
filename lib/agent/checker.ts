@@ -62,6 +62,7 @@ export function ledgerFromToolResults(results: ToolResult<unknown>[]): ClaimLedg
 const MONTH = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)";
 const SKIP_PATTERNS: RegExp[] = [
   /\b(?:https?|gid):\/\/\S+/g, // links and Shopify ids
+  /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?/g, // ISO timestamps
   /\b\d{4}-\d{2}(?:-\d{2})?\b/g, // 2026-05-01 and 2026-05
   /\b\d{1,2}:\d{2}(?::\d{2})?(?:\s?[ap]\.?m\.?)?/gi, // times
   /#\d+/g, // order numbers

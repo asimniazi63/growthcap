@@ -27,3 +27,13 @@
 - Grouping by product returns ids, so "top products" takes a second tool call for the titles.
 - Conversations are not saved; a refresh starts over.
 - The first draft is visible while it streams, before the check runs.
+
+## First live run (2026-10-31)
+
+`npm run chat:try -- --store solenne --q "How did net sales do last month compared with the month before?"`, Devstral 2: **one tool call, streamed fine, 9,674 tokens in and 170 out, about $0.004.** The answer's figures were all correct against `truth.json` (September net sales $6,294.48; change -$2,479.22; -28.3%), so Devstral does call tools while streaming and the checker and repair loop ran for real.
+
+Found and fixed:
+- The first draft copied a raw timestamp (`2026-10-31T10:34:26.451Z`); the checker read its `31` as a claim and sent the answer back for a needless repair. ISO timestamps are now skipped (test added), and the prompt asks for dates in plain words and for falls described in words, not with a minus sign.
+- `chat:try` printed the first draft and the corrected answer joined together. It now prints the last answer only.
+
+Open question: "last month" resolves to **September**, because with the demo clock "today" is the newest order's date (2026-10-31). The product plan says October is the "last month" story (S9) and the Loom asks "How did we do last month?". Options are in the T4 hand-off; nothing has been changed yet.
