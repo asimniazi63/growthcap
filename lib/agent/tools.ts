@@ -31,7 +31,7 @@ export const TOOL_DEFS: Record<string, ToolDef> = {
   },
   get_orders: {
     description:
-      "Find or list orders by date, discount code, channel, tag, product, variant, customer id, new or returning customer, or whether they were refunded. Give orderIds with one id for that order's lines and refunds; add includeNote only when the user asks for the note. Shows the newest 50 by default and says how many there are in all.",
+      "Find or list orders by date, discount code, channel, tag, product, variant, customer id, new or returning customer, or whether they were refunded. Give orderNumbers (for example 1982 for order #1982) or orderIds with one order for that order's lines and refunds, with no dates needed; add includeNote only when the user asks for the note. Shows the newest 50 by default and says how many there are in all.",
     schema: getOrdersInputSchema,
     run: getOrders as unknown as Run,
   },

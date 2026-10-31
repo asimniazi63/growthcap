@@ -24,6 +24,7 @@ export const getOrdersInputSchema = z
   .strictObject({
     ...periodShape,
     orderIds: idList.optional(),
+    orderNumbers: z.array(z.string().regex(/^#?\d{1,10}$/, "an order number looks like 1982 or #1982")).min(1).max(10).optional(),
     customerIds: idList.optional(),
     discountCodes: idList.optional(),
     channels: idList.optional(),
@@ -37,7 +38,7 @@ export const getOrdersInputSchema = z
     includeNote: z.boolean().optional(),
     limit: limitField,
   })
-  .refine((i) => !i.includeNote || i.orderIds?.length === 1, { path: ["includeNote"], message: "needs exactly one order id in orderIds" });
+  .refine((i) => !i.includeNote || i.orderIds?.length === 1 || i.orderNumbers?.length === 1, { path: ["includeNote"], message: "needs exactly one order, in orderIds or orderNumbers" });
 export type GetOrdersInput = z.input<typeof getOrdersInputSchema>;
 
 export interface OrderDetail {
@@ -82,7 +83,7 @@ export async function getOrders(ctx: Ctx, rawInput: GetOrdersInput, deps: { db?:
   if (!win.first || !win.last) throw new AppError("NO_DATA", "This store has no synced orders yet.");
 
   // Asking for named orders without dates means "wherever they fall".
-  const byId = input.orderIds !== undefined && input.period === undefined && input.from === undefined && input.to === undefined;
+  const byId = (input.orderIds !== undefined || input.orderNumbers !== undefined) && input.period === undefined && input.from === undefined && input.to === undefined;
   const range = byId ? { from: win.first, to: win.last } : resolveRange(input, todayFor(shop.timezone, win));
   if (!byId) assertInWindow(range, win);
 
@@ -102,6 +103,7 @@ export async function getOrders(ctx: Ctx, rawInput: GetOrdersInput, deps: { db?:
     byId ? undefined : gte(orders.localDate, range.from),
     byId ? undefined : lte(orders.localDate, range.to),
     input.orderIds && inArray(orders.id, input.orderIds),
+    input.orderNumbers && inArray(orders.name, input.orderNumbers.map((n) => (n.startsWith("#") ? n : `#${n}`))),
     input.customerIds && inArray(orders.customerId, input.customerIds),
     input.discountCodes && inArray(orders.discountCode, input.discountCodes),
     input.channels && inArray(orders.channel, input.channels),
@@ -129,7 +131,7 @@ export async function getOrders(ctx: Ctx, rawInput: GetOrdersInput, deps: { db?:
   const lines = ids.length ? await db.select().from(orderLines).where(and(eq(orderLines.tenantId, ctx.tenantId), inArray(orderLines.orderId, ids))) : [];
   const refundRows = ids.length ? await db.select().from(refunds).where(and(eq(refunds.tenantId, ctx.tenantId), inArray(refunds.orderId, ids))) : [];
 
-  const single = rows.length === 1 && input.orderIds?.length === 1;
+  const single = rows.length === 1 && (input.orderIds?.length === 1 || input.orderNumbers?.length === 1);
   const refundedQty = new Map<string, number>();
   let titles = new Map<string, { product: string; variant: string }>();
   if (single) {

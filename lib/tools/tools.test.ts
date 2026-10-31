@@ -83,6 +83,19 @@ describe("getOrders", () => {
     expect(row.units).toBe(order.lines.reduce((s, l) => s + l.qty, 0));
   });
 
+  it("finds an order by the number a person says (1982 or #1982), with its note when asked", async () => {
+    const order = ds.orders.find((o) => o.note)!;
+    const row0 = (await getOrders(ctx, { orderIds: [shopifyId.order(order.genId)] }, { db })).data[0]!;
+    const number = row0.name.replace("#", "");
+    for (const n of [number, `#${number}`]) {
+      const res = await getOrders(ctx, { orderNumbers: [n], includeNote: true }, { db });
+      expect(res.data).toHaveLength(1);
+      expect(res.data[0]!.name).toBe(row0.name);
+      expect(res.data[0]!.untrusted.note).toBe(order.note);
+    }
+    expect((await getOrders(ctx, { orderNumbers: ["999999"] }, { db })).data).toHaveLength(0);
+  });
+
   it("returns an order's note only when asked, for one order, and only under `untrusted`", async () => {
     const order = ds.orders.find((o) => o.note)!;
     const id = shopifyId.order(order.genId);

@@ -1,6 +1,7 @@
 import { APICallError, convertToModelMessages, createUIMessageStream, isStepCount, streamText, type LanguageModel, type ModelMessage, type UIMessage, type UIMessageChunk } from "ai";
+import { eq } from "drizzle-orm";
 import type { Db } from "../db/client";
-import type { AgentSource } from "../db/schema";
+import { tenants, type AgentSource } from "../db/schema";
 import { AppError, type ErrorCode } from "../errors";
 import { confirmedNotes } from "../memory/store";
 import type { TenantContext } from "../tenancy/context";
@@ -192,7 +193,8 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
 
         const win = await loadWindow(db, ctx.tenantId);
         const notes = await confirmedNotes(db, ctx.tenantId).catch(() => [] as string[]);
-        const context = turnContext({ today: todayFor(shop.timezone, win), timezone: shop.timezone, asOf: win.synced, notes });
+        const [brandRow] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
+        const context = turnContext({ today: todayFor(shop.timezone, win), timezone: shop.timezone, asOf: win.synced, notes, brand: brandRow?.name });
         let userMessage: ModelMessage | null = null; // what is saved for this question: the text without the per-turn context
         let modelMessages: ModelMessage[];
         if (input.thread) {
