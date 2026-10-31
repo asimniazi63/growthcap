@@ -8,6 +8,7 @@ import type { LedgerView } from "@/lib/actions/ledger";
 import type { ActionKind } from "@/lib/actions/types";
 import type { PendingRow } from "@/lib/overview/data";
 import { ApproveInline } from "./approve-inline";
+import { RefreshNow } from "./refresh-now";
 
 // The newest changes waiting for a decision, each with an Approve button. Titles were written by the model, so they are text.
 export function WaitingCard({ rows, total }: { rows: PendingRow[]; total: number }) {
@@ -18,6 +19,8 @@ export function WaitingCard({ rows, total }: { rows: PendingRow[]; total: number
 
   return (
     <section className="card card-pad" aria-labelledby="ov-waiting">
+      {/* Read the page again after each approval so the sidebar count updates. It lives here, not in the button, because the button is replaced by "Approved" and would unmount first. */}
+      {approved.size > 0 ? <RefreshNow key={approved.size} /> : null}
       <div className="mb-3 flex items-center justify-between gap-2.5">
         <h2 id="ov-waiting" className="section-title">
           Waiting for you

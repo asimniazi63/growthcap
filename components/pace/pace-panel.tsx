@@ -45,9 +45,9 @@ function GapCell({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; curr
   const { tone, text, pct } = gapText(metric, g, currency);
   const Icon = ICON[tone];
   return (
-    <span className={`inline-flex items-center justify-end gap-1.5 whitespace-nowrap font-medium ${TEXT_TONE[tone]}`}>
-      <Icon className="size-3.5 shrink-0" aria-hidden />
-      <span>
+    <span className={`inline-flex items-start justify-end gap-1.5 font-medium sm:items-center sm:whitespace-nowrap ${TEXT_TONE[tone]}`}>
+      <Icon className="mt-1 size-3.5 shrink-0 sm:mt-0" aria-hidden />
+      <span className="text-right">
         {text}
         {pct}
       </span>
