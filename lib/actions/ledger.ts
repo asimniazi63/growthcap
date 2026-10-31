@@ -215,7 +215,7 @@ export async function approveAction(db: Db, ctx: TenantContext, id: string, deps
     // An executor can finish without writing (Shopify gated the theme write): that is a failure to record, not a success.
     const notWritten = (result as { written?: unknown } | null)?.written === false ? (result as { reason?: string; finishByHand?: string }) : null;
     if (notWritten) {
-      const failed = await advance(db, ctx, id, ["running"], { status: "failed", result: toJson(result), error: `${notWritten.reason ?? "Nothing was written."} ${notWritten.finishByHand ?? ""}`.trim().slice(0, 600) });
+      const failed = await advance(db, ctx, id, ["running"], { status: "failed", result: toJson(result), error: `${notWritten.reason ?? "Nothing was written."} To finish it, run in the project folder: npm run landing:push -- ${id}`.slice(0, 600) });
       return toView(failed ?? (await loadRow(db, ctx, id)));
     }
     const done = await advance(db, ctx, id, ["running"], { status: "done", result: toJson(result) });
