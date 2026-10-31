@@ -1,5 +1,7 @@
+import { Lock } from "lucide-react";
 import { ActionsList } from "@/components/actions/actions-list";
 import { ErrorBanner } from "@/components/chat/error-banner";
+import { PageHeader } from "@/components/ui/page-header";
 import { listActions, type LedgerView } from "@/lib/actions/ledger";
 import { getDb } from "@/lib/db/client";
 import { AppError, type ErrorCode } from "@/lib/errors";
@@ -15,15 +17,10 @@ async function loadTenant(): Promise<TenantContext | null> {
 
 export default async function ActionsPage() {
   const ctx = await loadTenant();
-  const heading = (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Actions</h1>
-      <p className="mt-1 text-sm text-neutral-600">Changes the agent proposed for this brand. Nothing reaches the store until a Growth Capital admin or partner approves it here.</p>
-    </div>
-  );
+  const heading = <PageHeader title="Actions" description="Changes the agent proposed for this brand. Nothing reaches the store until a Growth Capital admin or partner approves it here." />;
   if (!ctx) {
     return (
-      <section className="space-y-4">
+      <section>
         {heading}
         <ErrorBanner code="FORBIDDEN" role="client_viewer" />
       </section>
@@ -32,9 +29,17 @@ export default async function ActionsPage() {
 
   if (ctx.role === "client_viewer") {
     return (
-      <section className="space-y-4">
+      <section>
         {heading}
-        <p className="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600">Growth Capital roles only. Changes to the store are proposed and approved by the Growth Capital team.</p>
+        <div className="card card-pad flex items-start gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-paper-2 text-ink-2">
+            <Lock className="size-4" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="font-medium">Growth Capital roles only</p>
+            <p className="muted mt-0.5 text-sm">Changes to the store are proposed and approved by the Growth Capital team.</p>
+          </div>
+        </div>
       </section>
     );
   }
@@ -48,7 +53,7 @@ export default async function ActionsPage() {
   }
 
   return (
-    <section className="space-y-5">
+    <section>
       {heading}
       {failure ? <ErrorBanner code={failure} role={ctx.role} /> : <ActionsList actions={actions} canDecide={ctx.role === "gc_admin" || ctx.role === "gc_partner"} me={ctx.userId} timezone={ctx.shop?.timezone ?? "UTC"} />}
     </section>

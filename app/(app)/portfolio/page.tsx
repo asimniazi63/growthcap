@@ -1,5 +1,7 @@
+import { Lock } from "lucide-react";
 import { ErrorBanner } from "@/components/chat/error-banner";
 import { PortfolioTable } from "@/components/portfolio/portfolio-table";
+import { PageHeader } from "@/components/ui/page-header";
 import { getDb } from "@/lib/db/client";
 import { getPortfolio, type PortfolioRow } from "@/lib/portfolio/portfolio";
 import { getTenantContext, type TenantContext } from "@/lib/tenancy/context";
@@ -14,15 +16,10 @@ async function loadTenant(): Promise<TenantContext | null> {
 
 export default async function PortfolioPage() {
   const ctx = await loadTenant();
-  const heading = (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>
-      <p className="mt-1 text-sm text-neutral-600">Your brands, ranked by net sales behind plan this month, with the part of the gap that pulled the most.</p>
-    </div>
-  );
+  const heading = <PageHeader title="Portfolio" description="Your brands, ranked by net sales behind plan this month, with the part of the gap that pulled the most." />;
   if (!ctx) {
     return (
-      <section className="space-y-4">
+      <section>
         {heading}
         <ErrorBanner code="FORBIDDEN" role="client_viewer" />
       </section>
@@ -30,11 +27,12 @@ export default async function PortfolioPage() {
   }
   if (ctx.role === "client_viewer") {
     return (
-      <section className="space-y-4">
+      <section>
         {heading}
-        <p role="alert" className="rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
-          Growth Capital roles only. The portfolio compares brands, so it is open to Growth Capital admins and partners.
-        </p>
+        <div role="alert" className="card flex items-start gap-3 px-4 py-3.5 text-sm">
+          <Lock className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
+          <p className="muted">Growth Capital roles only. The portfolio compares brands, so it is open to Growth Capital admins and partners.</p>
+        </div>
       </section>
     );
   }
@@ -47,7 +45,7 @@ export default async function PortfolioPage() {
     failed = true;
   }
   return (
-    <section className="space-y-5">
+    <section>
       {heading}
       {failed ? <ErrorBanner code="INTERNAL_ERROR" role={ctx.role} /> : <PortfolioTable rows={rows} />}
     </section>

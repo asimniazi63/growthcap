@@ -1,5 +1,6 @@
 "use client";
 
+import { LoaderCircle, PinOff } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -16,8 +17,9 @@ export function UnpinButton({ id }: { id: string }) {
         if (res?.ok) router.refresh();
         else setBusy(false);
       }}
-      className="rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs hover:border-neutral-500 disabled:opacity-50"
+      className="btn btn-ghost btn-sm"
     >
+      {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <PinOff className="size-4" aria-hidden />}
       {busy ? "Removing…" : "Unpin"}
     </button>
   );

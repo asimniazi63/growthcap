@@ -1,3 +1,5 @@
+import { ChevronDown, Info, TriangleAlert } from "lucide-react";
+import { PageHeader } from "@/components/ui/page-header";
 import { ChatClient } from "@/components/chat/chat-client";
 import { ErrorBanner } from "@/components/chat/error-banner";
 import { NotesPanel } from "@/components/chat/notes-panel";
@@ -23,8 +25,8 @@ export default async function ChatPage() {
   const ctx = await loadTenant();
   if (!ctx) {
     return (
-      <section className="space-y-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Chat</h1>
+      <section>
+        <PageHeader title="Chat" />
         <ErrorBanner code="FORBIDDEN" role="client_viewer" />
       </section>
     );
@@ -41,41 +43,49 @@ export default async function ChatPage() {
   const models = availableModels().map((m) => ({ id: m.id, label: m.label }));
 
   return (
-    <section className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Chat</h1>
-        <p className="mt-1 text-sm text-neutral-600">Ask questions about this brand&apos;s Shopify data. Every number is checked against the store before you see it.</p>
-      </div>
+    <div className="space-y-8">
+      {/* On large screens the chat fills the screen height inside the page padding; the notes and metric definitions sit below it. */}
+      <section className="flex min-h-0 flex-col gap-4 lg:h-[calc(100dvh-5rem)]">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h1 className="page-title text-2xl">Chat</h1>
+          <p className="muted text-sm">Ask questions about this brand&apos;s Shopify data. Every number is checked against the store before you see it.</p>
+        </div>
 
-      {demoThrough ? (
-        <p role="status" className="rounded-md border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900">
-          Demo data through {demoThrough}. &quot;Today&quot; and &quot;last month&quot; are counted as if it were the day after.
-        </p>
-      ) : null}
-      {budget?.warn && !budget.exceeded ? (
-        <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
-          This brand has used {Math.round((budget.spentUsd / budget.capUsd) * 100)}% of today&apos;s AI budget.
-        </p>
-      ) : null}
-      {!connected ? <ErrorBanner code="STORE_DISCONNECTED" role={ctx.role} /> : null}
+        {demoThrough ? (
+          <p role="status" className="flex items-start gap-2.5 rounded-xl border border-brand/20 bg-brand-tint px-4 py-2.5 text-sm text-brand-strong">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>Demo data through {demoThrough}. &quot;Today&quot; and &quot;last month&quot; are counted as if it were the day after.</span>
+          </p>
+        ) : null}
+        {budget?.warn && !budget.exceeded ? (
+          <p role="status" className="flex items-start gap-2.5 rounded-xl border border-warn/30 bg-warn-tint px-4 py-2.5 text-sm text-ink">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
+            <span>This brand has used {Math.round((budget.spentUsd / budget.capUsd) * 100)}% of today&apos;s AI budget.</span>
+          </p>
+        ) : null}
+        {!connected ? <ErrorBanner code="STORE_DISCONNECTED" role={ctx.role} /> : null}
 
-      <ChatClient role={ctx.role} models={models} defaultModelId={defaultModelId("chat")} suggestions={SUGGESTED_QUESTIONS} currency={ctx.shop?.currency ?? "USD"} userId={ctx.userId} />
+        <ChatClient role={ctx.role} models={models} defaultModelId={defaultModelId("chat")} suggestions={SUGGESTED_QUESTIONS} currency={ctx.shop?.currency ?? "USD"} userId={ctx.userId} />
+      </section>
 
       <NotesPanel notes={notes.filter((n) => n.status !== "dismissed").map((n) => ({ id: n.id, text: n.text, status: n.status === "confirmed" ? ("confirmed" as const) : ("proposed" as const) }))} role={ctx.role} />
 
-      <details className="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm">
-        <summary className="cursor-pointer font-medium">What the metrics mean</summary>
-        <dl className="mt-3 space-y-3">
+      <details className="card group text-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-2xl px-5 py-4 font-medium [&::-webkit-details-marker]:hidden">
+          What the metrics mean
+          <ChevronDown className="ml-auto size-4 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <dl className="divide-y divide-line border-t border-line px-5">
           {METRIC_IDS.map((id) => (
-            <div key={id}>
-              <dt className="font-medium">
-                {METRICS[id].label} <span className="font-mono text-xs text-neutral-500">{id}</span>
+            <div key={id} className="py-3">
+              <dt className="flex flex-wrap items-center gap-2 font-medium">
+                {METRICS[id].label} <span className="badge font-mono text-[0.6875rem] font-medium">{id}</span>
               </dt>
-              <dd className="text-neutral-600">{METRICS[id].definition}</dd>
+              <dd className="muted mt-1 max-w-[70ch]">{METRICS[id].definition}</dd>
             </div>
           ))}
         </dl>
       </details>
-    </section>
+    </div>
   );
 }

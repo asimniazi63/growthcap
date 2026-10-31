@@ -1,5 +1,6 @@
 "use client";
 
+import { NotebookPen } from "lucide-react";
 import { useState } from "react";
 
 export type MemoryCardState = "proposed" | "confirmed" | "dismissed";
@@ -22,31 +23,46 @@ export function MemoryCard({ id, text, status, canDecide }: { id: string; text: 
     else setFailed(true);
   }
 
+  const badge =
+    state === "proposed" ? (
+      <span className="badge badge-warn">Waiting for confirmation</span>
+    ) : state === "confirmed" ? (
+      <span className="badge badge-ahead">Confirmed</span>
+    ) : state === "gone" ? (
+      <span className="badge">Already decided</span>
+    ) : (
+      <span className="badge">Dismissed</span>
+    );
+
   return (
-    <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950">
-      <p className="text-xs font-medium uppercase tracking-wide text-sky-800">Note for this brand</p>
-      <p className="mt-1">{text}</p>
+    <div className={`rounded-xl border bg-surface p-4 text-sm ${state === "proposed" ? "border-warn/30" : "border-line"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 font-semibold">
+          <NotebookPen className="size-4 text-brand-strong" aria-hidden />
+          Note for this brand
+        </p>
+        {badge}
+      </div>
+      <p className="mt-2 leading-6">{text}</p>
       {state === "proposed" ? (
         canDecide ? (
-          <div className="mt-2 flex items-center gap-2">
-            <button type="button" disabled={busy} onClick={() => decide("confirm")} className="rounded-md bg-sky-800 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" disabled={busy} onClick={() => decide("confirm")} className="btn btn-primary btn-sm">
               Confirm
             </button>
-            <button type="button" disabled={busy} onClick={() => decide("dismiss")} className="rounded-md border border-sky-300 bg-white px-2.5 py-1 text-xs hover:border-sky-500 disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => decide("dismiss")} className="btn btn-secondary btn-sm">
               Dismiss
             </button>
-            {failed ? <span role="alert" className="text-xs text-red-700">Couldn&apos;t save that. Try again.</span> : null}
+            {failed ? <span role="alert" className="text-xs text-behind">Couldn&apos;t save that. Try again.</span> : null}
           </div>
         ) : (
-          <p className="mt-1 text-xs text-sky-800">Waiting for a Growth Capital admin or partner to confirm it.</p>
+          <p className="muted mt-2 text-xs">Waiting for a Growth Capital admin or partner to confirm it.</p>
         )
       ) : state === "confirmed" ? (
-        <p className="mt-1 text-xs text-emerald-700">Confirmed. It will be used in answers for this brand.</p>
+        <p className="muted mt-2 text-xs">It will be used in answers for this brand.</p>
       ) : state === "gone" ? (
-        <p className="mt-1 text-xs text-neutral-600">This note has already been decided or removed. The notes list shows what is in use.</p>
-      ) : (
-        <p className="mt-1 text-xs text-neutral-600">Dismissed.</p>
-      )}
+        <p className="muted mt-2 text-xs">This note has already been decided or removed. The notes list shows what is in use.</p>
+      ) : null}
     </div>
   );
 }

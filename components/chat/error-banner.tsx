@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleAlert, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import type { ErrorCode } from "@/lib/errors";
 import type { Role } from "@/lib/tenancy/context";
@@ -20,26 +21,34 @@ export const ERROR_COPY: Record<ChatErrorCode, { title: string; body: string; re
   FORBIDDEN: { title: "You don't have access to this brand's chat", body: "Switch to a brand you belong to, or ask your GC admin." },
 };
 
+// Problems the person can wait out or retry read as a warning; the rest read as an error.
+const SOFT: ReadonlySet<ChatErrorCode> = new Set(["SHOPIFY_THROTTLED", "SHOPIFY_UNAVAILABLE", "DATA_STALE", "NO_DATA", "INVALID_INPUT", "MODEL_TIMEOUT", "BUDGET_EXCEEDED"]);
+
 export function ErrorBanner({ code, role, onRetry }: { code: ChatErrorCode; role: Role; onRetry?: () => void }) {
   const copy = ERROR_COPY[code] ?? ERROR_COPY.INTERNAL_ERROR;
+  const soft = SOFT.has(code);
+  const Icon = soft ? TriangleAlert : CircleAlert;
   return (
-    <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-      <p className="font-medium">{copy.title}</p>
-      <p className="mt-0.5 text-red-800">{copy.body}</p>
-      {code === "STORE_DISCONNECTED" ? (
-        role === "gc_admin" ? (
-          <Link href="/connect" className="mt-2 inline-block rounded-md bg-red-900 px-3 py-1.5 text-white hover:bg-red-800">
-            Reconnect the store
-          </Link>
-        ) : (
-          <p className="mt-2">Ask your GC admin to reconnect the store.</p>
-        )
-      ) : null}
-      {copy.retry && onRetry ? (
-        <button type="button" onClick={onRetry} className="mt-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-red-900 hover:bg-red-100">
-          Try again
-        </button>
-      ) : null}
+    <div role="alert" className={`flex gap-3 rounded-xl border px-4 py-3.5 text-sm ${soft ? "border-warn/30 bg-warn-tint" : "border-behind/30 bg-behind-tint"}`}>
+      <Icon className={`mt-0.5 size-4.5 shrink-0 ${soft ? "text-warn" : "text-behind"}`} aria-hidden />
+      <div className="min-w-0">
+        <p className="font-semibold text-ink">{copy.title}</p>
+        <p className="mt-0.5 text-ink-2">{copy.body}</p>
+        {code === "STORE_DISCONNECTED" ? (
+          role === "gc_admin" ? (
+            <Link href="/connect" className="btn btn-primary btn-sm mt-3">
+              Reconnect the store
+            </Link>
+          ) : (
+            <p className="mt-2 text-ink">Ask your GC admin to reconnect the store.</p>
+          )
+        ) : null}
+        {copy.retry && onRetry ? (
+          <button type="button" onClick={onRetry} className="btn btn-secondary btn-sm mt-3">
+            Try again
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

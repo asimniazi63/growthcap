@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown, NotebookPen } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Role } from "@/lib/tenancy/context";
@@ -28,27 +29,34 @@ export function NotesPanel({ notes, role }: { notes: NoteItem[]; role: Role }) {
   }
 
   return (
-    <details className="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm" open={visible.some((n) => n.status === "proposed")}>
-      <summary className="cursor-pointer font-medium">Notes for this brand</summary>
-      <p className="mt-2 text-xs text-neutral-500">Confirmed notes are given to the assistant with every question. It can propose a note, but it is used only after a Growth Capital admin or partner confirms it.</p>
-      <ul className="mt-3 space-y-2">
-        {visible.map((n) =>
-          n.status === "proposed" ? (
-            <li key={n.id}>
-              <MemoryCard id={n.id} text={n.text} status="proposed" canDecide={canManage} />
-            </li>
-          ) : (
-            <li key={n.id} className="flex items-start justify-between gap-3 border-t border-neutral-100 pt-2">
-              <span>{n.text}</span>
-              {canManage ? (
-                <button type="button" disabled={busy === n.id} onClick={() => remove(n.id)} className="shrink-0 rounded-md border border-neutral-300 px-2 py-0.5 text-xs hover:border-neutral-500 disabled:opacity-50">
-                  {busy === n.id ? "Removing…" : "Remove"}
-                </button>
-              ) : null}
-            </li>
-          ),
-        )}
-      </ul>
+    <details className="card group text-sm" open={visible.some((n) => n.status === "proposed")}>
+      <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-2xl px-5 py-4 font-medium [&::-webkit-details-marker]:hidden">
+        <NotebookPen className="size-4 text-brand-strong" aria-hidden />
+        Notes for this brand
+        <span className="badge num">{visible.length}</span>
+        <ChevronDown className="ml-auto size-4 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="border-t border-line px-5 py-4">
+        <p className="muted max-w-[70ch] text-xs">Confirmed notes are given to the assistant with every question. It can propose a note, but it is used only after a Growth Capital admin or partner confirms it.</p>
+        <ul className="mt-3 space-y-3">
+          {visible.map((n) =>
+            n.status === "proposed" ? (
+              <li key={n.id}>
+                <MemoryCard id={n.id} text={n.text} status="proposed" canDecide={canManage} />
+              </li>
+            ) : (
+              <li key={n.id} className="flex items-start justify-between gap-3 rounded-xl bg-paper px-4 py-3">
+                <span className="min-w-0 leading-6">{n.text}</span>
+                {canManage ? (
+                  <button type="button" disabled={busy === n.id} onClick={() => remove(n.id)} className="btn btn-ghost btn-sm shrink-0">
+                    {busy === n.id ? "Removing…" : "Remove"}
+                  </button>
+                ) : null}
+              </li>
+            ),
+          )}
+        </ul>
+      </div>
     </details>
   );
 }

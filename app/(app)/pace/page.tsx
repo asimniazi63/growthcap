@@ -1,6 +1,8 @@
+import { FlaskConical } from "lucide-react";
 import { ErrorBanner } from "@/components/chat/error-banner";
 import { PacePanel } from "@/components/pace/pace-panel";
 import { PinnedViews } from "@/components/pace/pinned-views";
+import { PageHeader } from "@/components/ui/page-header";
 import { getDb } from "@/lib/db/client";
 import { AppError, type ErrorCode } from "@/lib/errors";
 import { getPaceView, type PaceView } from "@/lib/pace/view";
@@ -16,15 +18,10 @@ async function loadTenant(): Promise<TenantContext | null> {
 
 export default async function PacePage() {
   const ctx = await loadTenant();
-  const heading = (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Pace</h1>
-      <p className="mt-1 text-sm text-neutral-600">This month against the plan, where it is likely to land, and how last month finished.</p>
-    </div>
-  );
+  const heading = <PageHeader title="Pace" description="This month against the plan, where it is likely to land, and how last month finished." />;
   if (!ctx) {
     return (
-      <section className="space-y-4">
+      <section>
         {heading}
         <ErrorBanner code="FORBIDDEN" role="client_viewer" />
       </section>
@@ -44,16 +41,19 @@ export default async function PacePage() {
   }
 
   return (
-    <section className="space-y-5">
+    <section>
       {heading}
-      {failure ? <ErrorBanner code={failure} role={ctx.role} /> : null}
-      {view?.demoClock ? (
-        <p role="status" className="rounded-md border border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-900">
-          Demo data: &quot;today&quot; is counted as the day after the newest order, so {view.through} is the last complete day.
-        </p>
-      ) : null}
-      {view && ctx.shop ? <PacePanel view={view} currency={ctx.shop.currency} /> : null}
-      {ctx.shop?.status === "connected" ? <PinnedViews ctx={ctx} /> : null}
+      <div className="space-y-10">
+        {failure ? <ErrorBanner code={failure} role={ctx.role} /> : null}
+        {view?.demoClock ? (
+          <p role="status" className="flex items-start gap-2.5 rounded-2xl border border-dashed border-estimate bg-surface px-4 py-3 text-sm">
+            <FlaskConical className="mt-0.5 size-4 shrink-0 text-estimate" aria-hidden />
+            <span>Demo data: &quot;today&quot; is counted as the day after the newest order, so {view.through} is the last complete day.</span>
+          </p>
+        ) : null}
+        {view && ctx.shop ? <PacePanel view={view} currency={ctx.shop.currency} /> : null}
+        {ctx.shop?.status === "connected" ? <PinnedViews ctx={ctx} /> : null}
+      </div>
     </section>
   );
 }

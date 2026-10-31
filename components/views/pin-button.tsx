@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, LoaderCircle, Pin } from "lucide-react";
 import { useState } from "react";
 import type { ViewComponent, ViewSourceRef } from "@/lib/views/types";
 
@@ -23,13 +24,21 @@ export function PinButton({ title, component, sources }: { title: string; compon
     }
   }
 
-  if (state === "pinned") return <p className="text-xs text-emerald-700">Pinned. It is on the Pace page and refreshes each time you open it.</p>;
+  if (state === "pinned") {
+    return (
+      <p className="flex items-center gap-1.5 text-[13px] font-medium text-ahead">
+        <Check className="size-4 shrink-0" aria-hidden />
+        Pinned. It is on the Pace page and refreshes each time you open it.
+      </p>
+    );
+  }
   return (
-    <div className="flex items-center gap-2">
-      <button type="button" onClick={pin} disabled={state === "saving"} className="rounded-md border border-neutral-300 bg-white px-2.5 py-1 text-xs hover:border-neutral-500 disabled:opacity-50">
+    <div className="flex flex-wrap items-center gap-2">
+      <button type="button" onClick={pin} disabled={state === "saving"} className="btn btn-ghost btn-sm">
+        {state === "saving" ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : <Pin className="size-4" aria-hidden />}
         {state === "saving" ? "Pinning…" : "Pin to Pace"}
       </button>
-      {state === "error" ? <span role="alert" className="text-xs text-red-700">{message}</span> : null}
+      {state === "error" ? <span role="alert" className="text-[13px] font-medium text-behind">{message}</span> : null}
     </div>
   );
 }

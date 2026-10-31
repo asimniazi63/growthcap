@@ -1,3 +1,6 @@
+import { AlertTriangle, CheckCircle2, Plug, RefreshCw, ShieldCheck } from "lucide-react";
+import type { ReactNode } from "react";
+import { PageHeader } from "@/components/ui/page-header";
 import { getDb } from "@/lib/db/client";
 import { canResync } from "@/lib/sync/run";
 import { getSyncStatus, type SyncStatus } from "@/lib/sync/status";
@@ -24,6 +27,28 @@ function asOfText(iso: string | null, timezone: string): string {
   return new Intl.DateTimeFormat("en-US", { timeZone: timezone, dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
 }
 
+// A message above the status card: an error says what went wrong, a success says what happened.
+function Callout({ tone, role, children }: { tone: "error" | "success"; role: "alert" | "status"; children: ReactNode }) {
+  const Icon = tone === "error" ? AlertTriangle : CheckCircle2;
+  const style = tone === "error" ? "bg-behind-tint text-behind" : "bg-ahead-tint text-ahead";
+  return (
+    <p role={role} className={`mb-5 flex items-start gap-3 rounded-xl px-4 py-3 text-sm font-medium ${style}`}>
+      <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+function StatusDot({ tone }: { tone: "ahead" | "warn" | "muted" }) {
+  const colour = tone === "ahead" ? "bg-ahead" : tone === "warn" ? "bg-warn" : "bg-ink-3";
+  return (
+    <span className="relative grid size-5 place-items-center" aria-hidden>
+      <span className={`absolute size-5 rounded-full opacity-20 ${colour}`} />
+      <span className={`size-2.5 rounded-full ${colour}`} />
+    </span>
+  );
+}
+
 function SyncPanel({ status, timezone, canSync }: { status: SyncStatus; timezone: string; canSync: boolean }) {
   const { counts } = status;
   const stats: [string, number][] = [
@@ -35,22 +60,19 @@ function SyncPanel({ status, timezone, canSync }: { status: SyncStatus; timezone
   ];
   const run = status.lastRun;
   return (
-    <div className="mt-5 border-t border-neutral-200 pt-5">
+    <div className="mt-5 border-t border-line pt-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-neutral-500">Synced data</p>
-          <p className="mt-0.5 text-sm text-neutral-700">
+          <h2 className="section-title">Synced data</h2>
+          <p className="muted mt-0.5 text-sm">
             Data as of {asOfText(status.asOf, timezone)}
             {status.firstOrderDate && status.lastOrderDate ? ` · orders from ${status.firstOrderDate} to ${status.lastOrderDate}` : ""}
           </p>
         </div>
         {canSync ? (
           <form action="/api/sync" method="post">
-            <button
-              type="submit"
-              disabled={status.running}
-              className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <button type="submit" disabled={status.running} className="btn btn-secondary">
+              <RefreshCw className={`size-4 ${status.running ? "motion-safe:animate-spin" : ""}`} aria-hidden />
               {status.running ? "Syncing…" : "Resync"}
             </button>
           </form>
@@ -58,19 +80,20 @@ function SyncPanel({ status, timezone, canSync }: { status: SyncStatus; timezone
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {stats.map(([label, value]) => (
-          <div key={label} className="rounded-md bg-neutral-50 px-3 py-2">
-            <dt className="text-xs text-neutral-500">{label}</dt>
-            <dd className="text-lg font-semibold tabular-nums">{number.format(value)}</dd>
+          <div key={label} className="inset px-3.5 py-3">
+            <dt className="faint text-xs">{label}</dt>
+            <dd className="stat num mt-1 text-xl">{number.format(value)}</dd>
           </div>
         ))}
       </dl>
       {status.running ? (
-        <p role="status" className="mt-3 text-sm text-neutral-600">
+        <p role="status" className="muted mt-4 text-sm">
           A sync is running. This page refreshes on its own.
         </p>
       ) : run?.status === "failed" ? (
-        <p role="alert" className="mt-3 text-sm text-red-700">
-          The last sync failed: {(run.error ?? "unknown error").slice(0, 200)}
+        <p role="alert" className="mt-4 flex items-start gap-3 rounded-xl bg-behind-tint px-4 py-3 text-sm text-behind">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>The last sync failed: {(run.error ?? "unknown error").slice(0, 200)}</span>
         </p>
       ) : null}
     </div>
@@ -93,46 +116,45 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
   const status = ctx && shop ? await getSyncStatus(getDb(), ctx.tenantId).catch(() => null) : null;
 
   return (
-    <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Store connection</h1>
-        <p className="mt-1 text-sm text-neutral-600">The Shopify store this brand&apos;s questions are answered from.</p>
-      </div>
+    <section>
+      <PageHeader title="Store connection" description="The Shopify store this brand's questions are answered from." />
 
       {error ? (
-        <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <Callout tone="error" role="alert">
           {MESSAGES[error] ?? "Something went wrong. Try again."}
-        </p>
+        </Callout>
       ) : null}
       {status?.running ? <meta httpEquiv="refresh" content="10" /> : null}
       {sync === "started" ? (
-        <p role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <Callout tone="success" role="status">
           Sync started.
-        </p>
+        </Callout>
       ) : null}
       {connected ? (
-        <p role="status" className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <Callout tone="success" role="status">
           Store connected.
-        </p>
+        </Callout>
       ) : null}
 
       {!ctx ? (
-        <p className="rounded-md border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">{MESSAGES.no_tenant}</p>
+        <div className="card card-pad text-sm">
+          <p className="muted">{MESSAGES.no_tenant}</p>
+        </div>
       ) : (
-        <div className="rounded-lg border border-neutral-200 bg-white p-5">
-          <div className="flex items-center justify-between gap-4">
+        <div className="card card-pad">
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
             <div>
-              <p className="text-sm text-neutral-500">Status</p>
-              <p className="mt-0.5 flex items-center gap-2 font-medium">
-                <span className={`inline-block size-2 rounded-full ${isConnected ? "bg-emerald-500" : "bg-neutral-400"}`} aria-hidden />
+              <p className="faint text-sm">Status</p>
+              <p className="section-title mt-0.5 flex items-center gap-2.5">
+                <StatusDot tone={isConnected ? "ahead" : shop ? "warn" : "muted"} />
                 {isConnected ? "Connected" : shop ? "Disconnected" : "Not connected"}
               </p>
             </div>
             {shop ? (
-              <dl className="text-right text-sm text-neutral-600">
+              <dl className="min-w-0 text-sm sm:text-right">
                 <dt className="sr-only">Store</dt>
-                <dd className="font-mono">{shop.domain}</dd>
-                <dd>
+                <dd className="break-all font-mono text-ink">{shop.domain}</dd>
+                <dd className="muted mt-0.5">
                   {shop.timezone} · {shop.currency}
                 </dd>
               </dl>
@@ -146,31 +168,26 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
               <label className="sr-only" htmlFor="shop">
                 Store address
               </label>
-              <input
-                id="shop"
-                name="shop"
-                required
-                defaultValue={shop?.domain ?? ""}
-                placeholder="your-store.myshopify.com"
-                className="min-w-0 flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              />
-              <button type="submit" className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700">
+              <input id="shop" name="shop" required defaultValue={shop?.domain ?? ""} placeholder="your-store.myshopify.com" className="field min-w-0 flex-1" />
+              <button type="submit" className="btn btn-primary">
+                <Plug className="size-4" aria-hidden />
                 {shop ? "Reconnect store" : "Connect store"}
               </button>
             </form>
           ) : null}
           {ctx.role === "gc_admin" && isConnected && shop ? (
-            <form action="/api/shopify/install" method="get" className="mt-5 flex flex-col gap-2">
+            <form action="/api/shopify/install" method="get" className="mt-5 flex flex-col gap-2 border-t border-line pt-5">
               <input type="hidden" name="shop" value={shop.domain} />
               <div>
-                <button type="submit" className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+                <button type="submit" className="btn btn-secondary">
+                  <ShieldCheck className="size-4" aria-hidden />
                   Update permissions
                 </button>
               </div>
-              <p className="text-sm text-neutral-500">Use this after a new version of the app asks for more access. Shopify shows what is new, and the store stays connected.</p>
+              <p className="muted text-sm">Use this after a new version of the app asks for more access. Shopify shows what is new, and the store stays connected.</p>
             </form>
           ) : null}
-          {ctx.role !== "gc_admin" && !isConnected ? <p className="mt-4 text-sm text-neutral-500">An admin needs to connect the store.</p> : null}
+          {ctx.role !== "gc_admin" && !isConnected ? <p className="muted mt-4 text-sm">An admin needs to connect the store.</p> : null}
         </div>
       )}
     </section>

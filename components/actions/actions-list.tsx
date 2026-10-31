@@ -1,6 +1,9 @@
 "use client";
 
+import { ChevronRight, ListChecks } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { LedgerView } from "@/lib/actions/ledger";
 import { ActionCard, KIND_LABEL, personLabel, StatusBadge } from "./action-card";
 
@@ -16,14 +19,31 @@ export function ActionsList({ actions, canDecide, me, timezone }: { actions: Led
   const update = (next: LedgerView) => setItems((cur) => cur.map((a) => (a.id === next.id ? next : a)));
 
   if (items.length === 0) {
-    return <p className="rounded-lg border border-neutral-200 bg-white p-4 text-sm text-neutral-600">No actions yet. Ask the agent in Chat to propose a change, such as a plan target or a note on the calendar.</p>;
+    return (
+      <EmptyState
+        icon={ListChecks}
+        title="No actions yet"
+        action={
+          <Link href="/chat" className="btn btn-secondary">
+            Open Chat
+          </Link>
+        }
+      >
+        Ask the agent in Chat to propose a change, such as a plan target or a note on the calendar.
+      </EmptyState>
+    );
   }
 
+  const open = items.filter((a) => a.status === "proposed").length;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       {waiting.length > 0 ? (
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium text-neutral-700">Waiting for a decision</h2>
+        <section className="space-y-4">
+          <div className="flex items-center gap-2.5">
+            <h2 className="section-title">Waiting for a decision</h2>
+            {open > 0 ? <span className="badge badge-warn num">{open}</span> : null}
+          </div>
           {waiting.map((id) => {
             const a = items.find((x) => x.id === id);
             return a ? <ActionCard key={`${id}:${a.status}`} action={a} canDecide={canDecide} me={me} onChange={update} /> : null;
@@ -31,44 +51,42 @@ export function ActionsList({ actions, canDecide, me, timezone }: { actions: Led
         </section>
       ) : null}
 
-      <section>
-        <h2 className="text-sm font-medium text-neutral-700">All actions</h2>
-        <div className="mt-2 overflow-x-auto rounded-lg border border-neutral-200 bg-white">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-neutral-200 text-xs text-neutral-500">
-              <tr>
-                <th className="px-3 py-2 font-normal">Action</th>
-                <th className="px-3 py-2 font-normal">Kind</th>
-                <th className="px-3 py-2 font-normal">Status</th>
-                <th className="px-3 py-2 font-normal">Owner</th>
-                <th className="px-3 py-2 font-normal">Approved by</th>
-                <th className="px-3 py-2 font-normal">When</th>
-                <th className="px-3 py-2 font-normal">Dry run</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((a) => (
-                <tr key={a.id} className="border-b border-neutral-100 align-top last:border-0">
-                  <td className="max-w-xs px-3 py-2">
-                    <details>
-                      <summary className="cursor-pointer">{a.title}</summary>
-                      <div className="mt-2">
-                        <ActionCard key={`${a.id}:${a.status}`} action={a} canDecide={canDecide} me={me} onChange={update} />
+      <section className="space-y-4">
+        <div className="flex items-baseline gap-2.5">
+          <h2 className="section-title">All actions</h2>
+          <span className="faint num text-sm">{items.length}</span>
+        </div>
+        <div className="card overflow-hidden">
+          <ul className="divide-y divide-line">
+            {items.map((a) => {
+              const decider = a.status === "proposed" ? null : `${a.status === "rejected" ? "Rejected" : "Approved"} by ${personLabel(a.decidedBy, me)}`;
+              return (
+                <li key={a.id}>
+                  <details className="group">
+                    <summary className="grid cursor-pointer list-none grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 px-4 py-3.5 hover:bg-paper/60 sm:grid-cols-[auto_minmax(0,1fr)_auto] [&::-webkit-details-marker]:hidden">
+                      <ChevronRight className="mt-1 size-4 shrink-0 text-ink-3 transition-transform group-open:rotate-90" aria-hidden />
+                      <div className="min-w-0">
+                        <p className="break-words font-medium text-ink">{a.title}</p>
+                        <p className="faint mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
+                          <span>{KIND_LABEL[a.kind] ?? a.kind}</span>
+                          <span>Owner: {personLabel(a.owner, me)}</span>
+                          {decider ? <span>{decider}</span> : null}
+                          <span className="num">{when(a.decidedAt ?? a.createdAt, timezone)}</span>
+                        </p>
                       </div>
-                    </details>
-                  </td>
-                  <td className="px-3 py-2 text-neutral-600">{KIND_LABEL[a.kind] ?? a.kind}</td>
-                  <td className="px-3 py-2">
-                    <StatusBadge status={a.status} dryRun={a.dryRun} />
-                  </td>
-                  <td className="px-3 py-2 text-neutral-600">{personLabel(a.owner, me)}</td>
-                  <td className="px-3 py-2 text-neutral-600">{a.status === "proposed" ? "—" : a.status === "rejected" ? `${personLabel(a.decidedBy, me)} (rejected)` : personLabel(a.decidedBy, me)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 text-neutral-600">{when(a.decidedAt ?? a.createdAt, timezone)}</td>
-                  <td className="px-3 py-2 text-neutral-600">{a.dryRun ? "Yes" : "No"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      <span className="col-start-2 flex flex-wrap items-center gap-1.5 sm:col-start-3 sm:justify-end">
+                        {a.dryRun && a.status !== "done" ? <span className="badge">Dry run</span> : null}
+                        <StatusBadge status={a.status} dryRun={a.dryRun} />
+                      </span>
+                    </summary>
+                    <div className="border-t border-line bg-paper/50 p-3 sm:p-4">
+                      <ActionCard key={`${a.id}:${a.status}`} action={a} canDecide={canDecide} me={me} onChange={update} />
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </section>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -19,12 +20,13 @@ export function ApproveButton({ id }: { id: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <button type="button" disabled={busy} onClick={approve} className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50">
+    <div className="flex flex-wrap items-center gap-3">
+      <button type="button" disabled={busy} onClick={approve} className="btn btn-primary">
+        {busy ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : <Check className="size-4" aria-hidden />}
         {busy ? "Approving…" : "Approve"}
       </button>
       {failed ? (
-        <span role="alert" className="text-xs text-red-700">
+        <span role="alert" className="text-sm text-behind">
           {failed}
         </span>
       ) : null}
