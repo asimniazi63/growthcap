@@ -1,0 +1,126 @@
+{
+  "commit": "c015696",
+  "model": "devstral-2",
+  "ranAt": "2026-10-31T17:01:24.045Z",
+  "totalCostUsd": 0.017936,
+  "cases": [
+    {
+      "id": "pace-gauge",
+      "category": "plan",
+      "passed": true,
+      "checks": [
+        {
+          "name": "calls the month-end figure an estimate",
+          "ok": true,
+          "detail": "pattern /estimate/i"
+        },
+        {
+          "name": "called query_metric",
+          "ok": true,
+          "detail": "tools called: query_metric, render_view"
+        },
+        {
+          "name": "called render_view",
+          "ok": true,
+          "detail": "tools called: query_metric, render_view"
+        },
+        {
+          "name": "drew a gauge of net sales, orders and new-customer orders against the plan",
+          "ok": true
+        },
+        {
+          "name": "every number traced to a tool result",
+          "ok": true
+        }
+      ],
+      "answer": "As of October 16, 2026, the store has achieved the following for the month of October:\n\n- Net Sales: $3,032.50 (target: $6,506.88)\n- Orders: 45 (target: 92)\n- New Customer Orders: 17 (target: 44)\n\nThe projected outcomes for the end of the month are:\n\n- Net Sales: An estimate of $5,883.84\n- Orders: An estimate of 86\n- New Customer Orders: An estimate of 32\n\nThe pacing against the plan shows a gap in all metrics. The gap to plan is as follows:\n\n- Net Sales: -9.58%\n- Orders: -6.64%\n- New Customer Orders: -28.57%\n\nHere's a visual representation of the pacing against the plan:\n\nThe gauge shows how the actual performance compares to the planned performance for each metric.",
+      "costUsd": 0.006347,
+      "tokens": {
+        "input": 14462,
+        "output": 281
+      }
+    },
+    {
+      "id": "note-excludes-wholesale",
+      "category": "memory",
+      "passed": true,
+      "checks": [
+        {
+          "name": "states the average order value without wholesale",
+          "ok": true,
+          "detail": "expected 81.46694736842105 (±0.01); the answer states: 81.47, 31, 10, 1"
+        },
+        {
+          "name": "does not state the figure that includes wholesale",
+          "ok": true,
+          "detail": "143.11833333333334 must not appear; the answer states: 81.47, 31, 10, 1"
+        },
+        {
+          "name": "says wholesale orders were left out",
+          "ok": true,
+          "detail": "pattern /wholesale/i"
+        },
+        {
+          "name": "left wholesale orders out of the query",
+          "ok": true,
+          "detail": "query_metric inputs: [{\"metrics\":[\"aov\"],\"period\":\"last_month\",\"filters\":{\"excludeTags\":[\"wholesale\"]}}]"
+        },
+        {
+          "name": "every number traced to a tool result",
+          "ok": true
+        }
+      ],
+      "answer": "The average order value last month was $81.47, calculated as gross sales minus discounts, divided by the number of orders (excluding wholesale orders). This is as of October 31, 10:01 UTC.",
+      "control": {
+        "answer": "Our average order value (AOV) last month was $143.12. This represents gross sales minus discounts, divided by the number of orders, and does not account for refunds.\n\nLast month, the AOV was significantly above the planned target, indicating strong performance in this metric. Here's a breakdown:\n\n- **Actual AOV**: $143.12\n- **Planned AOV**: $83.41\n- The actual AOV exceeded the target by $59.71, which is 71.59% above the planned value.\n\nAs of October 31, 10:34 UTC, this data reflects the period from May 1 to May 31. If you'd like to see this visually, let me know!",
+        "numbers": [
+          143.12,
+          83.41,
+          59.71,
+          71.59,
+          31,
+          10,
+          34,
+          1
+        ]
+      },
+      "costUsd": 0.007837,
+      "tokens": {
+        "input": 18238,
+        "output": 271
+      }
+    },
+    {
+      "id": "mer-last-month",
+      "category": "ads",
+      "passed": true,
+      "checks": [
+        {
+          "name": "states September's MER (net sales over ad spend)",
+          "ok": true,
+          "detail": "expected 2.0013353936549723 (±0.05); the answer states: 2, 1, 30, 31, 10"
+        },
+        {
+          "name": "called query_metric",
+          "ok": true,
+          "detail": "tools called: query_metric"
+        },
+        {
+          "name": "asked for the mer metric",
+          "ok": true,
+          "detail": "query_metric inputs: [{\"metrics\":[\"mer\"],\"period\":\"last_month\"}]"
+        },
+        {
+          "name": "every number traced to a tool result",
+          "ok": true
+        }
+      ],
+      "answer": "Last month, the Marketing Efficiency Ratio (MER) was 2.00 for the period September 1 to September 30, as of October 31, 10:01 UTC.",
+      "costUsd": 0.003752,
+      "tokens": {
+        "input": 9064,
+        "output": 63
+      }
+    }
+  ]
+}

@@ -159,11 +159,18 @@ As in the implementation plan's Day 0, with these specifics:
 
 **Deliverable:** a pacing screen and chat answers rendered as approved components, saved threads and confirmed client facts, and ad-spend metrics.
 
-- [ ] As in implementation plan T5-A: plans loaded from `plan.csv`, `render_view` with the six components, `/pace` with month-to-date against plan and where the month will land, pinned views, saved threads, `memories` with confirmation, and `ad_spend` with `mer` and `new_customer_cac`.
-- [ ] Cut: the month-end estimate has no range or backtest.
-- [ ] Tests, as in T5-A.
-- [ ] Eval cases: a pacing question that renders a gauge; a remembered "exclude wholesale" rule that changes the answer; a MER question.
-- [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
+- [x] As in implementation plan T5-A: plans loaded from `plan.csv`, `render_view` with the six components, `/pace` with month-to-date against plan and where the month will land, pinned views, saved threads, `memories` with confirmation, and `ad_spend` with `mer` and `new_customer_cac`.
+- [x] Cut: the month-end estimate has no range or backtest.
+- [x] Tests, as in T5-A.
+- [x] Eval cases: a pacing question that renders a gauge; a remembered "exclude wholesale" rule that changes the answer; a MER question. `npm run eval` runs them (3 of 3 pass on Devstral 2; results in `docs/evals/latest.md`). T5 grows this runner into the full set.
+- [x] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
+
+**Result (2026-10-31).** Live checks on the Vercel URL as the `gc_partner` reviewer, Solenne:
+- `/pace` shows October to date and September finished; October to date matches the dataset exactly (net sales $5,583.60, 79 orders, 33 new-customer orders, average order value $75.06, returning rate 58.2%).
+- A pacing question drew a gauge; a daily net-sales question drew a line, which pinned to `/pace` and unpinned; a bar by channel drew 48, 13, 11, 6 and 2 orders (80).
+- Saved conversation: reopened after a reload with both views restored, and a follow-up ("that same period") used the saved history.
+- Note: proposed, shown with Confirm and Dismiss, confirmed, then used (the AOV query left wholesale out and said so); removed afterwards.
+- Known edge: on the last day of a month the chat's "this month" covers the whole month, so a gauge shows plan so far equal to the target and no estimate. `/pace` counts complete days only.
 
 ### T7: Why: multi-agent explanations (stretch B, about 4–5 hours)
 

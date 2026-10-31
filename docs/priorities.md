@@ -45,7 +45,7 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 
 ## Changes made while building
 
-- **2026-10-31, Asim:** T0, T1 and T2 are closed on GitHub. T3 stays open until the `orders/create` check is done; T4 stays open until the suggested questions are checked on the Vercel URL after the latest fixes are deployed. T5 is deferred and T6 runs next. Until T5 is built there is no `npm run eval`, so T6's three eval cases are listed in its ticket and written when the harness exists.
+- **2026-10-31, Asim:** T0, T1 and T2 are closed on GitHub. T3 stays open until the `orders/create` check is done; T4 stays open until the suggested questions are checked on the Vercel URL after the latest fixes are deployed. T5 is deferred and T6 ran next (done 2026-10-31, with a small `npm run eval` for its three cases). Until T5 is built there is no `npm run eval`, so T6's three eval cases are listed in its ticket and written when the harness exists.
 
 ## What this order changes in the build plan
 

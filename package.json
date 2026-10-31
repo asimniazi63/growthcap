@@ -18,6 +18,7 @@
     "fixtures:load": "tsx scripts/fixtures-load.ts",
     "tenant:create": "tsx scripts/tenant-create.ts",
     "chat:try": "tsx scripts/chat-try.ts",
+    "eval": "tsx evals/run.ts",
     "sync:probe": "tsx scripts/spikes/sync-probe.ts",
     "reconcile:truth": "tsx scripts/reconcile-truth.ts",
     "seed:generate": "tsx scripts/seed/generate.ts",
