@@ -53,7 +53,7 @@ export interface ProductNode {
     price: string;
     inventoryItem: {
       unitCost: { amount: string } | null;
-      inventoryLevels: { nodes: { location: { id: string; name: string }; quantities: { name: string; quantity: number }[] }[] };
+      inventoryLevels: { nodes: { location: { id: string }; quantities: { name: string; quantity: number }[] }[] };
     } | null;
   }>;
 }
@@ -153,7 +153,6 @@ export function mapProduct(tenantId: string, node: ProductNode) {
       tenantId,
       variantId: v.id,
       locationId: lv.location.id,
-      locationName: lv.location.name,
       available: lv.quantities.find((q) => q.name === "available")?.quantity ?? 0,
     })),
   );

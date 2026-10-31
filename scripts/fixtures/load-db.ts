@@ -84,7 +84,6 @@ function orderNodes(ds: Dataset): OrderNode[] {
 }
 
 function productNodes(ds: Dataset): ProductNode[] {
-  const locations = new Map(ds.locations.map((l) => [l.genId, l.name]));
   return ds.products.map((p) => ({
     id: shopifyId.product(p.genId),
     title: p.title,
@@ -107,7 +106,7 @@ function productNodes(ds: Dataset): ProductNode[] {
               nodes: ds.inventory
                 .filter((i) => i.variantGenId === v.genId)
                 .map((i) => ({
-                  location: { id: gid("Location", num(i.locationGenId)), name: locations.get(i.locationGenId) ?? "" },
+                  location: { id: gid("Location", num(i.locationGenId)) },
                   quantities: [{ name: "available", quantity: i.available }],
                 })),
             },

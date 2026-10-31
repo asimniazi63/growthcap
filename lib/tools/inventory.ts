@@ -27,7 +27,7 @@ export interface InventoryRow {
   unitsSold: number; // in the cover window
   dailyRate: number; // unitsSold / window days
   daysOfCover: number | null; // available / dailyRate; null when nothing sold in the window
-  untrusted: { product: string; variant: string; locations: Record<string, string> }; // store text
+  untrusted: { product: string; variant: string }; // store text
 }
 
 const DEFINITIONS = {
@@ -91,7 +91,7 @@ export async function getInventory(ctx: Ctx, rawInput: GetInventoryInput, deps: 
       unitsSold,
       dailyRate,
       daysOfCover: dailyRate > 0 ? available / dailyRate : null,
-      untrusted: { product: v.product, variant: v.variant, locations: Object.fromEntries(mine.map((l) => [l.locationId, l.locationName])) },
+      untrusted: { product: v.product, variant: v.variant },
     };
   });
 

@@ -31,41 +31,49 @@ function overwrite(table: PgTable, keep: string[]) {
   );
 }
 
+type MappedOrder = ReturnType<typeof mapOrder>;
+
+// Postgres allows 65,535 parameters per statement; rows go in chunks well under that.
+function* chunks<T>(rows: T[], size = 500): Generator<T[]> {
+  for (let i = 0; i < rows.length; i += size) yield rows.slice(i, i + size);
+}
+
 // Every write is an upsert on (tenant, id). Nothing here deletes: when Shopify stops returning an order (the 60-day
-// window), the copy we hold stays. The same function serves the paged sync and the orders/create webhook, so a
-// duplicate delivery or a resync can only repeat the same writes.
-export async function upsertOrder(db: Db, mapped: ReturnType<typeof mapOrder>): Promise<void> {
+// window), the copy we hold stays. The sync writes a page of orders in one transaction, and the orders/create webhook
+// writes one, through this same function, so a duplicate or concurrent delivery or a resync repeats the same writes.
+export async function upsertOrders(db: Db, batch: MappedOrder[]): Promise<void> {
+  if (batch.length === 0) return;
   await db.transaction(async (tx) => {
-    if (mapped.customer) {
+    // One statement can't touch the same row twice, so a customer who appears in several orders is merged first,
+    // keeping their earliest order.
+    const customerRows = new Map<string, NonNullable<MappedOrder["customer"]>>();
+    for (const m of batch) {
+      if (!m.customer) continue;
+      const seen = customerRows.get(m.customer.id);
+      if (!seen || m.customer.firstSeenAt < seen.firstSeenAt) customerRows.set(m.customer.id, m.customer);
+    }
+    for (const rows of chunks([...customerRows.values()])) {
       await tx
         .insert(customers)
-        .values(mapped.customer)
+        .values(rows)
         .onConflictDoUpdate({ target: [customers.tenantId, customers.id], set: { firstSeenAt: sql`least(${customers.firstSeenAt}, excluded."first_seen_at")` } });
     }
-    await tx
-      .insert(orders)
-      .values(mapped.order)
-      .onConflictDoUpdate({ target: [orders.tenantId, orders.id], set: overwrite(orders, ["tenantId", "id"]) });
-    if (mapped.lines.length > 0) {
-      await tx
-        .insert(orderLines)
-        .values(mapped.lines)
-        .onConflictDoUpdate({ target: [orderLines.tenantId, orderLines.id], set: overwrite(orderLines, ["tenantId", "id"]) });
+    for (const rows of chunks(batch.map((m) => m.order))) {
+      await tx.insert(orders).values(rows).onConflictDoUpdate({ target: [orders.tenantId, orders.id], set: overwrite(orders, ["tenantId", "id"]) });
     }
-    for (const r of mapped.refunds) {
-      await tx
-        .insert(refunds)
-        .values(r.refund)
-        .onConflictDoUpdate({ target: [refunds.tenantId, refunds.id], set: overwrite(refunds, ["tenantId", "id"]) });
-      if (r.lines.length > 0) {
-        await tx
-          .insert(refundLines)
-          .values(r.lines)
-          .onConflictDoUpdate({ target: [refundLines.tenantId, refundLines.id], set: overwrite(refundLines, ["tenantId", "id"]) });
-      }
+    for (const rows of chunks(batch.flatMap((m) => m.lines))) {
+      await tx.insert(orderLines).values(rows).onConflictDoUpdate({ target: [orderLines.tenantId, orderLines.id], set: overwrite(orderLines, ["tenantId", "id"]) });
+    }
+    for (const rows of chunks(batch.flatMap((m) => m.refunds.map((r) => r.refund)))) {
+      await tx.insert(refunds).values(rows).onConflictDoUpdate({ target: [refunds.tenantId, refunds.id], set: overwrite(refunds, ["tenantId", "id"]) });
+    }
+    for (const rows of chunks(batch.flatMap((m) => m.refunds.flatMap((r) => r.lines)))) {
+      await tx.insert(refundLines).values(rows).onConflictDoUpdate({ target: [refundLines.tenantId, refundLines.id], set: overwrite(refundLines, ["tenantId", "id"]) });
     }
   });
 }
+
+export const upsertOrder = (db: Db, mapped: MappedOrder): Promise<void> => upsertOrders(db, [mapped]);
 
 async function upsertProduct(db: Db, mapped: ReturnType<typeof mapProduct>): Promise<void> {
   await db.transaction(async (tx) => {
@@ -117,7 +125,7 @@ export async function syncStore({ db, tenantId, timezone, graphql, runId: given 
       counts.products += nodes.length;
     }
     for await (const nodes of pages<OrderNode>(graphql, SYNC_ORDERS, "orders")) {
-      for (const node of nodes) await upsertOrder(db, mapOrder(tenantId, timezone, node));
+      await upsertOrders(db, nodes.map((node) => mapOrder(tenantId, timezone, node)));
       counts.orders += nodes.length;
     }
     await db.update(syncRuns).set({ status: "succeeded", finishedAt: new Date(), counts }).where(sql`${syncRuns.id} = ${runId}`);

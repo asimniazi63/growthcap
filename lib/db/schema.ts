@@ -104,7 +104,7 @@ export const inventoryLevels = pgTable(
     tenantId: tenantRef(),
     variantId: text("variant_id").notNull(),
     locationId: text("location_id").notNull(),
-    locationName: text("location_name").notNull().default(""),
+    locationName: text("location_name").notNull().default(""), // always empty: a location's name needs read_locations, which the app doesn't request
     available: integer("available").notNull(),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },

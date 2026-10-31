@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "../db/client";
 import * as schema from "../db/schema";
 import { createTestDb } from "../db/test-db";
-import type { OrderNode, ProductNode } from "./map";
+import { pseudonymFor, type OrderNode, type ProductNode } from "./map";
+import { SYNC_ORDER, SYNC_ORDERS, SYNC_PRODUCTS } from "./queries";
 import { syncStore, type GraphqlFn } from "./sync";
 
 const money = (amount: string) => ({ shopMoney: { amount } });
@@ -57,7 +58,7 @@ const product: ProductNode = {
         price: "28.00",
         inventoryItem: {
           unitCost: { amount: "9.00" },
-          inventoryLevels: { nodes: [{ location: { id: "gid://shopify/Location/1", name: "Main" }, quantities: [{ name: "available", quantity: 12 }] }] },
+          inventoryLevels: { nodes: [{ location: { id: "gid://shopify/Location/1" }, quantities: [{ name: "available", quantity: 12 }] }] },
         },
       },
     ],
@@ -129,6 +130,21 @@ describe("syncStore", () => {
     expect((await db.select({ n: count() }).from(schema.orderLines).where(eq(schema.orderLines.tenantId, a)))[0]!.n).toBe(3);
   });
 
+  it("copes with one page holding several orders of the same customer, and keeps the earliest first order", async () => {
+    // Orders 1 and 4 share a customer (n % 3), and so do 2 and 5, all in one page of five.
+    const orders = [1, 2, 3, 4, 5].map((n) => order(n, { processedAt: `2026-03-0${6 - n}T12:00:00-05:00` }));
+    await syncStore({ db, tenantId: a, timezone: TZ, graphql: fakeShopify(orders, 5).graphql });
+    expect(await total(schema.orders, a)).toBe(5);
+    const custs = await db.select().from(schema.customers).where(eq(schema.customers.tenantId, a));
+    expect(custs).toHaveLength(3);
+    const dateOf = (n: number) => new Date(`2026-03-0${6 - n}T12:00:00-05:00`).getTime();
+    const customerOf = (n: number) => pseudonymFor(a, `gid://shopify/Customer/${n % 3}`);
+    for (const n of [1, 2, 3]) {
+      const earliest = Math.min(dateOf(n), dateOf(n + 3 <= 5 ? n + 3 : n));
+      expect(custs.find((c) => c.id === customerOf(n))!.firstSeenAt.getTime()).toBe(earliest);
+    }
+  });
+
   it("updates an order that changed in Shopify", async () => {
     await syncStore({ db, tenantId: a, timezone: TZ, graphql: fakeShopify([order(1)]).graphql });
     await syncStore({ db, tenantId: a, timezone: TZ, graphql: fakeShopify([order(1, { cancelledAt: "2026-03-05T00:00:00Z", note: "changed" })]).graphql });
@@ -164,6 +180,15 @@ describe("syncStore", () => {
     const [row] = await db.select().from(schema.syncRuns).where(eq(schema.syncRuns.tenantId, a));
     expect(row).toMatchObject({ status: "failed", error: "Shopify is unavailable" });
     expect(await total(schema.orders, a)).toBe(2);
+  });
+});
+
+describe("scopes", () => {
+  it("the sync queries ask for no field that needs a scope the app was not granted (a location's name needs read_locations)", () => {
+    for (const q of [SYNC_PRODUCTS, SYNC_ORDERS, SYNC_ORDER]) {
+      expect(q).not.toMatch(/location\s*\{[^}]*\bname\b/);
+      expect(q).not.toMatch(/\blocations\b/);
+    }
   });
 });
 

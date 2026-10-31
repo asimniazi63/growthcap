@@ -132,7 +132,7 @@ describe("mapProduct", () => {
           price: "28.00",
           inventoryItem: {
             unitCost: { amount: "9.50" },
-            inventoryLevels: { nodes: [{ location: { id: "gid://shopify/Location/1", name: "Main" }, quantities: [{ name: "available", quantity: 14 }] }] },
+            inventoryLevels: { nodes: [{ location: { id: "gid://shopify/Location/1" }, quantities: [{ name: "available", quantity: 14 }] }] },
           },
         },
       ],
