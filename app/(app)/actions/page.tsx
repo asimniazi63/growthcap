@@ -30,6 +30,15 @@ export default async function ActionsPage() {
     );
   }
 
+  if (ctx.role === "client_viewer") {
+    return (
+      <section className="space-y-4">
+        {heading}
+        <p className="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-600">Growth Capital roles only. Changes to the store are proposed and approved by the Growth Capital team.</p>
+      </section>
+    );
+  }
+
   let actions: LedgerView[] = [];
   let failure: ErrorCode | null = null;
   try {

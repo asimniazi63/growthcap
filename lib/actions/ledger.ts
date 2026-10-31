@@ -164,7 +164,9 @@ async function closeStuck(db: Db, tenantId: string): Promise<void> {
     .where(and(eq(actions.tenantId, tenantId), inArray(actions.status, ["approved", "running"]), lt(actions.updatedAt, new Date(Date.now() - STUCK_AFTER_MS))));
 }
 
+// The ledger is the agency's working record (what it proposed, why, and who approved it), so only Growth Capital roles read it.
 export async function listActions(db: Db, ctx: TenantContext, opts: { status?: string } = {}): Promise<LedgerView[]> {
+  requireGc(ctx);
   await closeStuck(db, ctx.tenantId);
   let status: ActionStatus | undefined;
   if (opts.status !== undefined) {
@@ -181,6 +183,7 @@ export async function listActions(db: Db, ctx: TenantContext, opts: { status?: s
 }
 
 export async function getAction(db: Db, ctx: TenantContext, id: string): Promise<LedgerView> {
+  requireGc(ctx);
   await closeStuck(db, ctx.tenantId);
   return toView(await loadRow(db, ctx, id));
 }

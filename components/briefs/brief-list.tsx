@@ -1,3 +1,4 @@
+import { SafeMarkdown } from "@/components/chat/safe-markdown";
 import type { BriefItem } from "@/lib/briefs/store";
 import { formatRange } from "@/lib/pace/format";
 import type { Role } from "@/lib/tenancy/context";
@@ -11,7 +12,7 @@ const BADGE: Record<BriefItem["status"], { text: string; style: string }> = {
 
 const day = (d: Date) => new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" }).format(d);
 
-// This brand's Monday briefs. All text is rendered as text, never as markup. Approve shows only on a draft, and only to a
+// This brand's Monday briefs. The body is rendered through the same allow-listed markdown as the chat (no raw HTML, no images, links only to this app and Shopify). Approve shows only on a draft, and only to a
 // Growth Capital admin or partner.
 export function BriefList({ briefs, role }: { briefs: BriefItem[]; role: Role }) {
   if (briefs.length === 0) {
@@ -26,7 +27,9 @@ export function BriefList({ briefs, role }: { briefs: BriefItem[]; role: Role })
             <h2 className="font-medium">Week of {formatRange(b.weekStart, b.weekStart)}</h2>
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE[b.status].style}`}>{BADGE[b.status].text}</span>
           </div>
-          <p className="mt-3 whitespace-pre-wrap text-sm">{b.body}</p>
+          <div className="mt-3">
+            <SafeMarkdown text={b.body} />
+          </div>
           {b.status === "blocked" ? (
             <div role="alert" className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
               <p className="font-medium">The number checker could not find these figures in the data, so this brief can&apos;t be approved:</p>

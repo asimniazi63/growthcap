@@ -32,7 +32,7 @@ An agent that talks about money must not make numbers up. So the model never doe
 - **Why** (`explain_gap`): splits a finished month's gap into new and returning orders, their average order values and refunds (a midpoint split, so the parts add up exactly), looks for evidence in the store data, the marketing calendar and the call notes, and writes the explanation. A client viewer's version uses store data only.
 - **Plan in** (`/plan`) and **Actions** (`/actions`): documents become plan targets; the agent can propose a Shopify target, an annotation, turning a discount code off or a landing page. Each proposal is a card with the exact change. A Growth Capital admin or partner approves, the server re-validates and runs it once, and the ledger records who and when. Approvals from the reviewer logins are a dry run that never touches the store.
 - **Portfolio** (`/portfolio`) and **Briefs** (`/briefs`): brands ranked by dollars behind plan with the biggest driver of each; a weekly brief drafted through the same agent loop, blocked from approval if the checker finds a number it cannot source.
-- **Roles:** `gc_admin` and `gc_partner` (Growth Capital staff, several brands) and `client_viewer` (one brand, read only, no call notes, no write tools).
+- **Roles:** `gc_admin` and `gc_partner` (Growth Capital staff, several brands) and `client_viewer` (one brand, read only: the chat with store data and the approved weekly briefs; no call notes, no write tools, and the Plan, Actions and Portfolio pages say they are for Growth Capital roles only).
 
 ## How it works
 

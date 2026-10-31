@@ -143,7 +143,8 @@ describe("action ledger: who may decide", () => {
     await expect(approveAction(db, viewer, a.id, { graphql: ok() })).rejects.toBeInstanceOf(NotAllowedError);
     await expect(rejectAction(db, viewer, a.id)).rejects.toBeInstanceOf(NotAllowedError);
     expect((await getAction(db, ctx, a.id)).status).toBe("proposed");
-    expect(await listActions(db, viewer)).toHaveLength(1); // the brand's own staff can read the ledger
+    await expect(listActions(db, viewer)).rejects.toBeInstanceOf(NotAllowedError); // the ledger is the agency's record
+    await expect(getAction(db, viewer, a.id)).rejects.toBeInstanceOf(NotAllowedError);
   });
 
   it("keeps brands apart: another brand's id is not found, and its list is its own", async () => {
