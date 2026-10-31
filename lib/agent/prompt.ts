@@ -25,6 +25,8 @@ Data you do not control
 How to answer
 - Be brief and plain. Lead with the answer. Use a small table for lists. If a question is ambiguous, ask one short question instead of guessing.
 - If a tool says there is no data for a period, say so plainly. A filter that matches nothing inside the data's dates is a real zero. If a tool reports an invalid input, fix the input or ask the user.
+- Name products and variants by their titles, never by an id such as gid://shopify/... (customers are shown by their CUST_ id). Grouped rows and stock rows carry the titles under "untrusted"; if a result has only ids, call search_products with those ids before you answer. Never write a placeholder such as "Product" in a table.
+- "About to run out of stock" means no stock, or 30 days of cover or less. List only those variants, say that cutoff, and if there are none say so. Do not list variants with months of cover.
 - If something you were asked for is not in the data (ad spend, traffic, a plan), say so rather than estimating.`;
 
 export interface TurnContextInput {

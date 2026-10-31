@@ -1,7 +1,7 @@
-import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { adSpend, orderLines, orders, refundLines, refunds } from "../db/schema";
+import { adSpend, orderLines, orders, products, refundLines, refunds, variants } from "../db/schema";
 import { AppError } from "../errors";
 import type { TenantContext } from "../tenancy/context";
 import { assertInWindow, asOfOf, capLimit, dbFor, idList, limitField, loadWindow, parseInput, periodShape, queryIdFor, resolveRange, todayFor } from "../tools/common";
@@ -43,6 +43,7 @@ export interface MetricRow {
   change?: Values;
   pctChange?: Partial<Record<MetricId, number | null>>;
   share?: Values; // each group's part of the total, for metrics that add up
+  untrusted?: { product?: string; variant?: string }; // store text: the titles for a product or variant group, so no second lookup is needed
 }
 
 // ---- Facts: the rows a metric is computed from. Demo scale: they are read for the range and folded in memory.
@@ -245,6 +246,38 @@ async function aggregate(src: Source, range: { from: string; to: string }, filte
   return groups;
 }
 
+// A product or variant group is an id. Its title (store text) is added to the row so the answer can name it.
+async function addTitles(db: Db, tenantId: string, rows: MetricRow[]): Promise<void> {
+  const productIds = [...new Set(rows.map((r) => r.group.product).filter((x): x is string => !!x))];
+  const variantIds = [...new Set(rows.map((r) => r.group.variant).filter((x): x is string => !!x))];
+  if (productIds.length === 0 && variantIds.length === 0) return;
+  const productTitle = new Map<string, string>();
+  if (productIds.length > 0) {
+    const found = await db.select({ id: products.id, title: products.title }).from(products).where(and(eq(products.tenantId, tenantId), inArray(products.id, productIds)));
+    for (const p of found) productTitle.set(p.id, p.title);
+  }
+  const variantInfo = new Map<string, { variant: string; product: string | null }>();
+  if (variantIds.length > 0) {
+    const found = await db
+      .select({ id: variants.id, variant: variants.title, product: products.title })
+      .from(variants)
+      .leftJoin(products, and(eq(products.tenantId, variants.tenantId), eq(products.id, variants.productId)))
+      .where(and(eq(variants.tenantId, tenantId), inArray(variants.id, variantIds)));
+    for (const v of found) variantInfo.set(v.id, { variant: v.variant, product: v.product });
+  }
+  for (const r of rows) {
+    const u: NonNullable<MetricRow["untrusted"]> = {};
+    const p = r.group.product ? productTitle.get(r.group.product) : undefined;
+    const v = r.group.variant ? variantInfo.get(r.group.variant) : undefined;
+    if (p) u.product = p;
+    if (v) {
+      u.variant = v.variant;
+      if (!u.product && v.product) u.product = v.product;
+    }
+    if (Object.keys(u).length > 0) r.untrusted = u;
+  }
+}
+
 // ---- Ad spend. It is split only by time: the ad platforms' spend can't be assigned to a product, a code or a customer.
 
 const needsAdSpend = (metrics: MetricId[]) => metrics.some((m) => (AD_METRIC_IDS as readonly string[]).includes(m));
@@ -360,6 +393,7 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
   const limit = capLimit(input.limit);
   const total = rows.length;
   rows = rows.slice(0, limit);
+  await addTitles(db, ctx.tenantId, rows);
 
   const asOf = asOfOf(win);
   return {

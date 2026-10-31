@@ -132,6 +132,23 @@ describe("checkClaims: names with a number in them", () => {
   });
 });
 
+describe("checkClaims: days in a result's range", () => {
+  // The tools use the last 30 days when no period is given, so the input never says 30 (found on the live site, Q6).
+  const l = ledgerFromToolResults([result([], "q_r", { range: { from: "2026-10-02", to: "2026-10-31" } })]);
+  it("does not flag '30 days' when a result covers 30 days", () => {
+    expect(unmatched("Here are your top 5 over the last 30 days.", l, [{ view: "list", limit: 5 }])).toEqual([]);
+    expect(unmatched("Your 30-day net sales.", l)).toEqual([]);
+  });
+  it("still flags the same number as anything but days, and a day count no result covers", () => {
+    expect(unmatched("There were 30 orders.", l)).toEqual(["30"]);
+    expect(unmatched("Over the last 29 days.", l)).toEqual(["29"]);
+  });
+  it("counts both ends of the range (a single day is 1 day)", () => {
+    const one = ledgerFromToolResults([result([], "q_d", { range: { from: "2026-10-05", to: "2026-10-05" } })]);
+    expect(unmatched("Over 1 day.", one)).toEqual([]);
+  });
+});
+
 describe("ledgerFromToolResults", () => {
   it("turns cents into dollars, fractions into percentages, and keeps counts", () => {
     const l = ledgerFromToolResults([

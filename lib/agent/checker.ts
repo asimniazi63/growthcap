@@ -1,3 +1,4 @@
+import { daysBetween } from "../metrics/dates";
 import { METRICS, type MetricId } from "../metrics/registry";
 import type { ToolResult } from "../tools/result";
 
@@ -17,6 +18,7 @@ export interface ClaimEntry {
 export interface ClaimLedger {
   entries: ClaimEntry[];
   names?: string[]; // product and variant titles with a digit in them ("SPF 50"): part of a name, not a claim
+  rangeDays?: number[]; // how many days each result covers, so "the last 30 days" is not a claim when no input said 30
 }
 
 const METRIC_MAPS = new Set(["values", "previous", "change"]);
@@ -65,12 +67,14 @@ function collectNames(node: unknown, key: string, parentKey: string | undefined,
 export function ledgerFromToolResults(results: ToolResult<unknown>[]): ClaimLedger {
   const entries: ClaimEntry[] = [];
   const names = new Set<string>();
+  const rangeDays = new Set<number>();
   results.forEach((r) => {
+    if (r.range?.from && r.range?.to) rangeDays.add(daysBetween(r.range.from, r.range.to) + 1);
     walk(r.data, "data", "data", undefined, r.queryId, entries);
     if (r.truncated) walk(r.truncated, "truncated", "truncated", undefined, r.queryId, entries);
     collectNames(r.data, "data", undefined, false, names);
   });
-  return { entries, names: [...names] };
+  return { entries, names: [...names], rangeDays: [...rangeDays] };
 }
 
 // ---- Reading the answer
@@ -125,6 +129,7 @@ export interface ClaimCheck {
 
 export function checkClaims(answer: string, ledger: ClaimLedger, toolInputs: unknown[]): ClaimCheck {
   const skip = numbersInInputs(toolInputs);
+  const rangeDays = new Set(ledger.rangeDays ?? []);
   const masked = mask(answer, ledger.names);
   const result: ClaimCheck = { ok: true, matched: [], unmatched: [] };
 
@@ -139,6 +144,7 @@ export function checkClaims(answer: string, ledger: ClaimLedger, toolInputs: unk
     const value = Number(`${whole!.replace(/,/g, "")}${frac !== undefined ? `.${frac}` : ""}`) * multiplier;
     const unit: ClaimUnit = dollar ? "money" : suffix === "%" ? "rate" : "count";
     if (unit === "count" && skip.has(value)) continue; // asked for by the tool input
+    if (unit === "count" && rangeDays.has(value) && /^[\s-]?days?\b/i.test(masked.slice(m.index! + text.length))) continue; // "30 days", when a result covers 30
 
     const start = m.index!;
     const span: [number, number] = [start, start + text.length];

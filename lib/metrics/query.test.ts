@@ -344,3 +344,37 @@ describe("MER and CAC without ad spend or without new customers", () => {
     expect(solenne.data[0]!.values.mer).not.toBeCloseTo(tidepool.data[0]!.values.mer!, 3);
   });
 });
+
+// ---- Names beside ids. The live chat showed "Product" in every row of a table because grouped rows carried only gids and
+// the model skipped the extra search_products call. Titles are store text, so they sit under `untrusted`.
+describe.each(["solenne", "tidepool"] as const)("%s: product and variant names on grouped rows", (store) => {
+  const titles = () => {
+    const ds = fixtures[store].dataset;
+    const product = new Map(ds.products.map((p) => [shopifyId.product(p.genId), p.title]));
+    const variant = new Map(ds.variants.map((v) => [shopifyId.variant(v.genId), { variant: v.title, product: product.get(shopifyId.product(v.productGenId))! }]));
+    return { product, variant };
+  };
+
+  it("gives each product row its title", async () => {
+    const res = await run(store, { metrics: ["units"], from: "2026-09-01", to: "2026-09-30", groupBy: ["product"] });
+    const { product } = titles();
+    expect(res.data.length).toBeGreaterThan(3);
+    for (const r of res.data) expect(r.untrusted, r.group.product).toEqual({ product: product.get(r.group.product!) });
+  });
+
+  it("gives each variant row its variant title and its product's title", async () => {
+    const res = await run(store, { metrics: ["units"], from: "2026-09-01", to: "2026-09-30", groupBy: ["variant"] });
+    const { variant } = titles();
+    expect(res.data.length).toBeGreaterThan(3);
+    for (const r of res.data) expect(r.untrusted, r.group.variant).toEqual(variant.get(r.group.variant!));
+  });
+
+  it("adds no names to groupings that have none, or to a total", async () => {
+    for (const groupBy of [["day"], ["discount_code"], ["channel"]] as const) {
+      const res = await run(store, { metrics: ["orders"], from: "2026-09-01", to: "2026-09-07", groupBy: [...groupBy] });
+      expect(res.data.every((r) => r.untrusted === undefined)).toBe(true);
+    }
+    const total = await run(store, { metrics: ["orders"], from: "2026-09-01", to: "2026-09-07" });
+    expect(total.data[0]!.untrusted).toBeUndefined();
+  });
+});

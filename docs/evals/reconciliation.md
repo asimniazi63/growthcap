@@ -24,5 +24,17 @@ Not checked (6):
 
 Checked on 2026-10-31: 12 months x 11 metrics (132 values), 3 storyline checks, 5 row counts.
 
-**No differences.** Every value matches `truth.json` and the dataset.
+**9 differences, 0 unexplained.**
+
+| Where | Metric | truth.json | Synced | Explanation |
+|---|---|---|---|---|
+| 2026-10 | gross_sales | 103000 | 104600 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
+| 2026-10 | net_sales | 101860 | 103460 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
+| 2026-10 | orders | 13 | 14 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
+| 2026-10 | aov | 7835.384615 | 7390 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
+| 2026-10 | units | 27 | 28 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
+| 2026-10 | discounted_order_share | 0.153846 | 0.142857 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
+| TP1 net_sales {"exclude_tag":"wholesale"} 2026-10-01..2026-10-31 | net_sales | 101860 | 103460 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
+| TP1 orders {"exclude_tag":"wholesale"} 2026-10-01..2026-10-31 | orders | 13 | 14 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
+| synced rows | orders | 102 | 103 | Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json. |
 <!-- /reconcile:tidepool -->

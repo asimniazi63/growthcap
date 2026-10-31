@@ -57,3 +57,25 @@ All 8 run with `chat:try` on Devstral 2 (about $0.045 in all, estimated prices).
 Confirmed on a second paid run of Q1, Q4, Q6 and Q7 (about $0.033): dollars in the table, "October 2 to 31" stated, and Q7 now says the AOV is $76.26 with or without wholesale because there are no wholesale orders in the period (the wholesale order is S3, May 14). The two false positives left in that run ("30", "31" in a "to" range; "50" in "SPF 50") are what the checker changes above remove. They are covered by unit tests, not re-run live.
 
 Not a bug, but easy to misread: Solenne's data ends on 2026-10-31 04:50 UTC, so until about 36 hours later (2026-11-01 ~17:00 UTC) the clock is real and "last month" is September. After that the demo clock applies and "last month" is October (the S9 story). Eval cases must pin the clock (`setTestNow`) so they don't depend on the day they run.
+
+## Fourth live check: the 8 suggested questions on the Vercel URL (2026-10-31)
+
+Signed in as the `gc_partner` reviewer (`reviewer-gc+clerk_test@example.com`, Clerk test code) in a fresh browser, brand Solenne, Devstral 2. Eight chat runs, about $0.05 in all (estimated prices); all `ok` in the audit log, role `gc_partner`. The deploy had the previous batch of fixes (the AOV answer was right).
+
+| # | Question | Result |
+|---|---|---|
+| 1 | Net sales vs the month before | Correct ($6,294.48, down 28.3% from $8,773.70), all numbers checked |
+| 2 | Top 5 products by units | **Numbers right, names missing**: every row said "Product" |
+| 3 | Variants about to run out | Numbers checked, but raw `gid://` ids in the table and variants with 1,099 days of cover listed |
+| 4 | Refund rate and top refunded products | **Rate right (3.3%), names missing** ("Product" again) |
+| 5 | Discount codes last month | Correct |
+| 6 | Top 5 customers by spend | Right, but the checker flagged "30" in "last 30 days" |
+| 7 | AOV with and without wholesale | Correct: $76.26 both ways, no wholesale orders in the period |
+| 8 | New and returning customers last month | Correct (47 new, 31 returning customers; the metric's 33 counts orders, a different definition) |
+
+Causes and fixes:
+- **Names (Q2, Q4):** a product-grouped row carried only a gid, and the model skipped the extra `search_products` call. `query_metric` rows grouped by product or variant now carry the titles under `untrusted` (tested for both stores). The prompt also says never to show a `gid://` id or a placeholder.
+- **Stock (Q3):** the prompt now defines "about to run out" as no stock or 30 days of cover or less, and says to list only those.
+- **"30 days" flagged (Q6):** my own prompt change told the model the default period is 30 days, and no tool input then said 30. The checker now accepts "N days" when a result's range covers N days (a count of 30 orders is still checked).
+
+Not fixed: Q2 also added a made-up remark about a tie between 9 and 8 units. The numbers were real, so the checker passes it; only a judge-style eval would catch it (T5).
