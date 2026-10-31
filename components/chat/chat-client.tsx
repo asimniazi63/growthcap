@@ -232,9 +232,9 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
   return (
     <ProofDrawerContext.Provider value={proof}>
       <div className="flex min-h-[65dvh] min-w-0 flex-col lg:min-h-0">
-        {/* The proof drawer sits over the right of this block on large screens (the conversation makes room for it) and below the conversation on small ones. */}
+        {/* The proof drawer sits over the right of this block on large screens (over the conversation, as in the mockup) and below the conversation on small ones. */}
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <div className={`-mx-1 flex-1 px-1 lg:min-h-0 lg:overflow-y-auto ${proof.current ? "lg:pr-[23.5rem]" : "lg:pr-3"}`}>
+          <div className="-mx-1 flex-1 px-1 lg:min-h-0 lg:overflow-y-auto lg:pr-3">
             <div className="mx-auto w-full max-w-3xl space-y-6 pb-6">
               {messages.length === 0 ? (
                 <div className="pt-4 lg:pt-10">

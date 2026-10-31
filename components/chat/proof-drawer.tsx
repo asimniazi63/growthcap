@@ -218,13 +218,16 @@ export function ProofDrawerPanel() {
       ) : null}
 
       {definitions.length > 0 ? (
-        <div className="inset mt-5 space-y-2 p-3.5 text-[0.8125rem] leading-5 text-ink-2">
-          {definitions.map(([metric, definition]) => (
-            <p key={metric}>
-              <b className="font-semibold text-ink">{humanize(metric)}.</b> {definition}
-            </p>
-          ))}
-        </div>
+        <details className="inset group mt-5 text-[0.8125rem] leading-5 text-ink-2" open={definitions.length === 1}>
+          <summary className="cursor-pointer select-none px-3.5 py-2.5 font-semibold text-ink">{definitions.length === 1 ? "Definition" : `Definitions (${definitions.length})`}</summary>
+          <div className="space-y-2 px-3.5 pb-3.5">
+            {definitions.map(([metric, definition]) => (
+              <p key={metric}>
+                <b className="font-semibold text-ink">{humanize(metric)}.</b> {definition}
+              </p>
+            ))}
+          </div>
+        </details>
       ) : null}
 
       {entry.truncated ? (
