@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { EncryptedSecret } from "../crypto/secrets";
 
 // One row per client brand, made only by `npm run tenant:create -- --org <orgId>`. orgId is the Clerk organization id.
@@ -251,4 +251,49 @@ export const agentSteps = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("agent_steps_run_idx").on(t.runId)],
+);
+
+// ---- Pace (T6). The plan and the ad spend come from files (fixtures now, an uploaded SOW later), not from Shopify.
+// Daily ad spend per channel, in cents. Channels are the ad platforms, not the store's sales channels.
+export const adSpend = pgTable(
+  "ad_spend",
+  {
+    tenantId: tenantRef(),
+    date: date("date", { mode: "string" }).notNull(),
+    channel: text("channel").notNull(),
+    spendCents: integer("spend_cents").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.date, t.channel] })],
+);
+
+export const PLAN_SOURCES = ["fixture", "upload"] as const;
+export type PlanSource = (typeof PLAN_SOURCES)[number];
+
+// A brand has one active plan; a confirmed upload later replaces it (the old one stays, inactive).
+export const plans = pgTable(
+  "plans",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    label: text("label").notNull(), // not "name": the personal-data schema test forbids that column name
+    source: text("source").$type<PlanSource>().notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("plans_one_active_per_tenant").on(t.tenantId).where(sql`${t.active}`)],
+);
+
+// One monthly target. Money is in cents and a rate is a fraction, the same as the metrics.
+export const planTargets = pgTable(
+  "plan_targets",
+  {
+    tenantId: tenantRef(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id),
+    month: text("month").notNull(), // YYYY-MM
+    metric: text("metric").notNull(),
+    value: doublePrecision("value").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.planId, t.month, t.metric] })],
 );

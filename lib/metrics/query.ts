@@ -1,13 +1,13 @@
 import { and, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { orderLines, orders, refundLines, refunds } from "../db/schema";
+import { adSpend, orderLines, orders, refundLines, refunds } from "../db/schema";
 import { AppError } from "../errors";
 import type { TenantContext } from "../tenancy/context";
 import { assertInWindow, asOfOf, capLimit, dbFor, idList, limitField, loadWindow, parseInput, periodShape, queryIdFor, resolveRange, todayFor } from "../tools/common";
 import { requireConnectedShop, type ToolResult } from "../tools/result";
-import { addDays, addMonths, monthOf, previousRange, sameRangeLastYear, weekStart } from "./dates";
-import { CORE_METRIC_IDS, METRICS, type MetricId } from "./registry";
+import { addDays, addMonths, monthEnd, monthOf, monthStart, previousRange, sameRangeLastYear, weekStart } from "./dates";
+import { AD_METRIC_IDS, METRIC_IDS, METRICS, type MetricId } from "./registry";
 
 export const DIMENSIONS = ["day", "week", "month", "product", "variant", "channel", "discount_code", "customer_type", "tag"] as const;
 export type Dimension = (typeof DIMENSIONS)[number];
@@ -16,7 +16,7 @@ const ids = idList;
 
 // strictObject: an unknown key (a tenant, a shop, anything the model invents) is an error, not ignored.
 export const queryMetricInputSchema = z.strictObject({
-  metrics: z.array(z.enum(CORE_METRIC_IDS)).min(1),
+  metrics: z.array(z.enum(METRIC_IDS)).min(1),
   ...periodShape,
   groupBy: z.array(z.enum(DIMENSIONS)).max(2).optional(),
   filters: z
@@ -109,6 +109,7 @@ interface Acc {
   units: number;
   refundsAmount: number;
   refundedUnits: number;
+  adSpend: number; // cents of ad spend on the days this group covers; set only when an ad metric is asked for
 }
 
 const blank = (group: Record<string, string>): Acc => ({
@@ -122,6 +123,7 @@ const blank = (group: Record<string, string>): Acc => ({
   units: 0,
   refundsAmount: 0,
   refundedUnits: 0,
+  adSpend: 0,
 });
 
 function valuesOf(a: Acc, metrics: MetricId[]): Values {
@@ -138,6 +140,8 @@ function valuesOf(a: Acc, metrics: MetricId[]): Values {
     returning_customer_rate: a.customers.size === 0 ? 0 : [...a.customers.values()].filter(Boolean).length / a.customers.size,
     refund_rate: a.units === 0 ? 0 : a.refundedUnits / a.units,
     discounted_order_share: orders === 0 ? 0 : a.discounted.size / orders,
+    mer: a.adSpend === 0 ? 0 : (a.gross - a.discounts - a.refundsAmount) / a.adSpend,
+    new_customer_cac: a.adSpend === 0 || a.newOrders.size === 0 ? 0 : a.adSpend / a.newOrders.size,
   };
   return Object.fromEntries(metrics.map((m) => [m, all[m]])) as Values;
 }
@@ -241,6 +245,35 @@ async function aggregate(src: Source, range: { from: string; to: string }, filte
   return groups;
 }
 
+// ---- Ad spend. It is split only by time: the ad platforms' spend can't be assigned to a product, a code or a customer.
+
+const needsAdSpend = (metrics: MetricId[]) => metrics.some((m) => (AD_METRIC_IDS as readonly string[]).includes(m));
+
+async function adSpendByDay(db: Db, tenantId: string, range: { from: string; to: string }): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ date: adSpend.date, cents: sql<number>`sum(${adSpend.spendCents})::int` })
+    .from(adSpend)
+    .where(and(eq(adSpend.tenantId, tenantId), gte(adSpend.date, range.from), lte(adSpend.date, range.to)))
+    .groupBy(adSpend.date);
+  return new Map(rows.map((r) => [r.date, r.cents]));
+}
+
+// The days a group covers: the whole range, one day, a week or a month. A part week or month at the edge of the range is
+// cut down to the range because adSpendByDay only reads the range.
+function coverage(group: Record<string, string>, timeDim: Dimension | undefined, range: { from: string; to: string }): { from: string; to: string } {
+  if (timeDim === "day") return { from: group.day!, to: group.day! };
+  if (timeDim === "week") return { from: group.week!, to: addDays(group.week!, 6) };
+  if (timeDim === "month") return { from: monthStart(group.month!), to: monthEnd(group.month!) };
+  return range;
+}
+
+function setAdSpend(acc: Acc, timeDim: Dimension | undefined, range: { from: string; to: string }, byDay: Map<string, number>): void {
+  const { from, to } = coverage(acc.group, timeDim, range);
+  let cents = 0;
+  for (const [day, value] of byDay) if (day >= from && day <= to) cents += value;
+  acc.adSpend = cents;
+}
+
 // ---- Dates and periods
 
 function buckets(dim: Dimension, from: string, to: string): string[] {
@@ -265,6 +298,9 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
   if (input.compareTo && timeDim) throw new AppError("INVALID_INPUT", "compareTo can't be combined with a day, week or month grouping.");
   const metrics = [...new Set(input.metrics)];
   const filters = input.filters ?? {};
+  const adMetrics = needsAdSpend(metrics);
+  if (adMetrics && (dims.length > 1 || (dims.length === 1 && !timeDim)))
+    throw new AppError("INVALID_INPUT", "MER and new-customer CAC can be grouped by day, week or month, one at a time: ad spend isn't split by product, channel, code or customer.");
 
   const db = await dbFor(deps);
   const win = await loadWindow(db, ctx.tenantId);
@@ -275,6 +311,7 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
 
   const src = await loadSource(db, ctx.tenantId);
   const groups = await aggregate(src, range, filters, dims);
+  const spendNow = adMetrics ? await adSpendByDay(db, ctx.tenantId, range) : new Map<string, number>();
 
   // A quiet day, week or month inside the data window is a real zero, so it appears as a row.
   if (dims.length === 1 && timeDim) {
@@ -283,6 +320,7 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
     for (const b of buckets(timeDim, from, to)) if (!groups.has(b)) groups.set(b, blank({ [timeDim]: b }));
   }
   if (dims.length === 0 && groups.size === 0) groups.set("", blank({}));
+  if (adMetrics) for (const a of groups.values()) setAdSpend(a, timeDim, range, spendNow);
 
   let rows: MetricRow[] = [...groups.values()].map((a) => ({ group: a.group, values: valuesOf(a, metrics) }));
 
@@ -296,10 +334,12 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
   if (input.compareTo) {
     const prevRange = input.compareTo === "previous_year" ? sameRangeLastYear(range.from, range.to) : previousRange(range.from, range.to);
     const prev = await aggregate(src, prevRange, filters, dims);
+    const spendBefore = adMetrics ? await adSpendByDay(db, ctx.tenantId, prevRange) : new Map<string, number>();
     const keyOf = (g: Record<string, string>) => dims.map((d) => g[d]).join("\u0001");
     for (const r of rows) {
-      const p = prev.get(keyOf(r.group));
-      const before = valuesOf(p ?? blank(r.group), metrics);
+      const p = prev.get(keyOf(r.group)) ?? blank(r.group);
+      if (adMetrics) setAdSpend(p, timeDim, prevRange, spendBefore);
+      const before = valuesOf(p, metrics);
       r.previous = before;
       r.change = {};
       r.pctChange = {};

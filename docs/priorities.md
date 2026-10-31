@@ -24,7 +24,7 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 | 3 | Required | T2: Platform | #3 | Brief item 1 |
 | 4 | Required | T3: Sync, metrics and tools, including the `orders/create` webhook | #4 | Brief item 3. The webhook shows a new order arriving, which is the clearest proof of "on demand" |
 | 5 | Required | T4: Agent and chat | #5 | Brief item 3 |
-| 6 | Required | T5: Core ship | #6 | Delivery. From here on there's always a complete submission |
+| 6 | Required | T5: Core ship (**deferred by Asim, 2026-10-31: T6 runs first**) | #6 | Delivery. From here on there's always a complete submission. Still owed: the 15 evals and `npm run eval`, README v1, the backup Loom. T11 picks up whatever is left |
 | 7 | Their ideas | T6: Pace (generative UI, memory, ad spend) | #7 | Stretch ideas 1 and 4, and the most visible in a Loom |
 | 8 | Their ideas | T8 part C: Plan in (SOW parsing) | #9 | Stretch idea 2. The SOW feeds the plan that Pace uses |
 | 9 | Their ideas | T9: Liquid landing pages | #10 | Stretch idea 3 |
@@ -42,6 +42,10 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 | 21 | Last, always | T11: Final ship | #12 | Whatever is built gets its evals, docs and the final Loom |
 
 **If time runs short,** cut from the bottom: T19 back to T12, then T10, then T8 part D, then T7, then T9, then T8 part C, then T6. Nothing in T0–T5 is cut.
+
+## Changes made while building
+
+- **2026-10-31, Asim:** T0, T1 and T2 are closed on GitHub. T3 stays open until the `orders/create` check is done; T4 stays open until the suggested questions are checked on the Vercel URL after the latest fixes are deployed. T5 is deferred and T6 runs next. Until T5 is built there is no `npm run eval`, so T6's three eval cases are listed in its ticket and written when the harness exists.
 
 ## What this order changes in the build plan
 

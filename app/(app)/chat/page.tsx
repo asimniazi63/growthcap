@@ -5,7 +5,7 @@ import { budgetStatus } from "@/lib/agent/budget";
 import { availableModels, defaultModelId } from "@/lib/agent/models";
 import { isDemoClock } from "@/lib/clock";
 import { getDb } from "@/lib/db/client";
-import { CORE_METRIC_IDS, METRICS } from "@/lib/metrics/registry";
+import { METRIC_IDS, METRICS } from "@/lib/metrics/registry";
 import { getTenantContext, type TenantContext } from "@/lib/tenancy/context";
 import { loadWindow } from "@/lib/tools/common";
 
@@ -58,7 +58,7 @@ export default async function ChatPage() {
       <details className="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm">
         <summary className="cursor-pointer font-medium">What the metrics mean</summary>
         <dl className="mt-3 space-y-3">
-          {CORE_METRIC_IDS.map((id) => (
+          {METRIC_IDS.map((id) => (
             <div key={id}>
               <dt className="font-medium">
                 {METRICS[id].label} <span className="font-mono text-xs text-neutral-500">{id}</span>

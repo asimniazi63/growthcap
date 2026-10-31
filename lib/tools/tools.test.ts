@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setTestNow } from "../clock";
 import type { Db } from "../db/client";
 import { createTestDb } from "../db/test-db";
-import { CORE_METRIC_IDS, METRICS } from "../metrics/registry";
+import { METRIC_IDS, METRICS } from "../metrics/registry";
 import { queryMetric } from "../metrics/query";
 import { pseudonymFor } from "../sync/map";
 import type { TenantContext } from "../tenancy/context";
@@ -233,9 +233,9 @@ describe("getCustomers", () => {
 });
 
 describe("describeMetrics", () => {
-  it("describes all 11 metrics from the registry, with the units, groupings and periods the tools accept", async () => {
+  it("describes all the metrics in the registry, with the units, groupings and periods the tools accept", async () => {
     const res = await describeMetrics(ctx, {}, { db });
-    expect(res.data.metrics.map((m) => m.id)).toEqual([...CORE_METRIC_IDS]);
+    expect(res.data.metrics.map((m) => m.id)).toEqual([...METRIC_IDS]);
     for (const m of res.data.metrics) expect(m.definition).toBe(METRICS[m.id].definition);
     expect(res.data.groupBy).toContain("channel");
     expect(res.data.periods).toContain("last_30_days");

@@ -5,6 +5,7 @@ import { tenants } from "../db/schema";
 import { createTestDb } from "../db/test-db";
 import type { TenantContext } from "../tenancy/context";
 import { loadDataset, readFixture, shopifyId } from "../../scripts/fixtures/load-db";
+import { loadAdSpend, readFixtureFile } from "../../scripts/fixtures/load-pace";
 import { monthPeriod, monthlyMetrics, metricValue } from "../../scripts/seed/truth.js";
 import { STORES } from "../../scripts/seed/stores.js";
 import type { CoreMetricId, Dataset, StoreKey, Truth } from "../../scripts/seed/types.js";
@@ -21,6 +22,7 @@ beforeAll(async () => {
     const [t] = await db.insert(tenants).values({ orgId: `org_${store}`, name: STORES[store].name }).returning();
     fixtures[store] = readFixture(store);
     await loadDataset(db, t!.id, store, fixtures[store].dataset);
+    await loadAdSpend(db, t!.id, readFixtureFile(store, "ad-spend.csv"));
     ctxs[store] = {
       tenantId: t!.id,
       orgId: `org_${store}`,
@@ -29,6 +31,14 @@ beforeAll(async () => {
       shop: { domain: `${store}.myshopify.com`, timezone: STORES[store].timezone, currency: "USD", status: "connected" },
     };
   }
+}, 240_000);
+
+// Tidepool's orders with no ad spend loaded, to see what a brand without ad data gets.
+let noAds: TenantContext;
+beforeAll(async () => {
+  const [t] = await db.insert(tenants).values({ orgId: "org_noads", name: "No ads" }).returning();
+  await loadDataset(db, t!.id, "tidepool", fixtures.tidepool.dataset);
+  noAds = { ...ctxs.tidepool, tenantId: t!.id, orgId: "org_noads" };
 }, 240_000);
 
 const run = (store: StoreKey, input: QueryMetricInput) => queryMetric(ctxs[store], input, { db });
@@ -236,5 +246,101 @@ describe("truth helper", () => {
   it("monthlyMetrics reproduces truth.json", () => {
     const { dataset, truth } = fixtures.tidepool;
     expect(monthlyMetrics(dataset)["2026-03"]).toEqual(truth.monthly["2026-03"]);
+  });
+});
+
+// ---- MER and new-customer CAC (T6). The expected values come from truth.json (net sales, new-customer orders) and the
+// ad-spend.csv file read line by line here, not from the loader or the query engine.
+const spendByDay = (store: StoreKey) => {
+  const out = new Map<string, number>();
+  for (const l of readFixtureFile(store, "ad-spend.csv").split("\n")) {
+    const m = /^(\d{4}-\d{2}-\d{2}),\w+,(\d+)$/.exec(l);
+    if (m) out.set(m[1]!, (out.get(m[1]!) ?? 0) + Number(m[2]));
+  }
+  return out;
+};
+const spendIn = (store: StoreKey, from: string, to: string) => [...spendByDay(store)].filter(([d]) => d >= from && d <= to).reduce((s, [, v]) => s + v, 0);
+
+describe.each(["solenne", "tidepool"] as const)("%s: MER and new-customer CAC", (store) => {
+  it("equal net sales over ad spend, and ad spend over new-customer orders, for every month", async () => {
+    let checked = 0;
+    for (const [month, expected] of Object.entries(fixtures[store].truth.monthly)) {
+      const { from, to } = monthPeriod(month);
+      const spend = spendIn(store, from, to);
+      if (spend === 0) continue;
+      const res = await run(store, { metrics: ["mer", "new_customer_cac"], from, to });
+      expect(res.data[0]!.values.mer, `${month} mer`).toBeCloseTo(expected.net_sales / spend, 8);
+      expect(res.data[0]!.values.new_customer_cac, `${month} cac`).toBeCloseTo(expected.new_customer_orders === 0 ? 0 : spend / expected.new_customer_orders, 6);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(5);
+  });
+
+  it("uses each month's own spend when grouped by month", async () => {
+    const res = await run(store, { metrics: ["mer"], from: "2026-07-01", to: "2026-09-30", groupBy: ["month"] });
+    expect(res.data.map((r) => r.group.month)).toEqual(["2026-07", "2026-08", "2026-09"]);
+    for (const r of res.data) {
+      const { from, to } = monthPeriod(r.group.month!);
+      expect(r.values.mer).toBeCloseTo(fixtures[store].truth.monthly[r.group.month!]!.net_sales / spendIn(store, from, to), 8);
+    }
+  });
+
+  it("uses the day's own spend when grouped by day, and a part week's spend only for the days asked for", async () => {
+    const res = await run(store, { metrics: ["mer"], from: "2026-09-02", to: "2026-09-04", groupBy: ["week"] });
+    expect(res.data).toHaveLength(1); // 2026-09-02 is a Wednesday: one week bucket, but only 3 days of spend and sales
+    const net = metricValue(fixtures[store].dataset, "net_sales", {}, { from: "2026-09-02", to: "2026-09-04" });
+    expect(res.data[0]!.values.mer).toBeCloseTo(net / spendIn(store, "2026-09-02", "2026-09-04"), 8);
+    const days = await run(store, { metrics: ["mer"], from: "2026-09-02", to: "2026-09-04", groupBy: ["day"] });
+    for (const d of days.data) {
+      const day = d.group.day!;
+      expect(d.values.mer).toBeCloseTo(metricValue(fixtures[store].dataset, "net_sales", {}, { from: day, to: day }) / spendIn(store, day, day), 8);
+    }
+  });
+
+  it("compares with the earlier period's own spend", async () => {
+    const res = await run(store, { metrics: ["mer"], from: "2026-09-01", to: "2026-09-30", compareTo: "previous_period" });
+    const aug = monthPeriod("2026-08");
+    expect(res.data[0]!.previous!.mer).toBeCloseTo(fixtures[store].truth.monthly["2026-08"]!.net_sales / spendIn(store, aug.from, aug.to), 8);
+  });
+
+  it("leaves ad spend whole when orders are filtered: wholesale-free MER is wholesale-free net sales over all the spend", async () => {
+    const { from, to } = monthPeriod("2026-05");
+    const res = await run(store, { metrics: ["mer"], from, to, filters: { excludeTags: ["wholesale"] } });
+    const net = metricValue(fixtures[store].dataset, "net_sales", { exclude_tag: "wholesale" }, { from, to });
+    expect(res.data[0]!.values.mer).toBeCloseTo(net / spendIn(store, from, to), 8);
+  });
+
+  it("refuses a grouping that ad spend can't be split by", async () => {
+    for (const groupBy of [["product"], ["variant"], ["channel"], ["discount_code"], ["customer_type"], ["tag"]] as const) {
+      await expect(run(store, { metrics: ["mer"], period: "last_30_days", groupBy: [...groupBy] })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    }
+    await expect(run(store, { metrics: ["new_customer_cac"], period: "last_30_days", groupBy: ["month", "product"] })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+
+  it("still groups the other metrics by product when MER is not asked for", async () => {
+    const res = await run(store, { metrics: ["net_sales"], period: "last_30_days", groupBy: ["product"] });
+    expect(res.data.length).toBeGreaterThan(0);
+  });
+
+  it("describes both metrics in the result's definitions", async () => {
+    const res = await run(store, { metrics: ["mer", "new_customer_cac"], period: "last_30_days" });
+    expect(Object.keys(res.definitions).sort()).toEqual(["mer", "new_customer_cac"]);
+    expect(res.definitions.mer).toMatch(/ad spend/i);
+  });
+});
+
+describe("MER and CAC without ad spend or without new customers", () => {
+  it("are 0 for a brand that has no ad spend loaded, and the definition says what 0 means", async () => {
+    const res = await queryMetric(noAds, { metrics: ["mer", "new_customer_cac", "net_sales"], from: "2026-09-01", to: "2026-09-30" }, { db });
+    expect(res.data[0]!.values.net_sales).toBeGreaterThan(0);
+    expect(res.data[0]!.values.mer).toBe(0);
+    expect(res.data[0]!.values.new_customer_cac).toBe(0);
+    expect(res.definitions.mer).toMatch(/0 when/);
+  });
+
+  it("keeps one brand's ad spend out of another's", async () => {
+    const solenne = await run("solenne", { metrics: ["mer"], from: "2026-09-01", to: "2026-09-30" });
+    const tidepool = await run("tidepool", { metrics: ["mer"], from: "2026-09-01", to: "2026-09-30" });
+    expect(solenne.data[0]!.values.mer).not.toBeCloseTo(tidepool.data[0]!.values.mer!, 3);
   });
 });

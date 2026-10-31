@@ -1,12 +1,12 @@
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { DIMENSIONS } from "../metrics/query";
-import { CORE_METRIC_IDS, METRICS, type MetricDef } from "../metrics/registry";
+import { METRIC_IDS, METRICS, type MetricDef } from "../metrics/registry";
 import { asOfOf, dbFor, loadWindow, parseInput, PERIODS, queryIdFor, todayFor, type Ctx } from "./common";
 import { requireConnectedShop, type ToolResult } from "./result";
 
 export const describeMetricsInputSchema = z.strictObject({
-  metrics: z.array(z.enum(CORE_METRIC_IDS)).min(1).optional(),
+  metrics: z.array(z.enum(METRIC_IDS)).min(1).optional(),
 });
 export type DescribeMetricsInput = z.input<typeof describeMetricsInputSchema>;
 
@@ -23,7 +23,7 @@ export async function describeMetrics(ctx: Ctx, rawInput: DescribeMetricsInput, 
   const input = parseInput(describeMetricsInputSchema, rawInput);
   const db = await dbFor(deps);
   const win = await loadWindow(db, ctx.tenantId);
-  const wanted = input.metrics ? [...new Set(input.metrics)] : [...CORE_METRIC_IDS];
+  const wanted = input.metrics ? [...new Set(input.metrics)] : [...METRIC_IDS];
   const today = todayFor(shop.timezone, win);
   const asOf = asOfOf(win);
   return {
