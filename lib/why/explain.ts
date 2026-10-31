@@ -185,7 +185,10 @@ ${HINTS[driver.kind]}`;
       prompt,
       tools,
       stopWhen: isStepCount(INVESTIGATOR_STEPS),
-      prepareStep: ({ stepNumber }) => (stepNumber >= INVESTIGATOR_STEPS - 1 ? { toolChoice: "none" as const } : {}), // the last step must be the answer
+      // The last step must be the answer. It is asked for in words rather than with toolChoice "none", because on Bedrock that
+      // removes every earlier tool call and result from the step's prompt, so the answer would be written blind.
+      prepareStep: ({ stepNumber, messages }) =>
+        stepNumber >= INVESTIGATOR_STEPS - 1 ? { messages: [...messages, { role: "user" as const, content: "Stop calling tools. Reply now with the JSON finding only, using what the tools returned." }] } : {},
       timeout: { totalMs: timeoutMs },
       maxRetries: 1,
       maxOutputTokens: 800,

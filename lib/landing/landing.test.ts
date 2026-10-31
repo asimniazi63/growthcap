@@ -102,6 +102,12 @@ describe("landing page: the copy is escaped and no price is typed", () => {
     expect(lintCopy({ ...copy, ctaLabel: "x onclick=alert(1)" })).not.toEqual([]);
   });
 
+  it("catches a price fused to a word or typed with full-width characters", () => {
+    const copy = (headline: string) => ({ headline, subhead: "Plain words.", bullets: ["One", "Two"], ctaLabel: "Shop", productHandles: ["a"] });
+    for (const bad of ["Just 29USD today", "Buy2Get1Free", "Only ＄２９ now", "Five bucks off"]) expect(lintCopy(copy(bad)).length, bad).toBeGreaterThan(0);
+    expect(lintCopy(copy("Our biggest sale of the year"))).toEqual([]);
+  });
+
   it("reads prices and stock from the store, never from the file", () => {
     const section = buildLandingFiles(copy, catalogue, bfcm).files[0]!.content;
     expect(section).toContain("{{ p.price | money }}");

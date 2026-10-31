@@ -22,11 +22,11 @@ export function buildExtraTools(d: ExtraToolDeps, opts: { singleAgent?: boolean 
 
 // The Why tools record their results by writing to `calls`. This map forwards each new one to the turn's own bookkeeping
 // (the number checker's results, the provenance list), so a figure from explain_gap is checked like one from query_metric.
-export function trackedCalls(calls: Map<string, TurnCall>, onNew: (queryId: string, call: TurnCall) => void): Map<string, TurnCall> {
+export function trackedCalls(calls: Map<string, TurnCall>, onResult: (queryId: string, call: TurnCall, isNew: boolean) => void): Map<string, TurnCall> {
   const tracked = new Map<string, TurnCall>();
   const set = tracked.set.bind(tracked);
   tracked.set = (queryId, call) => {
-    if (!calls.has(queryId)) onNew(queryId, call);
+    onResult(queryId, call, !calls.has(queryId));
     calls.set(queryId, call);
     return set(queryId, call);
   };

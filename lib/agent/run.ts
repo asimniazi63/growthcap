@@ -242,14 +242,16 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
           now: deps.now ?? new Date(),
           write,
           onStep: step,
-          calls: trackedCalls(calls, (queryId, call) => {
-            // A result from a stretch tool: the number checker and the provenance popover read it like any other.
-            results.push(call.result);
-            inputs.push(call.input);
-            // explain_gap runs sub-agents on its own: their tokens count toward this turn's cost and the brand's daily cap.
+          calls: trackedCalls(calls, (queryId, call, isNew) => {
+            // explain_gap runs sub-agents on its own: their tokens count toward this turn's cost and the brand's daily cap,
+            // every time it runs (a second call with the same query id still spent them).
             const used = (call.result as { meta?: { usage?: { total?: { inputTokens?: number; outputTokens?: number } } } }).meta?.usage?.total;
             summary.inputTokens += used?.inputTokens ?? 0;
             summary.outputTokens += used?.outputTokens ?? 0;
+            if (!isNew) return;
+            // A result from a stretch tool: the number checker and the provenance popover read it like any other.
+            results.push(call.result);
+            inputs.push(call.input);
             provenance.set(queryId, { queryId, tool: call.tool, input: call.input, range: call.result.range, asOf: call.result.asOf, definitions: call.result.definitions, ...(call.result.truncated ? { truncated: call.result.truncated } : {}) });
           }),
         }, { singleAgent: env.AGENT_SINGLE_AGENT === "true" });

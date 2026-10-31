@@ -51,7 +51,7 @@ describe("readPages: two passes", () => {
       ["2026-12", "net_sales", 982700, 1],
       ["2026-12", "returning_customer_rate", 0.45, 1],
     ]);
-    expect(out.targets[0]!.sentence).toBe("The net sales target for October 2026 is $6,507.");
+    expect(out.targets[0]!.sentence).toContain("October $6,507"); // the verified quote from the page, not the model's sentence
     // The quarter total, the refund rate (not a plan metric) and the Black Friday goal (a weekend) are shown, not dropped.
     expect(out.unapplied.map((u) => u.sentence).sort()).toEqual([
       "At least 30 new customers during Black Friday weekend, 2026-11-27 to 2026-11-30.",

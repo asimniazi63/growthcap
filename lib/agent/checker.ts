@@ -79,7 +79,10 @@ function collectNames(node: unknown, key: string, parentKey: string | undefined,
   } else if (Array.isArray(node)) {
     node.forEach((item) => collectNames(item, key, parentKey, underUntrusted, out));
   } else if (node && typeof node === "object") {
-    for (const [k, v] of Object.entries(node)) collectNames(v, k, key, underUntrusted || k === "untrusted", out);
+    // A calendar event or a call note is text people wrote, not a name: a figure in its title ("budget reduced by 40%") is not
+    // a result, so its title is never a name that excuses a number. Only product and variant titles are.
+    const written = "dateFrom" in node || "heldOn" in node;
+    for (const [k, v] of Object.entries(node)) collectNames(v, k, key, underUntrusted || (k === "untrusted" && !written), out);
   }
 }
 

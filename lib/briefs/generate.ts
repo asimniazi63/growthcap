@@ -68,7 +68,9 @@ export async function generateBrief(db: Db, tenant: BriefTenant, weekStart: stri
   const [existing] = await db.select({ id: briefs.id }).from(briefs).where(and(eq(briefs.tenantId, tenant.id), eq(briefs.weekStart, weekStart)));
   if (existing) return { outcome: "exists", briefId: existing.id };
 
-  const ctx: TenantContext = { tenantId: tenant.id, orgId: tenant.orgId, userId: "cron", role: "gc_admin", shop: tenant.shop };
+  // An unattended run with the least-privileged role: client viewers read the approved brief, so it may use only what they can
+  // see, and it is offered no write tool, no memory tool and no call notes. Its authority is the CRON_SECRET check on the route.
+  const ctx: TenantContext = { tenantId: tenant.id, orgId: tenant.orgId, userId: "cron", role: "client_viewer", shop: tenant.shop };
   const message: UIMessage = { id: "brief", role: "user", parts: [{ type: "text", text: briefQuestion(weekStart) }] };
   const { stream, finished } = runAgent(ctx, { messages: [message] }, { db, model: deps.model, env: deps.env, now: deps.now, source: "brief" });
   const { text, verification } = await readAnswer(stream);

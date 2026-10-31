@@ -54,7 +54,7 @@ export function pickTheme(nodes: ThemeNode[]): ThemeNode {
   if (!pick) {
     throw new AppError(
       "INVALID_INPUT",
-      "This store has no unpublished theme to write to. In the Shopify admin, open Online Store, Themes, and duplicate the live theme first; then approve this again.",
+      "This store has no unpublished theme to write to. In the Shopify admin, open Online Store, Themes, and duplicate the live theme first; then ask for the page again.",
     );
   }
   return pick;

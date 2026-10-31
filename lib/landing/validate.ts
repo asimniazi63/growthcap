@@ -8,7 +8,8 @@ import type { LandingCopy, LandingFile } from "./types";
 // Two layers. Our own lint is pure and catches what Theme Check does not: a typed price, a handle the store does not have,
 // a script or a link to another site. Theme Check (Shopify's linter) catches invalid Liquid and theme mistakes.
 
-const CURRENCY = /[$€£¥₹₽₩₺฿]|\b(?:USD|EUR|GBP|CAD|AUD|NZD|JPY|CHF|SEK|NOK|DKK)\b|\b(?:dollars?|euros?|pounds?|bucks)\b/i;
+// Currency symbols and words, and a code or word fused to a digit ("29USD", "5dollars").
+const CURRENCY = /[$€£¥₹₽₩₺฿]|(?:USD|EUR|GBP|CAD|AUD|NZD|JPY|CHF|SEK|NOK|DKK)(?![a-z])|\b(?:dollars?|euros?|pounds?|bucks)\b|\d(?:dollars?|euros?|pounds?|bucks)\b/i;
 const ALLOWED_TAGS = new Set(["assign", "if", "elsif", "else", "endif", "unless", "endunless", "comment", "endcomment", "stylesheet", "endstylesheet", "schema", "endschema"]);
 
 export interface LintOptions {
@@ -26,11 +27,13 @@ function visibleText(content: string): string {
     .replace(/&#?\w+;/g, " ");
 }
 
-function numberProblems(text: string, where: string, allowed: ReadonlySet<string>): string[] {
+function numberProblems(raw: string, where: string, allowed: ReadonlySet<string>): string[] {
   const out: string[] = [];
+  const text = raw.normalize("NFKC"); // full-width digits and symbols ("＄２９") become plain ones before they are looked at
   if (CURRENCY.test(text)) out.push(`${where} has a currency symbol or word. Prices are never written in the copy; the page reads them from the store.`);
   if (/\d+[.,]\d{1,2}\b/.test(text)) out.push(`${where} has a number that looks like a price. Prices are never written in the copy.`);
-  for (const found of text.match(/(?<![\w.])\d[\d,]*(?![\w])/g) ?? []) {
+  // Any run of digits, even inside a word ("Buy2Get1Free"): the copy has no numbers except the campaign's own and years.
+  for (const found of text.match(/\d[\d,]*/g) ?? []) {
     const hit = found.replace(/,+$/, "");
     const n = String(Number(hit.replace(/,/g, "")));
     const year = /^(19|20)\d{2}$/.test(n);

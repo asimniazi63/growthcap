@@ -148,18 +148,24 @@ export async function readPages(pages: string[], deps: ReaderDeps): Promise<Prop
   const second = await ask(deps, targetsSchema, PASS2_SYSTEM, claimsPrompt(verified));
   const covered = new Set<number>();
   const seen = new Map<string, number>(); // month|metric -> value, the first one wins
-  const refuse = (c: Claim, reason: string) => out.unapplied.push({ sentence: c.sentence, page: c.page, reason });
+  const refuse = (c: Claim, reason: string) => out.unapplied.push({ sentence: c.sentence.slice(0, 500), page: c.page, reason: reason.slice(0, 300) }); // the reason can hold the model's own strings
 
   for (const t of second.targets) {
     const claim = verified[t.claim - 1];
     if (!claim) continue;
     covered.add(t.claim);
-    const parsed = targetSchema.safeParse({ month: t.month, metric: t.metric, value: t.value, sentence: claim.sentence, page: claim.page });
+    // The review screen shows the text that is really on the page (the verified quote), not the model's paraphrase of it.
+    const parsed = targetSchema.safeParse({ month: t.month, metric: t.metric, value: t.value, sentence: claim.quote.length <= 500 ? claim.quote : claim.sentence, page: claim.page });
     if (!parsed.success) {
       refuse(claim, `The plan can't hold "${t.metric}" for "${t.month}" as read: ${parsed.error.issues[0]?.message ?? "not a valid target"}.`);
       continue;
     }
     const target = parsed.data;
+    // "October 2026" must not become 2026 orders: a count that is a year is a date that was misread, not a target.
+    if ((target.metric === "orders" || target.metric === "new_customer_orders") && target.value >= 1900 && target.value <= 2100) {
+      refuse(claim, `The figure ${target.value} for ${target.month} (${target.metric}) looks like a year, not a count, so it was not applied.`);
+      continue;
+    }
     if (!figureInQuote(target.metric, target.value, claim.quote)) {
       refuse(claim, `The figure for ${target.month} (${target.metric}) is not written in the quoted text, so it was not applied.`);
       continue;

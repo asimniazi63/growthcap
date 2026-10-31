@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { localDate } from "../clock";
 import type { Db } from "../db/client";
 import { ACTION_KINDS, ACTION_STATUSES, actions, type ActionStatus } from "../db/schema";
@@ -153,7 +153,19 @@ export async function proposeAction(db: Db, ctx: TenantContext, input: ProposeIn
   return toView(row!);
 }
 
+// A write that was killed mid-flight (the function timed out) would stay "running" for ever, and nothing else moves it.
+// Anything approved or running for more than ten minutes is closed as failed, so the ledger tells the truth and the
+// change can be asked for again. Whether Shopify applied it is then for a person to check.
+const STUCK_AFTER_MS = 10 * 60_000;
+async function closeStuck(db: Db, tenantId: string): Promise<void> {
+  await db
+    .update(actions)
+    .set({ status: "failed", error: "This did not finish and was closed after 10 minutes. Check in Shopify whether it was applied before asking again.", updatedAt: new Date() })
+    .where(and(eq(actions.tenantId, tenantId), inArray(actions.status, ["approved", "running"]), lt(actions.updatedAt, new Date(Date.now() - STUCK_AFTER_MS))));
+}
+
 export async function listActions(db: Db, ctx: TenantContext, opts: { status?: string } = {}): Promise<LedgerView[]> {
+  await closeStuck(db, ctx.tenantId);
   let status: ActionStatus | undefined;
   if (opts.status !== undefined) {
     status = ACTION_STATUSES.find((s) => s === opts.status);
@@ -169,6 +181,7 @@ export async function listActions(db: Db, ctx: TenantContext, opts: { status?: s
 }
 
 export async function getAction(db: Db, ctx: TenantContext, id: string): Promise<LedgerView> {
+  await closeStuck(db, ctx.tenantId);
   return toView(await loadRow(db, ctx, id));
 }
 
@@ -199,6 +212,12 @@ export async function approveAction(db: Db, ctx: TenantContext, id: string, deps
     if (!started) return toView(await loadRow(db, ctx, id));
     const graphql = checkedGraphql(deps.graphql ?? (await shopGraphqlFor(db, ctx)));
     const result = await executor.run(payload, { db, ctx, graphql });
+    // An executor can finish without writing (Shopify gated the theme write): that is a failure to record, not a success.
+    const notWritten = (result as { written?: unknown } | null)?.written === false ? (result as { reason?: string; finishByHand?: string }) : null;
+    if (notWritten) {
+      const failed = await advance(db, ctx, id, ["running"], { status: "failed", result: toJson(result), error: `${notWritten.reason ?? "Nothing was written."} ${notWritten.finishByHand ?? ""}`.trim().slice(0, 600) });
+      return toView(failed ?? (await loadRow(db, ctx, id)));
+    }
     const done = await advance(db, ctx, id, ["running"], { status: "done", result: toJson(result) });
     return toView(done ?? (await loadRow(db, ctx, id)));
   } catch (e) {

@@ -46,7 +46,7 @@ export async function shopGraphqlFor(db: Db, ctx: TenantContext, deps: GraphqlDe
     .from(shopConnections)
     .where(and(eq(shopConnections.tenantId, ctx.tenantId), eq(shopConnections.status, "connected")))
     .limit(1);
-  if (!conn?.tokenEnc) throw new AppError("STORE_DISCONNECTED", "The store is disconnected. Reconnect it, then approve the change again.");
+  if (!conn?.tokenEnc) throw new AppError("STORE_DISCONNECTED", "The store is disconnected. Reconnect it, then ask for the change again.");
   const token = decryptSecret(conn.tokenEnc);
   return checkedGraphql(async (query, variables) => {
     try {

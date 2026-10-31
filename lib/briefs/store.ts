@@ -5,6 +5,7 @@ import { AppError } from "../errors";
 import { isUuid } from "../ids";
 import { NotAllowedError } from "../memory/store";
 import type { TenantContext } from "../tenancy/context";
+import { isReviewer } from "../actions/reviewer";
 import { deliverBrief } from "./deliver";
 
 export interface BriefItem {
@@ -39,9 +40,14 @@ export async function listBriefs(db: Db, ctx: TenantContext, limit = 12): Promis
 export async function approveBrief(db: Db, ctx: TenantContext, id: string, env: Record<string, string | undefined> = process.env): Promise<"approved" | "already_approved" | null> {
   if (!canApprove(ctx)) throw new NotAllowedError();
   if (!isUuid(id)) return null;
-  const [row] = await db.select({ status: briefs.status }).from(briefs).where(and(eq(briefs.id, id), eq(briefs.tenantId, ctx.tenantId)));
+  const [row] = await db.select({ status: briefs.status, weekStart: briefs.weekStart }).from(briefs).where(and(eq(briefs.id, id), eq(briefs.tenantId, ctx.tenantId)));
   if (!row) return null;
   if (row.status === "blocked") throw new AppError("INVALID_INPUT", "This brief has a figure the number checker could not match, so it can't be approved.");
+  if (isReviewer(ctx.userId, env)) {
+    // A reviewer login's approval is a dry run: it is logged, and the brief stays a draft for the real approver.
+    console.info("[brief] dry run", JSON.stringify({ tenantId: ctx.tenantId, week: row.weekStart, briefId: id }));
+    return "approved";
+  }
 
   const [done] = await db
     .update(briefs)

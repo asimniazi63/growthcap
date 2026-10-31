@@ -2,6 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { extractText, getDocumentProxy } from "unpdf";
 import type { Db } from "../db/client";
 import { DOCUMENT_KINDS, documents, planTargets, plans, tenants, type DocumentKind, type DocumentStatus } from "../db/schema";
+import { assertBudget } from "../agent/budget";
 import { AppError } from "../errors";
 import { isUuid } from "../ids";
 import { NotAllowedError } from "../memory/store";
@@ -17,6 +18,7 @@ import { MAX_PAGES, MAX_TEXT_CHARS, proposalSchema, readPages, readPlanSheet, ty
 export const MAX_BYTES = 4 * 1024 * 1024;
 const MAX_LABEL_CHARS = 120;
 const CHUNK = 500;
+const MAX_CSV_ROWS = 2000;
 
 export const canManagePlan = (ctx: TenantContext) => ctx.role === "gc_admin" || ctx.role === "gc_partner";
 export function assertCanManagePlan(ctx: TenantContext): void {
@@ -37,8 +39,11 @@ export async function pdfPages(bytes: Uint8Array): Promise<string[]> {
   let pages: string[];
   try {
     const pdf = await getDocumentProxy(new Uint8Array(bytes)); // a copy: the reader takes ownership of the buffer it is given
+    // The page count is known before any text is extracted, so a PDF with tens of thousands of pages is refused cheaply.
+    if (pdf.numPages > MAX_PAGES) throw new AppError("INVALID_INPUT", `A PDF can have at most ${MAX_PAGES} pages.`);
     pages = (await extractText(pdf, { mergePages: false })).text;
-  } catch {
+  } catch (e) {
+    if (e instanceof AppError) throw e;
     throw new AppError("INVALID_INPUT", "That PDF could not be read. Is it damaged or password protected?");
   }
   pages = pages.map((p) => p.replace(/\u0000/g, "").trim());
@@ -57,6 +62,7 @@ function csvText(bytes: Uint8Array): string {
     throw new AppError("INVALID_INPUT", "A plan sheet must be a UTF-8 text CSV file.");
   }
   if (text.includes("\u0000") || text.trim() === "") throw new AppError("INVALID_INPUT", "A plan sheet must be a text CSV file with rows.");
+  if (text.split("\n").length > MAX_CSV_ROWS) throw new AppError("INVALID_INPUT", `A plan sheet can have at most ${MAX_CSV_ROWS} rows.`);
   return text;
 }
 
@@ -147,7 +153,10 @@ export async function readDocument(db: Db, ctx: TenantContext, id: string, deps?
   assertCanManagePlan(ctx);
   const doc = await ownDocument(db, ctx, id);
   if (!doc) return null;
-  if (doc.status !== "uploaded" && doc.status !== "read") throw new AppError("INVALID_INPUT", "That document has already been decided.");
+  // Only a document that has not been read can be read: a re-read would replace the proposal a person is reviewing, and each
+  // read is a paid model call. (A read that failed leaves the status at "uploaded", so it can be tried again.)
+  if (doc.status !== "uploaded") throw new AppError("INVALID_INPUT", doc.status === "read" ? "That document has already been read. Upload it again to read it again." : "That document has already been decided.");
+  if (doc.kind !== "plan_sheet") await assertBudget(ctx.tenantId, { db, env: process.env });
   let proposal: Proposal;
   if (doc.kind === "plan_sheet") proposal = readPlanSheet(doc.pages.join("\n"));
   else if (!deps) throw new AppError("INTERNAL_ERROR", "No model is set up to read this document.");
@@ -156,9 +165,9 @@ export async function readDocument(db: Db, ctx: TenantContext, id: string, deps?
   const done = await db
     .update(documents)
     .set({ proposal, status: "read" })
-    .where(and(eq(documents.id, doc.id), eq(documents.tenantId, ctx.tenantId), inArray(documents.status, ["uploaded", "read"])))
+    .where(and(eq(documents.id, doc.id), eq(documents.tenantId, ctx.tenantId), eq(documents.status, "uploaded")))
     .returning({ id: documents.id });
-  if (done.length === 0) throw new AppError("INVALID_INPUT", "That document has already been decided.");
+  if (done.length === 0) throw new AppError("INVALID_INPUT", "That document has already been read or decided.");
   return getDocument(db, ctx, id);
 }
 

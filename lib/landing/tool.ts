@@ -8,7 +8,7 @@ import { localDate } from "../clock";
 import { AppError } from "../errors";
 import { addDays } from "../metrics/dates";
 import { buildLandingFiles, campaignNumbers } from "./build";
-import { activeProducts, findCampaign } from "./data";
+import { activeProducts, findCampaign, sampleHandles } from "./data";
 import { LANDING_KIND, handleSchema, landingCopySchema, type LandingPayload } from "./types";
 import { lintCopy, validateLanding } from "./validate";
 
@@ -29,27 +29,30 @@ export type DraftLandingPageInput = z.infer<typeof draftLandingPageInput>;
 type Propose = (db: ExtraToolDeps["db"], ctx: ExtraToolDeps["ctx"], input: ProposeInput) => Promise<ActionView>;
 
 const recoverable = (e: unknown) => e instanceof AppError && e.code === "INVALID_INPUT";
-const MAX_FAILURES = 2;
+const MAX_FAILURES = 4;
 
 export function buildDraftLandingPageTool(d: ExtraToolDeps, propose: Propose = ledgerPropose) {
   let proposed = 0;
   let failures = 0;
   return tool({
     description:
-      "Draft a landing page for a planned campaign (from the calendar) or for a product, when the user asks for one. You write words only: headline, subhead, bullets and a button label. Never write Liquid, HTML, prices, discounts, links or numbers; the server builds the page and checks it, and prices and stock are read live from the store. Take productHandles from search_products results. This does not publish anything: it puts an approval card in the answer with the code and the check result; when a Growth Capital admin or partner approves, the page is written to the unpublished copy of the theme as a hidden page, and a person publishes it in the Shopify admin. After calling it, say the draft is waiting for approval. If it returns an error, fix the copy it names and call once more.",
+      "Draft a landing page for a planned campaign (from the calendar) or for a product, when the user asks for one. You write words only: headline, subhead, bullets and a button label. Never write Liquid, HTML, prices, discounts, links, percentages or any digits at all (no years either, unless the campaign has them); the server builds the page and checks it, and prices and stock are read live from the store. Take productHandles from search_products results. This does not publish anything: it puts an approval card in the answer with the code and the check result; when a Growth Capital admin or partner approves, the page is written to the unpublished copy of the theme as a hidden page, and a person publishes it in the Shopify admin. After calling it, say the draft is waiting for approval. If it returns an error, fix the copy it names and call once more.",
     inputSchema: draftLandingPageInput,
     execute: async (input) => {
       const started = Date.now();
       try {
         if (proposed >= 1) throw new AppError("INVALID_INPUT", "One landing page can be drafted in an answer.");
-        if (failures >= MAX_FAILURES) throw new AppError("INVALID_INPUT", "The draft failed its checks twice. Do not try again; tell the user what was wrong.");
+        if (failures >= MAX_FAILURES) throw new AppError("INVALID_INPUT", "The draft failed its checks several times. Do not try again; tell the user what was wrong.");
         if (Boolean(input.campaignId) === Boolean(input.productHandle)) throw new AppError("INVALID_INPUT", "Give either campaignId or productHandle, one of them.");
 
         const campaign = input.campaignId ? await findCampaign(d.db, d.ctx.tenantId, input.campaignId) : undefined;
         const handles = [...new Set([...(input.productHandle ? [input.productHandle] : []), ...input.productHandles])].slice(0, 6);
         const found = await activeProducts(d.db, d.ctx.tenantId, handles);
         const missing = handles.filter((h) => !found.some((p) => p.handle === h));
-        if (missing.length > 0) throw new AppError("INVALID_INPUT", `These handles are not active products in this store: ${missing.join(", ")}. Use handles from search_products.`);
+        if (missing.length > 0) {
+          const valid = await sampleHandles(d.db, d.ctx.tenantId);
+          throw new AppError("INVALID_INPUT", `These handles are not active products in this store: ${missing.join(", ")}. A handle is the lowercase, hyphenated name in search_products results. Some that exist: ${valid.join(", ")}.`);
+        }
 
         const copy = { headline: input.headline, subhead: input.subhead, bullets: input.bullets, ctaLabel: input.ctaLabel, productHandles: handles };
         const allowedNumbers = campaignNumbers(campaign);

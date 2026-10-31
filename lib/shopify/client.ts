@@ -65,10 +65,15 @@ export async function shopifyGraphql<T>(
   const unavailable = (why: string) =>
     new AppError("SHOPIFY_UNAVAILABLE", `Shopify is unavailable (${why}) for ${conn.shopDomain}`, { retryable: true });
 
+  // A mutation that may have been carried out is never sent again: a 5xx or a dropped connection can follow a write that
+  // committed, and a repeat would write twice. Only a throttled request (429 or a throttle error) was surely not run.
+  const isMutation = /^\s*mutation\b/i.test(query);
+
   for (let attempt = 0; ; attempt++) {
     const last = attempt >= attempts - 1;
     let failure: AppError;
     let wait = backoff(attempt);
+    let retrySafe = true;
 
     try {
       const res = await fetchFn(url, {
@@ -82,12 +87,14 @@ export async function shopifyGraphql<T>(
       }
       if (res.status === 429 || res.status >= 500) {
         failure = unavailable(`HTTP ${res.status}`);
+        if (res.status !== 429) retrySafe = false;
       } else if (!res.ok) {
         throw new AppError("INVALID_INPUT", `Shopify answered HTTP ${res.status}`);
       } else {
         const body = (await res.json().catch(() => null)) as GraphqlBody | null;
         if (!body) {
           failure = unavailable("the response was not JSON");
+          retrySafe = false;
         } else if (isThrottled(body.errors)) {
           failure = new AppError("SHOPIFY_THROTTLED", `Shopify kept throttling requests for ${conn.shopDomain}`, { retryable: true });
           wait = throttleWait(body.extensions?.cost, attempt);
@@ -100,9 +107,10 @@ export async function shopifyGraphql<T>(
     } catch (e) {
       if (e instanceof AppError) throw e;
       failure = unavailable("a network error");
+      retrySafe = false;
     }
 
-    if (last) throw failure;
+    if (last || (isMutation && !retrySafe)) throw failure;
     await sleep(wait);
   }
 }

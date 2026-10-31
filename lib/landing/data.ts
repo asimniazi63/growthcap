@@ -55,3 +55,9 @@ export async function activeProducts(db: Db, tenantId: string, handles: string[]
     .where(and(eq(products.tenantId, tenantId), inArray(products.handle, handles), eq(products.status, "ACTIVE")));
   return rows;
 }
+
+// A few of this brand's active product handles, for an error message that tells the model what it can use.
+export async function sampleHandles(db: Db, tenantId: string, limit = 12): Promise<string[]> {
+  const rows = await db.select({ handle: products.handle }).from(products).where(and(eq(products.tenantId, tenantId), eq(products.status, "ACTIVE"))).orderBy(products.handle).limit(limit);
+  return rows.map((r) => r.handle);
+}

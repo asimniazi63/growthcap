@@ -55,7 +55,7 @@ describe("drafting a brief through the agent loop", () => {
     expect(await stored(res.briefId!)).toMatchObject({ status: "draft", weekStart: WEEK, unmatched: [], delivered: false, approvedAt: null });
     expect(JSON.stringify(model.doStreamCalls[0]!.prompt)).toContain("Monday brief for the week starting October 26, 2026");
     const [run] = await db.select().from(agentRuns);
-    expect(run).toMatchObject({ tenantId: tenant.id, userId: "cron", role: "gc_admin" });
+    expect(run).toMatchObject({ tenantId: tenant.id, userId: "cron", role: "client_viewer" });
   });
 
   it("stores a blocked brief with the unmatched figures when the repair turn does not fix them", async () => {
@@ -137,10 +137,10 @@ describe("approval", () => {
     expect(line).not.toContain("A short brief.");
   });
 
-  it("is a dry run for a reviewer: approved, logged as a dry run, and not marked delivered", async () => {
+  it("is a dry run for a reviewer: logged, not delivered, and the brief stays a draft", async () => {
     const b = await insertBrief("draft");
     expect(await approveBrief(db, as("gc_partner", "user_rev"), b.id, { REVIEWER_USER_IDS: "user_rev" })).toBe("approved");
-    expect(await stored(b.id)).toMatchObject({ status: "approved", delivered: false });
+    expect(await stored(b.id)).toMatchObject({ status: "draft", delivered: false }); // still a draft for the real approver
     expect(String(info.mock.calls[0]!.join(" "))).toContain("dry run");
   });
 
