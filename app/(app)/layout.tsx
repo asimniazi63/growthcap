@@ -13,6 +13,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             Oasis Pace
           </Link>
           <nav className="flex gap-4 text-sm text-neutral-600">
+            <Link href="/chat" className="hover:text-neutral-900">
+              Chat
+            </Link>
             <Link href="/connect" className="hover:text-neutral-900">
               Connect
             </Link>

@@ -7,6 +7,7 @@ export const ERROR_CODES = [
   "INVALID_INPUT",
   "MODEL_TIMEOUT",
   "BUDGET_EXCEEDED",
+  "INTERNAL_ERROR", // anything unexpected: the user sees a generic message, and the detail stays in the server log
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

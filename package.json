@@ -16,6 +16,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "tenant:create": "tsx scripts/tenant-create.ts",
+    "chat:try": "tsx scripts/chat-try.ts",
     "sync:probe": "tsx scripts/spikes/sync-probe.ts",
     "reconcile:truth": "tsx scripts/reconcile-truth.ts",
     "seed:generate": "tsx scripts/seed/generate.ts",
@@ -40,13 +41,18 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^5.0.130",
+    "@ai-sdk/react": "^4.0.163",
     "@clerk/nextjs": "^7.9.23",
     "@neondatabase/serverless": "^1.2.0",
     "@shopify/shopify-api": "^15.0.1",
+    "ai": "^7.0.159",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "ws": "^8.22.0",
     "zod": "^4.6.7"
   }

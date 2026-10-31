@@ -15,6 +15,13 @@
       "when": 1793438795952,
       "tag": "0001_low_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793443351749,
+      "tag": "0002_bent_swarm",
+      "breakpoints": true
     }
   ]
 }

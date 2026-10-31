@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { EncryptedSecret } from "../crypto/secrets";
 
 // One row per client brand, made only by `npm run tenant:create -- --org <orgId>`. orgId is the Clerk organization id.
@@ -202,4 +202,53 @@ export const syncRuns = pgTable(
     error: text("error"),
   },
   (t) => [index("sync_runs_tenant_idx").on(t.tenantId, t.startedAt)],
+);
+
+// ---- The agent's audit log (T4). One row per run and one per step. Tool inputs are recorded (they are the model's own
+// arguments: dates, filters, ids); prompts, answers and tool results are not.
+export const AGENT_SOURCES = ["chat", "eval"] as const;
+export type AgentSource = (typeof AGENT_SOURCES)[number];
+export const AGENT_RUN_STATUSES = ["running", "ok", "error"] as const;
+
+export const agentRuns = pgTable(
+  "agent_runs",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    userId: text("user_id").notNull(), // the Clerk user
+    role: text("role").notNull(),
+    source: text("source").$type<AgentSource>().notNull(),
+    modelId: text("model_id").notNull(),
+    status: text("status").$type<(typeof AGENT_RUN_STATUSES)[number]>().notNull().default("running"),
+    errorCode: text("error_code"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    costMicros: integer("cost_micros").notNull().default(0), // millionths of a US dollar
+    steps: integer("steps").notNull().default(0),
+    repaired: boolean("repaired").notNull().default(false), // a repair turn was needed for unmatched numbers
+    flaggedNumbers: integer("flagged_numbers").notNull().default(0), // still unmatched after the repair
+  },
+  (t) => [index("agent_runs_tenant_started_idx").on(t.tenantId, t.startedAt)],
+);
+
+export const agentSteps = pgTable(
+  "agent_steps",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => agentRuns.id),
+    tenantId: tenantRef(),
+    stepIndex: integer("step_index").notNull(),
+    tool: text("tool").notNull(),
+    input: jsonb("input").$type<unknown>(),
+    ok: boolean("ok").notNull(),
+    errorCode: text("error_code"),
+    rowCount: integer("row_count"),
+    latencyMs: integer("latency_ms").notNull().default(0),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("agent_steps_run_idx").on(t.runId)],
 );

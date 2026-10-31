@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { setTestNow, storeToday } from "./clock";
+import { isDemoClock, setTestNow, storeToday } from "./clock";
 
 const NY = "America/New_York";
 const LA = "America/Los_Angeles";
@@ -61,5 +61,20 @@ describe("storeToday", () => {
     const today = storeToday(NY, null);
     expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(today).not.toBe("1999-12-31");
+  });
+});
+
+describe("isDemoClock", () => {
+  afterEach(() => setTestNow(null));
+
+  it("is true when today has been pulled back to the newest order, because the data is more than 36 hours old", () => {
+    setTestNow("2026-11-05T12:00:00Z");
+    expect(isDemoClock("America/New_York", "2026-10-31T20:00:00Z")).toBe(true);
+  });
+
+  it("is false while orders are recent, and when there are no orders at all", () => {
+    setTestNow("2026-11-01T12:00:00Z");
+    expect(isDemoClock("America/New_York", "2026-10-31T20:00:00Z")).toBe(false);
+    expect(isDemoClock("America/New_York", null)).toBe(false);
   });
 });
