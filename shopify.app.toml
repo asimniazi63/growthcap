@@ -1,0 +1,24 @@
+# Oasis Pace (product app). Written by hand because `shopify app config link` needs a browser login;
+# the client ID is not a secret. `shopify app deploy` (run by Asim) releases this as a new version.
+name = "Oasis Pace"
+client_id = "7c3e9bdad5eab940c095b1f89e90af35"
+application_url = "https://oasis-pace.vercel.app"
+embedded = false
+
+[access_scopes]
+# read_all_orders is added only once Shopify approves it, or `shopify app deploy` fails.
+scopes = "read_products,read_orders,read_customers,read_inventory,read_discounts"
+
+[auth]
+redirect_urls = ["https://oasis-pace.vercel.app/api/shopify/callback"]
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "/api/webhooks/shopify"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "/api/webhooks/shopify"

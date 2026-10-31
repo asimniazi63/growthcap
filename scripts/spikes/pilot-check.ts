@@ -171,7 +171,7 @@ export function compare(ds: Dataset, sel: Selection, shopify: ShopifyOrder[]): C
 }
 
 export interface PilotDeps {
-  env?: NodeJS.ProcessEnv;
+  env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
   readDataset?: (store: StoreKey) => Dataset;
   log?: (line: string) => void;

@@ -499,7 +499,7 @@ export function describePlan(ds: Dataset, sel: Selection): string[] {
 }
 
 export interface CliDeps {
-  env?: NodeJS.ProcessEnv;
+  env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
   readDataset?: (store: StoreKey) => Dataset;
   log?: (line: string) => void;
