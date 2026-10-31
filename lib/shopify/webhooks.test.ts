@@ -92,7 +92,7 @@ describe("handlers and idempotency", () => {
     const seen: { ctx: WebhookCtx; payload: unknown }[] = [];
     onWebhook("orders/create", async (ctx, payload) => void seen.push({ ctx, payload }));
     await deliver({ topic: "orders/create", webhookId: "wh-7", body: { id: 5, shop_domain: "evil.myshopify.com" } });
-    expect(seen).toEqual([{ ctx: { tenantId, shopDomain: SHOP, webhookId: "wh-7" }, payload: { id: 5, shop_domain: "evil.myshopify.com" } }]);
+    expect(seen).toEqual([{ ctx: { db, tenantId, shopDomain: SHOP, webhookId: "wh-7" }, payload: { id: 5, shop_domain: "evil.myshopify.com" } }]);
   });
 
   it("does not run a handler for a shop that isn't connected, and still answers 200 so Shopify stops retrying", async () => {

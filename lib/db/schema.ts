@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { date, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { EncryptedSecret } from "../crypto/secrets";
 
 // One row per client brand, made only by `npm run tenant:create -- --org <orgId>`. orgId is the Clerk organization id.
@@ -60,3 +60,146 @@ export const complianceRequests = pgTable("compliance_requests", {
   topic: text("topic").notNull(),
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// ---- Synced store data (T3). Every table has tenant_id first in its key. Ids are Shopify gids, except customers,
+// which are a pseudonym (lib/sync/map.ts): no name, email, phone or address is ever stored. Money is integer cents.
+const tenantRef = () =>
+  uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id);
+
+export const products = pgTable(
+  "products",
+  {
+    tenantId: tenantRef(),
+    id: text("id").notNull(),
+    title: text("title").notNull(),
+    handle: text("handle").notNull(),
+    status: text("status").notNull(),
+    description: text("description").notNull().default(""), // store text: untrusted
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.id] })],
+);
+
+export const variants = pgTable(
+  "variants",
+  {
+    tenantId: tenantRef(),
+    id: text("id").notNull(),
+    productId: text("product_id").notNull(),
+    sku: text("sku").notNull().default(""),
+    title: text("title").notNull(),
+    priceCents: integer("price_cents").notNull(),
+    unitCostCents: integer("unit_cost_cents"),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.id] }), index("variants_product_idx").on(t.tenantId, t.productId)],
+);
+
+export const inventoryLevels = pgTable(
+  "inventory_levels",
+  {
+    tenantId: tenantRef(),
+    variantId: text("variant_id").notNull(),
+    locationId: text("location_id").notNull(),
+    locationName: text("location_name").notNull().default(""),
+    available: integer("available").notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.variantId, t.locationId] })],
+);
+
+export const customers = pgTable(
+  "customers",
+  {
+    tenantId: tenantRef(),
+    id: text("id").notNull(), // CUST_ + hash of tenant and Shopify id
+    firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.id] })],
+);
+
+export const orders = pgTable(
+  "orders",
+  {
+    tenantId: tenantRef(),
+    id: text("id").notNull(),
+    name: text("name").notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }).notNull(),
+    localDate: date("local_date", { mode: "string" }).notNull(), // the store-local date of processedAt
+    customerId: text("customer_id"),
+    grossCents: integer("gross_cents").notNull(), // sum of qty x unit price
+    discountCents: integer("discount_cents").notNull(),
+    shippingCents: integer("shipping_cents").notNull(),
+    discountCode: text("discount_code"),
+    channel: text("channel").notNull(),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    note: text("note"), // store text: untrusted
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenantId, t.id] }),
+    index("orders_local_date_idx").on(t.tenantId, t.localDate),
+    index("orders_customer_idx").on(t.tenantId, t.customerId),
+  ],
+);
+
+export const orderLines = pgTable(
+  "order_lines",
+  {
+    tenantId: tenantRef(),
+    id: text("id").notNull(),
+    orderId: text("order_id").notNull(),
+    variantId: text("variant_id"),
+    productId: text("product_id"),
+    quantity: integer("quantity").notNull(),
+    unitPriceCents: integer("unit_price_cents").notNull(), // the price charged, before discounts
+    discountCents: integer("discount_cents").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.id] }), index("order_lines_order_idx").on(t.tenantId, t.orderId)],
+);
+
+export const refunds = pgTable(
+  "refunds",
+  {
+    tenantId: tenantRef(),
+    id: text("id").notNull(),
+    orderId: text("order_id").notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }).notNull(),
+    localDate: date("local_date", { mode: "string" }).notNull(),
+    amountCents: integer("amount_cents").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.id] }), index("refunds_local_date_idx").on(t.tenantId, t.localDate)],
+);
+
+export const refundLines = pgTable(
+  "refund_lines",
+  {
+    tenantId: tenantRef(),
+    id: text("id").notNull(),
+    refundId: text("refund_id").notNull(),
+    orderLineId: text("order_line_id"),
+    quantity: integer("quantity").notNull(),
+    subtotalCents: integer("subtotal_cents").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.id] })],
+);
+
+export const SYNC_STATUSES = ["running", "succeeded", "failed"] as const;
+
+export const syncRuns = pgTable(
+  "sync_runs",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    status: text("status").$type<(typeof SYNC_STATUSES)[number]>().notNull().default("running"),
+    counts: jsonb("counts").$type<Record<string, number>>(),
+    error: text("error"),
+  },
+  (t) => [index("sync_runs_tenant_idx").on(t.tenantId, t.startedAt)],
+);

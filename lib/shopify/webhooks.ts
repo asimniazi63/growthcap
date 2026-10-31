@@ -4,6 +4,7 @@ import type { Db } from "../db/client";
 import { complianceRequests, shopConnections, webhookEvents } from "../db/schema";
 
 export interface WebhookCtx {
+  db: Db;
   tenantId: string;
   shopDomain: string;
   webhookId: string;
@@ -93,7 +94,7 @@ export async function handleWebhook({ db, rawBody, headers, secret }: HandleWebh
           .where(eq(shopConnections.shopDomain, shopDomain));
       }
       for (const handler of handlers.get(topic) ?? []) {
-        await handler({ tenantId: connection.tenantId, shopDomain, webhookId }, payload);
+        await handler({ db, tenantId: connection.tenantId, shopDomain, webhookId }, payload);
       }
     }
     await markProcessed(db);

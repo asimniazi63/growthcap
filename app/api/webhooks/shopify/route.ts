@@ -1,7 +1,10 @@
 import { getDb } from "@/lib/db/client";
 import { handleWebhook } from "@/lib/shopify/webhooks";
+import { registerSyncWebhooks } from "@/lib/sync/orders-create";
 
 export const runtime = "nodejs";
+
+registerSyncWebhooks();
 
 // Public route (proxy.ts leaves it alone): authenticity comes from the HMAC, checked against the raw body.
 export async function POST(request: Request): Promise<Response> {

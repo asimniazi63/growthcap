@@ -18,7 +18,7 @@ function nowMs(): number {
   return pinnedNowMs ?? Date.now();
 }
 
-function localDate(ms: number, timezone: string): string {
+export function localDate(ms: number, timezone: string): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     year: "numeric",
