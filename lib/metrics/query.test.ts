@@ -1,15 +1,16 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { setTestNow } from "../clock";
 import type { Db } from "../db/client";
 import { tenants } from "../db/schema";
 import { createTestDb } from "../db/test-db";
 import type { TenantContext } from "../tenancy/context";
 import { loadDataset, readFixture, shopifyId } from "../../scripts/fixtures/load-db";
-import { loadAdSpend, readFixtureFile } from "../../scripts/fixtures/load-pace";
+import { loadAdSpend, loadPlan as loadPlanFixture, readFixtureFile } from "../../scripts/fixtures/load-pace";
 import { monthPeriod, monthlyMetrics, metricValue } from "../../scripts/seed/truth.js";
 import { STORES } from "../../scripts/seed/stores.js";
 import type { CoreMetricId, Dataset, StoreKey, Truth } from "../../scripts/seed/types.js";
 import { CORE_METRIC_IDS } from "./registry";
+import { getPaceView } from "../pace/view";
 import { queryMetric, type QueryMetricInput } from "./query";
 
 let db: Db;
@@ -23,6 +24,7 @@ beforeAll(async () => {
     fixtures[store] = readFixture(store);
     await loadDataset(db, t!.id, store, fixtures[store].dataset);
     await loadAdSpend(db, t!.id, readFixtureFile(store, "ad-spend.csv"));
+    await loadPlanFixture(db, t!.id, readFixtureFile(store, "plan.csv"), `${store} plan`);
     ctxs[store] = {
       tenantId: t!.id,
       orgId: `org_${store}`,
@@ -376,5 +378,112 @@ describe.each(["solenne", "tidepool"] as const)("%s: product and variant names o
     }
     const total = await run(store, { metrics: ["orders"], from: "2026-09-01", to: "2026-09-07" });
     expect(total.data[0]!.untrusted).toBeUndefined();
+  });
+});
+
+// ---- gapToPlan (T6). Plan figures are read from plan.csv here; actuals come from truth.json and the dataset.
+const planRow = (store: StoreKey, month: string) => {
+  const line = readFixtureFile(store, "plan.csv").split("\n").find((l) => l.startsWith(`${month},`));
+  if (!line) return undefined;
+  const [, net, orders, newOrders, aov, returning] = line.split(",");
+  return { net_sales: Number(net), orders: Number(orders), new_customer_orders: Number(newOrders), aov: Number(aov), returning_customer_rate: Number(returning) };
+};
+
+describe.each(["solenne", "tidepool"] as const)("%s: gapToPlan", (store) => {
+  it("compares every whole month in the data with its plan: the plan's figure, truth.json's actual and the difference", async () => {
+    let checked = 0;
+    for (const [month, expected] of Object.entries(fixtures[store].truth.monthly)) {
+      const plan = planRow(store, month);
+      if (!plan) continue;
+      const { from, to } = monthPeriod(month);
+      const res = await run(store, { metrics: ["net_sales", "orders", "new_customer_orders"], from, to });
+      const gap = res.data[0]!.gapToPlan!;
+      for (const m of ["net_sales", "orders", "new_customer_orders"] as const) {
+        expect(gap[m], `${month} ${m}`).toMatchObject({ month, target: plan[m], planned: plan[m], actual: expected[m], gap: expected[m] - plan[m] });
+        expect(gap[m]!.projected).toBeUndefined();
+      }
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(5);
+  });
+
+  it("spreads a month-to-date target by the same month last year when the data has it, and evenly when it doesn't", async () => {
+    const ds = fixtures[store].dataset;
+    const target = planRow(store, "2026-09")!.orders;
+    const day = (d: string) => metricValue(ds, "orders", {}, { from: d, to: d });
+    const lastYearCovered = fixtures[store].truth.window.from <= "2025-09-01";
+    const last = Array.from({ length: 30 }, (_, i) => day(`2025-09-${String(i + 1).padStart(2, "0")}`));
+    const total = last.reduce((s, v) => s + v, 0);
+    const share = lastYearCovered ? last.slice(0, 15).reduce((s, v) => s + v, 0) / total : 15 / 30;
+
+    const res = await run(store, { metrics: ["orders"], from: "2026-09-01", to: "2026-09-15" });
+    const g = res.data[0]!.gapToPlan!.orders!;
+    const actual = metricValue(ds, "orders", {}, { from: "2026-09-01", to: "2026-09-15" });
+    expect(g.spread).toBe(lastYearCovered ? "last_year" : "even");
+    expect(g.planned).toBeCloseTo(target * share, 1);
+    expect(g.actual).toBe(actual);
+    expect(g.projected).toBeCloseTo(actual + target * (1 - share) * (actual / (target * share)), 1);
+  });
+
+  it("is left out when the result is grouped, filtered, spans two months, or the brand has no plan", async () => {
+    const m = { metrics: ["net_sales" as const], from: "2026-09-01", to: "2026-09-30" };
+    expect((await run(store, { ...m, groupBy: ["channel"] })).data.every((r) => r.gapToPlan === undefined)).toBe(true);
+    expect((await run(store, { ...m, filters: { excludeTags: ["wholesale"] } })).data[0]!.gapToPlan).toBeUndefined();
+    expect((await run(store, { ...m, from: "2026-09-20", to: "2026-10-10" })).data[0]!.gapToPlan).toBeUndefined();
+    expect((await queryMetric(noAds, m, { db })).data[0]!.gapToPlan).toBeUndefined();
+  });
+});
+
+describe("gapToPlan: the Solenne October story (S9)", () => {
+  it("shows net sales about 9% behind plan and new-customer orders about 20% behind", async () => {
+    const res = await run("solenne", { metrics: ["net_sales", "new_customer_orders"], from: "2026-10-01", to: "2026-10-31" });
+    const g = res.data[0]!.gapToPlan!;
+    expect(g.net_sales!.pctGap!).toBeLessThan(-0.09);
+    expect(g.net_sales!.pctGap!).toBeGreaterThan(-0.095);
+    expect(g.new_customer_orders!.pctGap!).toBeLessThan(-0.18);
+    expect(g.new_customer_orders!.pctGap!).toBeGreaterThan(-0.25);
+  });
+});
+
+// ---- The /pace view: this month to date, through yesterday, and how last month finished.
+describe.each(["solenne", "tidepool"] as const)("%s: the pace view", (store) => {
+  afterEach(() => setTestNow(null));
+
+  it("counts this month through yesterday, and shows last month whole", async () => {
+    setTestNow("2026-10-16T12:00:00-04:00");
+    const view = await getPaceView(ctxs[store], { db });
+    expect(view).toMatchObject({ today: "2026-10-16", month: "2026-10", through: "2026-10-15", started: true, hasPlan: true });
+    const ds = fixtures[store].dataset;
+    expect(view.thisMonth!.gaps!.net_sales).toMatchObject({ throughDate: "2026-10-15", actual: metricValue(ds, "net_sales", {}, { from: "2026-10-01", to: "2026-10-15" }) });
+    expect(view.thisMonth!.gaps!.net_sales!.projected).toBeGreaterThan(0);
+    expect(view.lastMonth).toMatchObject({ month: "2026-09" });
+    expect(view.lastMonth!.gaps!.net_sales).toMatchObject({ actual: fixtures[store].truth.monthly["2026-09"]!.net_sales, throughDate: "2026-09-30" });
+  });
+
+  it("carries the plan's own name and the time the data was last synced", async () => {
+    setTestNow("2026-10-16T12:00:00-04:00");
+    const view = await getPaceView(ctxs[store], { db });
+    expect(view.planLabel).toBe(`${store} plan`);
+    expect(view.asOf).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
+describe("the pace view: the morning after the data ends", () => {
+  afterEach(() => setTestNow(null));
+
+  it("says the new month hasn't started, and shows October (the S9 month) as last month", async () => {
+    setTestNow("2026-11-03T12:00:00Z"); // the newest order is more than 36 hours old, so today is the day after it
+    const view = await getPaceView(ctxs.solenne, { db });
+    expect(view).toMatchObject({ today: "2026-11-01", month: "2026-11", through: "2026-10-31", started: false, demoClock: true });
+    expect(view.thisMonth).toBeNull();
+    expect(view.lastMonth).toMatchObject({ month: "2026-10" });
+    expect(view.lastMonth!.gaps!.net_sales!.pctGap!).toBeLessThan(-0.09);
+  });
+
+  it("has no plan to show for a brand without one, and still returns the dates", async () => {
+    setTestNow("2026-10-16T12:00:00-04:00");
+    const view = await getPaceView(noAds, { db });
+    expect(view).toMatchObject({ hasPlan: false, planLabel: null });
+    expect(view.thisMonth?.gaps).toBeUndefined();
   });
 });

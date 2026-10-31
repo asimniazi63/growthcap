@@ -37,6 +37,21 @@ function classify(key: string, parentKey: string | undefined, raw: number): { va
   return { value: raw, unit: "count" };
 }
 
+// A plan gap is keyed by metric, and every figure in it is in that metric's unit, except pctGap, which is a fraction.
+function walkPlanGaps(node: unknown, path: string, queryId: string, out: ClaimEntry[]): void {
+  if (!node || typeof node !== "object") return;
+  for (const [metric, gap] of Object.entries(node)) {
+    const def = METRICS[metric as MetricId];
+    if (!def || !gap || typeof gap !== "object") continue;
+    for (const [field, raw] of Object.entries(gap)) {
+      if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+      const unit: ClaimUnit = field === "pctGap" ? "rate" : def.unit === "money" ? "money" : def.unit === "rate" ? "rate" : "count";
+      const value = unit === "money" ? raw / 100 : unit === "rate" ? raw * 100 : raw;
+      out.push({ value, unit, queryId, path: `${path}.${metric}.${field}` });
+    }
+  }
+}
+
 function walk(node: unknown, path: string, key: string, parentKey: string | undefined, queryId: string, out: ClaimEntry[]): void {
   if (typeof node === "number" && Number.isFinite(node)) {
     out.push({ ...classify(key, parentKey, node), queryId, path });
@@ -45,6 +60,10 @@ function walk(node: unknown, path: string, key: string, parentKey: string | unde
   } else if (node && typeof node === "object") {
     for (const [k, v] of Object.entries(node)) {
       if (k === "untrusted") continue; // store text: never a source of numbers
+      if (k === "gapToPlan") {
+        walkPlanGaps(v, `${path}.${k}`, queryId, out);
+        continue;
+      }
       walk(v, `${path}.${k}`, k, key, queryId, out);
     }
   }

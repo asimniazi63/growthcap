@@ -5,10 +5,9 @@ import { fileURLToPath } from "node:url";
 import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "../../lib/db/client";
 import { adSpend, planTargets, plans } from "../../lib/db/schema";
+import { PLAN_METRICS, type PlanMetric } from "../../lib/pace/metrics";
 
 export const AD_CHANNELS = ["meta", "google", "tiktok"] as const;
-export const PLAN_METRICS = ["net_sales", "orders", "new_customer_orders", "aov", "returning_customer_rate"] as const;
-export type PlanMetric = (typeof PLAN_METRICS)[number];
 
 export interface AdSpendRow {
   date: string;

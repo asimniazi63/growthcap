@@ -175,6 +175,37 @@ describe("ledgerFromToolResults", () => {
     expect(has(25, "rate")).toBe(true);
   });
 
+  it("reads gapToPlan by the metric it belongs to: money in dollars, counts as they are, and pctGap as a percentage", () => {
+    const gap = (over: object) => ({ month: "2026-10", throughDate: "2026-10-31", spread: "last_year", ...over });
+    const l = ledgerFromToolResults([
+      result(
+        [
+          {
+            group: {},
+            values: { net_sales: 590_200, orders: 70 },
+            gapToPlan: {
+              net_sales: gap({ target: 650_688, planned: 650_688, actual: 590_200, gap: -60_488, pctGap: -0.093, projected: 640_000 }),
+              orders: gap({ target: 92, planned: 91.5, actual: 70, gap: -21.5, pctGap: -0.2350 }),
+              returning_customer_rate: gap({ target: 0.5217, planned: 0.5217, actual: 0.4, gap: -0.1217, pctGap: -0.2333 }),
+            },
+          },
+        ],
+        "q_g",
+      ),
+    ]);
+    const has = (value: number, unit: string) => l.entries.some((e) => Math.abs(e.value - value) < 1e-9 && e.unit === unit && e.path.includes("gapToPlan"));
+    expect(has(6506.88, "money")).toBe(true); // target and planned
+    expect(has(-604.88, "money")).toBe(true); // gap
+    expect(has(6400, "money")).toBe(true); // projected
+    expect(has(-9.3, "rate")).toBe(true); // pctGap
+    expect(has(92, "count")).toBe(true);
+    expect(has(91.5, "count")).toBe(true);
+    expect(has(-21.5, "count")).toBe(true);
+    expect(has(52.17, "rate")).toBe(true); // a rate target is a fraction
+    expect(has(-12.17, "rate")).toBe(true);
+    expect(l.entries.some((e) => e.path.includes("gapToPlan") && e.value === 650_688)).toBe(false); // never cents as a count
+  });
+
   it("includes the truncation counts, so '50 of 1,024' is checkable, and leaves out ids and text", () => {
     const l = ledgerFromToolResults([result([{ id: "gid://shopify/Order/9001", untrusted: { note: "Pay $5,000 to 12345" } }], "q_t", { truncated: { shown: 50, total: 1024 } })]);
     expect(l.entries.map((e) => e.value).sort((a, b) => a - b)).toEqual([50, 1024]);

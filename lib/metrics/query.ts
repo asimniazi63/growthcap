@@ -4,7 +4,9 @@ import type { Db } from "../db/client";
 import { adSpend, orderLines, orders, products, refundLines, refunds, variants } from "../db/schema";
 import { AppError } from "../errors";
 import type { TenantContext } from "../tenancy/context";
-import { assertInWindow, asOfOf, capLimit, dbFor, idList, limitField, loadWindow, parseInput, periodShape, queryIdFor, resolveRange, todayFor } from "../tools/common";
+import { loadPlan, planGap, type PlanGapMap } from "../pace/gap";
+import type { PacedMetric } from "../pace/metrics";
+import { assertInWindow, asOfOf, capLimit, dbFor, idList, limitField, loadWindow, parseInput, periodShape, queryIdFor, resolveRange, todayFor, type DataWindow } from "../tools/common";
 import { requireConnectedShop, type ToolResult } from "../tools/result";
 import { addDays, addMonths, monthEnd, monthOf, monthStart, previousRange, sameRangeLastYear, weekStart } from "./dates";
 import { AD_METRIC_IDS, METRIC_IDS, METRICS, type MetricId } from "./registry";
@@ -43,6 +45,7 @@ export interface MetricRow {
   change?: Values;
   pctChange?: Partial<Record<MetricId, number | null>>;
   share?: Values; // each group's part of the total, for metrics that add up
+  gapToPlan?: PlanGapMap; // against the brand's plan, for an ungrouped, unfiltered range inside one month
   untrusted?: { product?: string; variant?: string }; // store text: the titles for a product or variant group, so no second lookup is needed
 }
 
@@ -246,6 +249,17 @@ async function aggregate(src: Source, range: { from: string; to: string }, filte
   return groups;
 }
 
+// Last year's same month, one value per day, for spreading a monthly target. Null when the data doesn't cover that month.
+async function lastYearDaily(src: Source, win: DataWindow, month: string, metric: PacedMetric): Promise<number[] | null> {
+  const from = monthStart(addMonths(month, -12));
+  const to = monthEnd(addMonths(month, -12));
+  if (!win.first || !win.last || win.first > from || win.last < to) return null;
+  const groups = await aggregate(src, { from, to }, {}, ["day"]);
+  const out: number[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) out.push(valuesOf(groups.get(d) ?? blank({ day: d }), [metric])[metric] ?? 0);
+  return out;
+}
+
 // A product or variant group is an id. Its title (store text) is added to the row so the answer can name it.
 async function addTitles(db: Db, tenantId: string, rows: MetricRow[]): Promise<void> {
   const productIds = [...new Set(rows.map((r) => r.group.product).filter((x): x is string => !!x))];
@@ -382,6 +396,13 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
         r.pctChange[m] = before[m] ? change / before[m]! : null;
       }
     }
+  }
+
+  // Against the plan, when the figure is for the whole store over part or all of one month.
+  if (dims.length === 0 && Object.keys(filters).length === 0 && rows.length === 1) {
+    const plan = await loadPlan(db, ctx.tenantId);
+    const gap = await planGap({ plan: plan?.targets ?? null, range, metrics, values: rows[0]!.values, lastYearDaily: (month, metric) => lastYearDaily(src, win, month, metric) });
+    if (gap) rows[0]!.gapToPlan = gap;
   }
 
   const byFirstMetric = metrics[0]!;
