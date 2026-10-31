@@ -3,10 +3,12 @@
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ActionView } from "@/lib/actions/types";
 import { linkClaims, type MatchedClaim } from "@/lib/agent/links";
 import type { ProvenanceEntry } from "@/lib/agent/run";
 import type { Role } from "@/lib/tenancy/context";
 import type { ViewPayload } from "@/lib/views/types";
+import { ActionCard } from "../actions/action-card";
 import { PinButton } from "../views/pin-button";
 import { ViewRenderer } from "../views/view-renderer";
 import { MemoryCard, type MemoryCardState } from "./memory-card";
@@ -22,6 +24,8 @@ interface Verification {
 
 type Part = UIMessage["parts"][number];
 
+// These show their result (a view, a note card, an approval card), not a status line.
+const QUIET_TOOLS = new Set(["render_view", "remember", "propose_action", "draft_landing_page"]);
 const toolName = (p: Part) => (p.type.startsWith("tool-") ? p.type.slice("tool-".length) : null);
 const dataOf = <T,>(m: UIMessage, type: string): T | undefined => (m.parts.findLast((p) => p.type === type) as { data?: T } | undefined)?.data;
 
@@ -45,7 +49,7 @@ function ToolChip({ part }: { part: Part }) {
   );
 }
 
-function AssistantMessage({ message, role, currency }: { message: UIMessage; role: Role; currency: string }) {
+function AssistantMessage({ message, role, currency, userId }: { message: UIMessage; role: Role; currency: string; userId?: string }) {
   const provenanceList = dataOf<ProvenanceEntry[]>(message, "data-provenance") ?? [];
   const provenance = Object.fromEntries(provenanceList.map((p) => [p.queryId, p]));
   const verification = dataOf<Verification>(message, "data-verification");
@@ -53,8 +57,7 @@ function AssistantMessage({ message, role, currency }: { message: UIMessage; rol
   const lastText = message.parts.findLastIndex((p) => p.type === "text");
   const truncated = provenanceList.filter((p) => p.truncated);
   // A call that failed and was then made again successfully (the model fixing its own arguments) is not worth a red line.
-  // render_view and remember show their result (a view, a note card), not a status line.
-  const toolParts = message.parts.filter((p) => toolName(p) && toolName(p) !== "render_view" && toolName(p) !== "remember");
+  const toolParts = message.parts.filter((p) => toolName(p) && !QUIET_TOOLS.has(toolName(p)!));
   const chips = toolParts.filter((p, i) => (p as { state?: string }).state !== "output-error" || !toolParts.slice(i + 1).some((q) => toolName(q) === toolName(p) && (q as { state?: string }).state === "output-available"));
 
   return (
@@ -77,6 +80,10 @@ function AssistantMessage({ message, role, currency }: { message: UIMessage; rol
         if (p.type === "data-memory") {
           const note = (p as { data: { id: string; text: string; status: MemoryCardState } }).data;
           return <MemoryCard key={i} id={note.id} text={note.text} status={note.status} canDecide={role === "gc_admin" || role === "gc_partner"} />;
+        }
+        if (p.type === "data-action") {
+          const action = (p as { data: ActionView }).data;
+          return <ActionCard key={i} action={action} canDecide={role === "gc_admin" || role === "gc_partner"} me={userId} />;
         }
         if (p.type !== "text") return null;
         const text = (p as { text: string }).text;
@@ -116,11 +123,12 @@ interface ChatProps {
   defaultModelId: string;
   suggestions: readonly string[];
   currency: string;
+  userId?: string; // the signed-in person, so an action card can say "you"
 }
 
 // One conversation. The server keeps the model's history; the browser sends only the newest question and the thread id,
 // which arrives in the stream (data-thread) once the first answer starts.
-function ChatSession({ role, models, defaultModelId, suggestions, currency, threadId, initial, onSaved, onThread }: ChatProps & { threadId: string | null; initial: UIMessage[]; onSaved: () => void; onThread: (id: string) => void }) {
+function ChatSession({ role, models, defaultModelId, suggestions, currency, userId, threadId, initial, onSaved, onThread }: ChatProps & { threadId: string | null; initial: UIMessage[]; onSaved: () => void; onThread: (id: string) => void }) {
   const threadRef = useRef<string | null>(threadId);
   const transport = useMemo(
     () => new DefaultChatTransport({ api: "/api/chat", prepareSendMessagesRequest: ({ messages, body }) => ({ body: { ...body, messages: messages.slice(-1) } }) }),
@@ -173,7 +181,7 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, thre
                 <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-neutral-900 px-4 py-2 text-sm text-white">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</p>
               ) : (
                 <div className="max-w-full rounded-2xl border border-neutral-200 bg-white px-4 py-3">
-                  <AssistantMessage message={m} role={role} currency={currency} />
+                  <AssistantMessage message={m} role={role} currency={currency} userId={userId} />
                 </div>
               )}
             </li>

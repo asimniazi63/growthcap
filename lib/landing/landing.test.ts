@@ -1,0 +1,243 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ActionView, ProposeInput } from "../actions/types";
+import type { ExtraToolDeps } from "../agent/extra-types";
+import type { Db } from "../db/client";
+import { calendarEvents, products, tenants } from "../db/schema";
+import { createTestDb } from "../db/test-db";
+import type { TenantContext } from "../tenancy/context";
+import { buildLandingFiles, campaignNumbers, esc } from "./build";
+import { landingMutations, landingPageExecutor, pickTheme } from "./executor";
+import { buildDraftLandingPageTool, draftLandingPageInput } from "./tool";
+import type { LandingCampaign, LandingCopy, LandingPayload } from "./types";
+import { lintCopy, lintLanding, validateLanding } from "./validate";
+
+let db: Db;
+let ctx: TenantContext;
+let campaignId: string;
+
+const copy: LandingCopy = {
+  headline: "Black Friday at Solenne",
+  subhead: "Our best-loved skincare, together in one place for the weekend.",
+  bullets: ["Barrier support for dry skin", "Gentle daily routines"],
+  ctaLabel: "Shop the sale",
+  productHandles: ["hero-vitamin-c-serum", "barrier-cream"],
+};
+const catalogue = [
+  { handle: "hero-vitamin-c-serum", title: "Hero Vitamin C Serum" },
+  { handle: "barrier-cream", title: "Barrier Cream" },
+];
+const bfcm: LandingCampaign = { title: "Black Friday and Cyber Monday 2026", dateFrom: "2026-11-27", dateTo: "2026-11-30", details: "Planned: code and offer to be confirmed in November" };
+const handles = new Set(catalogue.map((p) => p.handle));
+
+beforeEach(async () => {
+  db = await createTestDb();
+  const [t] = await db.insert(tenants).values({ orgId: "org_s", name: "Solenne" }).returning({ id: tenants.id });
+  ctx = { tenantId: t!.id, orgId: "org_s", userId: "u1", role: "gc_partner", shop: { domain: "solenne.myshopify.com", timezone: "America/New_York", currency: "USD", status: "connected" } };
+  await db.insert(products).values([
+    { tenantId: ctx.tenantId, id: "gid://shopify/Product/1", title: "Hero Vitamin C Serum", handle: "hero-vitamin-c-serum", status: "ACTIVE" },
+    { tenantId: ctx.tenantId, id: "gid://shopify/Product/2", title: "Barrier Cream", handle: "barrier-cream", status: "ACTIVE" },
+    { tenantId: ctx.tenantId, id: "gid://shopify/Product/3", title: "Old Mask", handle: "old-mask", status: "DRAFT" },
+  ]);
+  const [c] = await db
+    .insert(calendarEvents)
+    .values({ tenantId: ctx.tenantId, dateFrom: bfcm.dateFrom, dateTo: bfcm.dateTo, title: bfcm.title, type: "promo", channel: "all", details: bfcm.details! })
+    .returning({ id: calendarEvents.id });
+  campaignId = c!.id;
+}, 60_000);
+
+afterEach(() => vi.unstubAllGlobals());
+
+function deps(over: Partial<ExtraToolDeps> = {}) {
+  const write = vi.fn();
+  const d: ExtraToolDeps = { ctx, db, model: {} as never, now: new Date("2026-11-02T17:00:00Z"), calls: new Map(), write, onStep: vi.fn(), ...over };
+  return { d, write };
+}
+
+function fakePropose() {
+  const seen: ProposeInput[] = [];
+  const propose = vi.fn(async (_db: Db, _ctx: TenantContext, input: ProposeInput): Promise<ActionView> => {
+    seen.push(input);
+    return {
+      id: "3f2b8c9e-4d4a-4f43-9d0e-0a1b2c3d4e5f", kind: input.kind, status: "proposed", title: input.title,
+      diff: { summary: "s", notes: ["Theme Check passed", "Theme Check warning: x line 4: y"], files: [] },
+      hypothesis: input.hypothesis, metric: input.metric, checkOn: input.checkOn, owner: "u1", dryRun: false, createdAt: "2026-11-02T17:00:00Z",
+    };
+  });
+  return { propose, seen };
+}
+
+const run = (tool: ReturnType<typeof buildDraftLandingPageTool>, input: unknown) => tool.execute!(input as never, { toolCallId: "t", messages: [], context: {} }) as unknown as Promise<Record<string, unknown>>;
+const toolInput = { campaignId: "Black Friday and Cyber Monday 2026", ...copy };
+
+describe("landing page: the copy is escaped and no price is typed", () => {
+  it("escapes HTML and Liquid in the copy", () => {
+    const draft = buildLandingFiles({ ...copy, headline: `<b>Big</b> {{ 1 }} & "sale"`, bullets: ["<script>x</script>", "{% if %}"] }, catalogue, { ...bfcm, title: `<img src=x onerror=alert(1)>` });
+    const section = draft.files[0]!.content;
+    expect(section).not.toContain("<b>Big");
+    expect(section).not.toContain("<script>");
+    expect(section).not.toContain("<img src=x");
+    expect(section).not.toContain("{{ 1 }}");
+    expect(section).toContain("&lt;b&gt;Big&lt;/b&gt;");
+    expect(esc(`a&b "c" {d}`)).toBe("a&amp;b &quot;c&quot; &#123;d&#125;");
+  });
+
+  it("rejects a template with a typed-in price", () => {
+    const section = buildLandingFiles(copy, catalogue, bfcm).files[0]!;
+    const opts = { handles, allowedNumbers: campaignNumbers(bfcm) };
+    expect(lintLanding([section], opts)).toEqual([]);
+    for (const typed of ["<p>Only $19.99 today</p>", "<p>Now 19.99</p>", "<p>Just 20 USD</p>", "<p>For 12 dollars</p>", "<p>Buy at 1,299</p>"]) {
+      const bad = { ...section, content: section.content.replace("</section>", `${typed}\n</section>`) };
+      expect(lintLanding([bad], opts), typed).not.toEqual([]);
+    }
+  });
+
+  it("keeps the model from typing prices or discounts into the copy, but allows the campaign's own numbers", () => {
+    expect(lintCopy({ ...copy, headline: "Everything for $20" })).not.toEqual([]);
+    expect(lintCopy({ ...copy, subhead: "Save 40% on the serum" })).not.toEqual([]);
+    expect(lintCopy({ ...copy, subhead: "Save 25% on the serum" }, campaignNumbers({ ...bfcm, details: "BFCM25 code (25% off sitewide)" }))).toEqual([]);
+    expect(lintCopy({ ...copy, headline: "Black Friday 2026" })).toEqual([]); // a year is fine
+    expect(lintCopy({ ...copy, bullets: ["See https://evil.example", "ok"] })).not.toEqual([]);
+    expect(lintCopy({ ...copy, bullets: ["<script>alert(1)</script>", "ok"] })).not.toEqual([]);
+    expect(lintCopy({ ...copy, ctaLabel: "x onclick=alert(1)" })).not.toEqual([]);
+  });
+
+  it("reads prices and stock from the store, never from the file", () => {
+    const section = buildLandingFiles(copy, catalogue, bfcm).files[0]!.content;
+    expect(section).toContain("{{ p.price | money }}");
+    expect(section).toContain("p.available");
+    expect(section).toContain("all_products['hero-vitamin-c-serum']");
+    expect(section).not.toMatch(/[$€£]/);
+  });
+});
+
+describe("landing page: handles and Liquid are checked", () => {
+  it("rejects a product handle the store does not have", async () => {
+    expect(() => buildLandingFiles({ ...copy, productHandles: ["no-such-product"] }, catalogue, bfcm)).toThrow(/no-such-product/);
+    const section = buildLandingFiles(copy, catalogue, bfcm).files[0]!;
+    expect(lintLanding([section], { handles: new Set(["barrier-cream"]) }).join(" ")).toContain("hero-vitamin-c-serum");
+
+    const { d, write } = deps();
+    const { propose } = fakePropose();
+    const out = await run(buildDraftLandingPageTool(d, propose), { ...toolInput, productHandles: ["hero-vitamin-c-serum", "old-mask", "ghost"] });
+    expect((out.error as { code: string; message: string }).code).toBe("INVALID_INPUT");
+    expect((out.error as { message: string }).message).toMatch(/old-mask.*ghost/);
+    expect(propose).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("passes Theme Check for a good draft, and fails invalid Liquid", async () => {
+    const draft = buildLandingFiles(copy, catalogue, bfcm);
+    const good = await validateLanding(draft.files, { handles, allowedNumbers: campaignNumbers(bfcm) });
+    expect(good.problems).toEqual([]);
+    expect(good.ok).toBe(true);
+    expect(good.notes).toContain("Theme Check passed");
+
+    const broken = draft.files.map((f) => (f.path.endsWith(".liquid") ? { ...f, content: f.content.replace("{%- endif -%}", "") } : f));
+    const bad = await validateLanding(broken, { handles, allowedNumbers: campaignNumbers(bfcm) });
+    expect(bad.ok).toBe(false);
+    expect(bad.problems.join(" ")).toMatch(/Theme Check/);
+  }, 60_000);
+});
+
+describe("draft_landing_page tool", () => {
+  it("only proposes: it never calls Shopify, and the card goes to the browser", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { d, write } = deps();
+    const { propose, seen } = fakePropose();
+    const out = await run(buildDraftLandingPageTool(d, propose), toolInput);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ proposed: true, actionId: "3f2b8c9e-4d4a-4f43-9d0e-0a1b2c3d4e5f", needsApproval: true, checks: ["Theme Check passed"] });
+    expect(propose).toHaveBeenCalledTimes(1);
+    const input = seen[0]!;
+    expect(input).toMatchObject({ kind: "landing_page", metric: "net_sales", checkOn: "2026-11-30" });
+    const payload = input.payload as LandingPayload;
+    expect(payload).toMatchObject({ campaignId, handles: ["hero-vitamin-c-serum", "barrier-cream"] });
+    expect(payload.files.map((f) => f.path)).toEqual([`sections/oasis-landing-${payload.slug}.liquid`, `templates/page.oasis-landing-${payload.slug}.json`]);
+    expect(landingPageExecutor.schema.safeParse(payload).success).toBe(true);
+    expect(write).toHaveBeenCalledWith(expect.objectContaining({ type: "data-action" }));
+  }, 60_000);
+
+  it("rejects fields the model should not have, and gives a recoverable error for a bad copy", async () => {
+    const { d } = deps();
+    const { propose } = fakePropose();
+    const tool = buildDraftLandingPageTool(d, propose);
+    expect(draftLandingPageInput.safeParse({ ...toolInput, tenantId: "x" }).success).toBe(false);
+    expect(draftLandingPageInput.safeParse(toolInput).success).toBe(true);
+    const out = await run(tool, { ...toolInput, subhead: "Only $9.99 this weekend" });
+    expect((out.error as { code: string }).code).toBe("INVALID_INPUT");
+    const neither = await run(tool, { ...copy });
+    expect((neither.error as { message: string }).message).toMatch(/campaignId or productHandle/);
+    expect(propose).not.toHaveBeenCalled();
+  });
+
+  it("names the planned campaigns when it can't find the one asked for, and reads only this brand's calendar", async () => {
+    const { d } = deps();
+    const { propose } = fakePropose();
+    const out = await run(buildDraftLandingPageTool(d, propose), { ...toolInput, campaignId: "Easter picnic" });
+    expect((out.error as { message: string }).message).toContain(campaignId);
+    const [other] = await db.insert(tenants).values({ orgId: "org_o", name: "Other" }).returning({ id: tenants.id });
+    const theirs = deps({ ctx: { ...ctx, tenantId: other!.id } });
+    const none = await run(buildDraftLandingPageTool(theirs.d, propose), { ...toolInput, campaignId });
+    expect((none.error as { message: string }).message).not.toContain(campaignId);
+  });
+});
+
+describe("landing page executor", () => {
+  const draft = buildLandingFiles(copy, catalogue, bfcm);
+  const payload: LandingPayload = { files: draft.files, slug: draft.slug, title: draft.title, handles: copy.productHandles };
+
+  it("has a strict payload that can write only the two pinned files", () => {
+    expect(landingPageExecutor.schema.safeParse(payload).success).toBe(true);
+    expect(landingPageExecutor.schema.safeParse({ ...payload, tenantId: "t" }).success).toBe(false);
+    const other = { ...payload, files: [payload.files[0]!, { path: "layout/theme.liquid", content: "x" }] };
+    expect(landingPageExecutor.schema.safeParse(other).success).toBe(false);
+  });
+
+  it("builds its mutations offline, with prices from `| money`, and a page that stays hidden", () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const ms = landingPageExecutor.mutations(payload);
+    expect(ms.map((m) => m.name)).toEqual(["themes", "themeFilesUpsert", "pageCreate"]);
+    expect(ms[0]!.query).toContain("UNPUBLISHED");
+    const files = (ms[1]!.variables as { files: { filename: string; body: { type: string; value: string } }[] }).files;
+    expect(files.map((f) => f.filename)).toEqual(draft.files.map((f) => f.path));
+    expect(files[0]!.body.value).toContain("| money");
+    expect(ms[2]!.variables).toMatchObject({ page: { isPublished: false, templateSuffix: `oasis-landing-${draft.slug}` } });
+    expect(landingMutations(payload)).toEqual(ms);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("shows the code and the check result on the card", async () => {
+    const diff = await landingPageExecutor.diff({ ...payload, campaignId }, ctx, db);
+    expect(diff.files?.map((f) => f.path)).toEqual(draft.files.map((f) => f.path));
+    expect(diff.notes).toContain("Theme Check passed");
+    expect(diff.mutations).toHaveLength(3);
+    await expect(landingPageExecutor.diff({ ...payload, handles: ["hero-vitamin-c-serum", "barrier-cream", "old-mask"] }, ctx, db)).rejects.toThrow(/old-mask/);
+  }, 60_000);
+
+  it("writes into the unpublished theme and creates a hidden page, never touching the live theme", async () => {
+    const sent: { query: string; variables: unknown }[] = [];
+    const answers: unknown[] = [
+      { themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/1", name: "Solenne live", role: "UNPUBLISHED", processing: false }, { id: "gid://shopify/OnlineStoreTheme/2", name: "Copy of Solenne", role: "UNPUBLISHED", processing: false }] } },
+      { themeFilesUpsert: { upsertedThemeFiles: draft.files.map((f) => ({ filename: f.path })) } },
+      { pageCreate: { page: { id: "gid://shopify/Page/9", title: draft.title, handle: `oasis-${draft.slug}`, isPublished: false } } },
+    ];
+    const graphql = vi.fn(async (query: string, variables?: unknown) => {
+      sent.push({ query, variables });
+      return answers.shift();
+    });
+    const result = (await landingPageExecutor.run(payload, { db, ctx, graphql })) as Record<string, unknown>;
+    expect(sent[1]!.variables).toMatchObject({ themeId: "gid://shopify/OnlineStoreTheme/2" });
+    expect(result).toMatchObject({ themeId: "gid://shopify/OnlineStoreTheme/2", pageId: "gid://shopify/Page/9", handle: `oasis-${draft.slug}`, published: false });
+    expect(String(result.editorUrlHint)).toContain("/store/solenne/themes/2/editor");
+  });
+
+  it("says so when the store has no unpublished theme", async () => {
+    const graphql = vi.fn(async () => ({ themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/5", name: "Live", role: "MAIN" }] } }));
+    await expect(landingPageExecutor.run(payload, { db, ctx, graphql })).rejects.toThrow(/no unpublished theme/);
+    expect(graphql).toHaveBeenCalledTimes(1);
+    expect(() => pickTheme([])).toThrow(/duplicate the live theme/);
+  });
+});

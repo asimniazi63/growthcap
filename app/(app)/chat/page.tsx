@@ -59,7 +59,7 @@ export default async function ChatPage() {
       ) : null}
       {!connected ? <ErrorBanner code="STORE_DISCONNECTED" role={ctx.role} /> : null}
 
-      <ChatClient role={ctx.role} models={models} defaultModelId={defaultModelId("chat")} suggestions={SUGGESTED_QUESTIONS} currency={ctx.shop?.currency ?? "USD"} />
+      <ChatClient role={ctx.role} models={models} defaultModelId={defaultModelId("chat")} suggestions={SUGGESTED_QUESTIONS} currency={ctx.shop?.currency ?? "USD"} userId={ctx.userId} />
 
       <NotesPanel notes={notes.filter((n) => n.status !== "dismissed").map((n) => ({ id: n.id, text: n.text, status: n.status === "confirmed" ? ("confirmed" as const) : ("proposed" as const) }))} role={ctx.role} />
 
