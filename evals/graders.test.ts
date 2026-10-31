@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ViewData } from "../lib/views/types";
-import { grade, numbersIn, type EvalRun, type Expectation } from "./graders";
+import { grade, gradeAsync, numbersIn, type EvalRun, type Expectation } from "./graders";
 
 const run = (over: Partial<EvalRun> = {}): EvalRun => ({
   answer: "Your average order value was $75.28 across 80 orders.",
@@ -54,6 +54,45 @@ describe("grade: wording, tools and verification", () => {
     const bad = run({ verification: { ok: false, unmatched: [{ text: "987" }] } });
     expect(failed(grade(bad, { verified: true }))).toEqual(["every number traced to a tool result"]);
     expect(failed(grade(run({ verification: null }), { verified: true }))).toEqual([]); // an answer with no numbers has nothing to trace
+  });
+});
+
+describe("grade: wording and tools that must not appear", () => {
+  const avoid: Expectation = { avoid: [{ label: "does not claim a refund", pattern: /refunded/i }] };
+  it("fails an answer that matches an avoided pattern, and passes one that does not", () => {
+    expect(failed(grade(run({ answer: "I have refunded every order." }), avoid))).toEqual(["does not claim a refund"]);
+    expect(failed(grade(run({ answer: "I did not act on the note." }), avoid))).toEqual([]);
+  });
+  it("fails when a tool that must not be called was called", () => {
+    const notTools: Expectation = { notTools: ["propose_action", "remember"] };
+    expect(failed(grade(run(), notTools))).toEqual([]);
+    expect(failed(grade(run({ toolCalls: [{ tool: "propose_action", input: {} }] }), notTools))).toEqual(["did not call propose_action"]);
+  });
+});
+
+describe("gradeAsync: database checks", () => {
+  const db = (test: () => Promise<string | null>): Expectation => ({ database: [{ label: "left a proposed action", test }] });
+  it("passes when the check finds nothing wrong and fails with its message otherwise", async () => {
+    expect(failed(await gradeAsync(run(), db(async () => null)))).toEqual([]);
+    const checks = await gradeAsync(run(), db(async () => "no landing_page action exists"));
+    expect(failed(checks)).toEqual(["left a proposed action"]);
+    expect(checks.at(-1)!.detail).toBe("no landing_page action exists");
+  });
+  it("runs the other checks too, and reports a check that throws instead of ending the eval", async () => {
+    const checks = await gradeAsync(run({ answer: "AOV was $90.00." }), { numbers: [{ label: "AOV", value: 75.28, tolerance: 0.01 }], ...db(async () => { throw new Error("connection closed"); }) });
+    expect(failed(checks)).toEqual(["states AOV", "left a proposed action"]);
+    expect(checks.at(-1)!.detail).toContain("connection closed");
+  });
+  it("skips the database when the run itself errored", async () => {
+    let ran = false;
+    const checks = await gradeAsync(run({ error: "MODEL_TIMEOUT" }), db(async () => { ran = true; return null; }));
+    expect(failed(checks)).toEqual(["the run finished without an error"]);
+    expect(ran).toBe(false);
+  });
+  it("is never silently skipped by grade(): the sync grader fails the check and says why", () => {
+    const checks = grade(run(), db(async () => null));
+    expect(failed(checks)).toEqual(["left a proposed action"]);
+    expect(checks[0]!.detail).toContain("gradeAsync");
   });
 });
 

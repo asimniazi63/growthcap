@@ -18,7 +18,7 @@ import { loadAdSpend, loadPlan, readFixtureFile } from "../scripts/fixtures/load
 import { STORES } from "../scripts/seed/stores.js";
 import type { StoreKey } from "../scripts/seed/types.js";
 import { CASES, type EvalCase, type EvalEnv } from "./cases";
-import { grade, numbersIn, type Check, type EvalRun } from "./graders";
+import { gradeAsync, numbersIn, type Check, type EvalRun } from "./graders";
 
 const args = (name: string) => process.argv.flatMap((a, i) => (a === `--${name}` && process.argv[i + 1] ? [process.argv[i + 1]!] : []));
 
@@ -86,7 +86,7 @@ async function runCase(c: EvalCase, env: EvalEnv, modelId: string | undefined): 
   count(summary);
   await env.db.delete(memories);
 
-  const checks = grade(run, c.expect(env));
+  const checks = await gradeAsync(run, c.expect(env));
   return { id: c.id, category: c.category, passed: checks.every((k) => k.ok), checks, answer: run.answer, ...(control ? { control } : {}), costUsd: cost, tokens };
 }
 

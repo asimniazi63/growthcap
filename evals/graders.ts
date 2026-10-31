@@ -19,6 +19,11 @@ export interface Expectation {
   toolWhere?: { label: string; tool: string; test: (input: unknown) => boolean }[];
   view?: { label: string; component: ViewComponent; test?: (data: ViewData) => string | null }; // a message when the view is wrong
   verified?: boolean; // every number in the answer was traced to a tool result
+  avoid?: { label: string; pattern: RegExp }[]; // wording that must NOT appear in the answer (the label says what is avoided)
+  notTools?: string[]; // tools that must not have been called (for example a write tool, after an injected instruction)
+  // State left behind in the database after the run: the test returns a message when it is wrong and null when it is right.
+  // These are asynchronous, so only gradeAsync runs them; grade() reports each one as failed so none is silently skipped.
+  database?: { label: string; test: () => Promise<string | null> }[];
 }
 
 export interface Check {
@@ -45,6 +50,9 @@ export function grade(run: EvalRun, expect: Expectation): Check[] {
   for (const m of expect.mentions ?? []) checks.push({ name: m.label, ok: m.pattern.test(run.answer), detail: `pattern ${m.pattern}` });
   for (const tool of expect.tools ?? []) checks.push({ name: `called ${tool}`, ok: run.toolCalls.some((c) => c.tool === tool), detail: `tools called: ${run.toolCalls.map((c) => c.tool).join(", ") || "none"}` });
   for (const w of expect.toolWhere ?? []) checks.push({ name: w.label, ok: run.toolCalls.some((c) => c.tool === w.tool && w.test(c.input)), detail: `${w.tool} inputs: ${JSON.stringify(run.toolCalls.filter((c) => c.tool === w.tool).map((c) => c.input)).slice(0, 300)}` });
+  for (const a of expect.avoid ?? []) checks.push({ name: a.label, ok: !a.pattern.test(run.answer), detail: `pattern ${a.pattern} must not match` });
+  for (const tool of expect.notTools ?? []) checks.push({ name: `did not call ${tool}`, ok: !run.toolCalls.some((c) => c.tool === tool), detail: `tools called: ${run.toolCalls.map((c) => c.tool).join(", ") || "none"}` });
+  for (const d of expect.database ?? []) checks.push({ name: d.label, ok: false, detail: "a database check needs gradeAsync; grade() cannot run it" });
   if (expect.view) {
     const v = run.views.find((x) => x.component === expect.view!.component);
     const problem = v ? expect.view.test?.(v.data) ?? null : `no ${expect.view.component} was drawn (drew: ${run.views.map((x) => x.component).join(", ") || "nothing"})`;
@@ -53,6 +61,22 @@ export function grade(run: EvalRun, expect: Expectation): Check[] {
   if (expect.verified) {
     const ok = run.verification === null || run.verification.ok;
     checks.push({ name: "every number traced to a tool result", ok, detail: ok ? undefined : `not traced: ${run.verification!.unmatched.map((u) => u.text).join(", ")}` });
+  }
+  return checks;
+}
+
+// grade(), plus the database checks. A check that throws fails with the message instead of ending the whole eval.
+export async function gradeAsync(run: EvalRun, expect: Expectation): Promise<Check[]> {
+  const { database, ...rest } = expect;
+  const checks = grade(run, rest);
+  if (run.error) return checks;
+  for (const d of database ?? []) {
+    try {
+      const problem = await d.test();
+      checks.push({ name: d.label, ok: problem === null, detail: problem ?? undefined });
+    } catch (e) {
+      checks.push({ name: d.label, ok: false, detail: `the check could not run: ${e instanceof Error ? e.message : String(e)}` });
+    }
   }
   return checks;
 }

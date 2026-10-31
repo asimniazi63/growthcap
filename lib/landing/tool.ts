@@ -88,7 +88,12 @@ export function buildDraftLandingPageTool(d: ExtraToolDeps, propose: Propose = l
           failures++;
           return { error: { code: (e as AppError).code, message: (e as AppError).message } };
         }
-        throw e;
+        // Anything else is a fault on our side. It is logged, and the model gets the reason in one line so it can tell the user
+        // the truth instead of guessing; the turn goes on.
+        const reason = e instanceof Error ? `${e.name}: ${e.message}`.replace(/\s+/g, " ").slice(0, 240) : "unknown";
+        console.error("[landing] the draft could not be prepared:", reason);
+        failures++;
+        return { error: { code: "INTERNAL_ERROR", message: `The draft could not be prepared because of a fault on the server (${reason}). Tell the user it failed; do not say it is waiting for approval.` } };
       }
     },
   });
