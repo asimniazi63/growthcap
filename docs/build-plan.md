@@ -174,6 +174,8 @@ As in the implementation plan's Day 0, with these specifics:
 
 ### T7: Why: multi-agent explanations (stretch B, about 4–5 hours)
 
+**Status (2026-10-31): code built, not yet checked live.** `driverTree` (midpoint split, parts add to the gap exactly), `explain_gap` with three investigators and a synthesis step, `get_calendar` and `get_notes` for GC roles only, the calendar and call-note loader, and five "why" eval cases in `evals/why-cases.ts` (deterministic graders, no judge model). Tests pass. Not done: the single-vs-multi-agent comparison table, and running the why evals (both wait for T11).
+
 **Deliverable:** "Why did we miss plan in October?" answered by parallel investigators, with causes from the data, the calendar and the call notes.
 
 - [ ] As in implementation plan T5-B: `driverTree` with the midpoint split, three parallel investigators on the chat model, synthesis on Opus 5.5, and `get_calendar` and `get_notes` for GC roles only.
@@ -183,6 +185,8 @@ As in the implementation plan's Day 0, with these specifics:
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ### T8: Plan in and act: document parsing and approved writes (stretch C and D, about 5 hours)
+
+**Status (2026-10-31): code built, not yet checked live.** Plan in: upload (PDF/CSV, 4 MB, GC roles), two-pass reader with quote verification, review screen at `/plan`, confirm swaps the active plan; `a try script, `scripts/plan-in-try.ts`, runs the real reader once. Act: `propose_action` plus executors for a Metric Target, an annotation and `VIPGLOW25`, on the T9 ledger. Scopes added to `shopify.app.toml`; `shopify app deploy` and the approval click in each store are next. Refund-rate and quarter-total targets come back as "not applied" because the plan holds monthly metrics only.
 
 **Deliverable:** the SOW PDF becomes a confirmed plan, and the agent proposes writes to Shopify that run only after a person approves.
 
@@ -196,6 +200,8 @@ Done in two passes ([priorities.md](priorities.md)): Plan in at priority 8, and 
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ### T9: Liquid landing pages (stretch E, about 3–4 hours)
+
+**Status (2026-10-31): code built, not yet checked live.** The action ledger (`lib/actions/`), the approval card, `/actions`, reviewer dry runs, and `draft_landing_page` (the model writes words only; the server builds the Liquid, prices come from `| money`, Theme Check runs). The theme-write spike script is `scripts/spikes/theme-write.ts`; Shopify gates `themeFilesUpsert` behind an exemption, so the Theme Access fallback may be needed.
 
 **Deliverable:** from chat, a GC partner asks for a landing page for a planned campaign, gets a validated Liquid page to review, and on approval it's written to an unpublished copy of the store's theme.
 
@@ -216,6 +222,8 @@ Done in two passes ([priorities.md](priorities.md)): Plan in at priority 8, and 
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ### T10: Operate and MCP: portfolio, Monday brief, Liam (stretch F and G, about 4–5 hours)
+
+**Status (2026-10-31): the in-app part is built; Slack and MCP are deferred by Asim.** `/portfolio` (GC roles), the weekly brief cron (Monday 06:00 UTC) through the shared agent loop, `/briefs` approval, delivery is a log line until Slack is added. Not built: the Slack webhook and posting, `/api/mcp`, Clerk OAuth, and the MCP tenant test.
 
 **Deliverable:** a staff portfolio across both brands, a weekly brief that GC approves before it's posted to Slack, and the read tools available to Liam over MCP.
 

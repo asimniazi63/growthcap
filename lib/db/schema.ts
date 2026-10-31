@@ -207,7 +207,7 @@ export const syncRuns = pgTable(
 
 // ---- The agent's audit log (T4). One row per run and one per step. Tool inputs are recorded (they are the model's own
 // arguments: dates, filters, ids); prompts, answers and tool results are not.
-export const AGENT_SOURCES = ["chat", "eval"] as const;
+export const AGENT_SOURCES = ["chat", "eval", "brief"] as const;
 export type AgentSource = (typeof AGENT_SOURCES)[number];
 export const AGENT_RUN_STATUSES = ["running", "ok", "error"] as const;
 

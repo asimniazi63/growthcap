@@ -12,6 +12,7 @@ import { checkClaims, ledgerFromToolResults } from "./checker";
 import { costUsd, resolveModel } from "./models";
 import { repairInstruction, SYSTEM_PROMPT, turnContext } from "./prompt";
 import { createModel, providerOptionsFor } from "./provider";
+import { buildExtraTools, trackedCalls } from "./extra-tools";
 import { buildTools, type ToolHooks } from "./tools";
 import { buildRememberTool, buildRenderViewTool, type TurnCall } from "./view-tools";
 
@@ -233,13 +234,32 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
         const step = (e: { tool: string; input: unknown; ok: boolean; errorCode?: string; latencyMs: number }) =>
           pending.push(recordStep(dbRef, { runId: runId!, tenantId: ctx.tenantId, stepIndex: summary.steps++, tool: e.tool, input: e.input, ok: e.ok, errorCode: e.errorCode, latencyMs: e.latencyMs }));
         const write = (chunk: UIMessageChunk) => writer.write(chunk);
+        const model = deps.model ?? createModel(spec);
+        const extra = buildExtraTools({
+          ctx,
+          db,
+          model,
+          now: deps.now ?? new Date(),
+          write,
+          onStep: step,
+          calls: trackedCalls(calls, (queryId, call) => {
+            // A result from a stretch tool: the number checker and the provenance popover read it like any other.
+            results.push(call.result);
+            inputs.push(call.input);
+            // explain_gap runs sub-agents on its own: their tokens count toward this turn's cost and the brand's daily cap.
+            const used = (call.result as { meta?: { usage?: { total?: { inputTokens?: number; outputTokens?: number } } } }).meta?.usage?.total;
+            summary.inputTokens += used?.inputTokens ?? 0;
+            summary.outputTokens += used?.outputTokens ?? 0;
+            provenance.set(queryId, { queryId, tool: call.tool, input: call.input, range: call.result.range, asOf: call.result.asOf, definitions: call.result.definitions, ...(call.result.truncated ? { truncated: call.result.truncated } : {}) });
+          }),
+        });
         const tools = {
           ...buildTools(ctx, hooks, { db }),
+          ...extra,
           render_view: buildRenderViewTool({ calls, write, onStep: step, titleProblems: (title) => checkClaims(title, ledgerFromToolResults(results), inputs).unmatched.map((u) => u.text) }),
           // Notes can be confirmed only by a Growth Capital admin or partner, so a client viewer is not offered the tool.
           ...(ctx.role !== "client_viewer" ? { remember: buildRememberTool({ ctx, db, write, onStep: step }) } : {}),
         };
-        const model = deps.model ?? createModel(spec);
         const onError = (e: unknown) => toAppError(e).code;
 
         const callModel = (messages: ModelMessage[], maxSteps: number) =>

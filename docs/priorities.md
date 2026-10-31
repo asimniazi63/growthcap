@@ -47,6 +47,8 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 
 - **2026-10-31, Asim:** T0, T1 and T2 are closed on GitHub. T3 stays open until the `orders/create` check is done; T4 stays open until the suggested questions are checked on the Vercel URL after the latest fixes are deployed. T5 is deferred and T6 ran next (done 2026-10-31, with a small `npm run eval` for its three cases). Until T5 is built there is no `npm run eval`, so T6's three eval cases are listed in its ticket and written when the harness exists.
 
+- **2026-10-31, Asim:** T7, T8 (C and D), T9 and T10 were built together in one parallel pass, with full testing, evals and live checks left to T11. Slack posting and MCP (T10) are deferred. T5's owed items fold into T11.
+
 ## What this order changes in the build plan
 
 - T3's `orders/create` webhook is required, not "if time allows".

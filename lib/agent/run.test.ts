@@ -125,11 +125,11 @@ describe("a normal turn", () => {
     expect(user).toContain("How did March 2026 go?");
   });
 
-  it("offers the six read tools plus render_view and remember, and no tool schema has a tenant, shop or org field", async () => {
+  it("offers the six read tools plus render_view, remember and the stretch tools, and no tool schema has a tenant, shop or org field", async () => {
     const model = scripted(say("Hello."));
     await collect(run(model).stream);
     const tools = model.doStreamCalls[0]!.tools ?? [];
-    expect(tools.map((t) => t.name).sort()).toEqual([...Object.keys(TOOL_DEFS), "render_view", "remember"].sort());
+    expect(tools.map((t) => t.name).sort()).toEqual([...Object.keys(TOOL_DEFS), "render_view", "remember", "explain_gap", "get_calendar", "get_notes", "propose_action", "draft_landing_page"].sort());
     const keys = new Set<string>();
     const walk = (n: unknown) => {
       if (Array.isArray(n)) n.forEach(walk);
