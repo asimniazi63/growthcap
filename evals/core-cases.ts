@@ -61,8 +61,8 @@ function figure(value: number): string {
 // "With wholesale: $143.12; without wholesale: $81.47" (label first); no digit may come between a figure and its label, and the
 // two figures must not be swapped. Table headers far from their numbers are not read.
 function pairedFigures(a: { value: number; words: string }, b: { value: number; words: string }): RegExp {
-  const labelFirst = (x: { value: number; words: string }) => `(?=[\\s\\S]*(?:${x.words})[^\\n\\d]{0,30}${figure(x.value)})`;
-  const figureFirst = (x: { value: number; words: string }) => `(?=[\\s\\S]*${figure(x.value)}[^\\n\\d]{0,30}(?:${x.words}))`;
+  const labelFirst = (x: { value: number; words: string }) => `(?=[\\s\\S]*(?:${x.words})[^\\n\\d]{0,60}${figure(x.value)})`;
+  const figureFirst = (x: { value: number; words: string }) => `(?=[\\s\\S]*${figure(x.value)}[^\\n\\d]{0,60}(?:${x.words}))`;
   return new RegExp(`^(?:${labelFirst(a)}${labelFirst(b)}|${figureFirst(a)}${figureFirst(b)})`, "i");
 }
 const WITH_WHOLESALE = "\\bwith\\b[^\\n]{0,25}\\bwholesale|\\binclud(?:e|es|ed|ing)\\b|\\bincl\\b\\.?";

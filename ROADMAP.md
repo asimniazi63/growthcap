@@ -62,7 +62,7 @@ The full design is in [docs/production/product-plan.md](docs/production/product-
 
 ## Known limitations
 
-- **Interim model.** Claude on Bedrock is blocked by an account restriction (AWS support case opened 2026-10-31), so the app runs on Devstral 2. Setting `BEDROCK_CLAUDE_ENABLED=true` switches the Claude entries on once access is granted. Nothing Claude-specific has been run: not the effort setting, not Opus synthesis, and the registry's prices are estimates. Devstral can pick the wrong metric. The number checker proves a number exists in a tool result, not that it is the right metric.
+- **Models.** Claude Sonnet 4.6 is the default; Kimi K3, MiniMax M2.5 and Devstral 2 are selectable. The Claude 5.5 models are still not approved for the account (AWS support case opened 2026-10-31); `BEDROCK_CLAUDE_ENABLED=true` switches them on and makes them the defaults once they are.
 - **Demo clock.** When the newest order is over 36 hours old, "today" becomes the day after it. On Solenne "last month" is October and "this month" has no data. Tidepool's data ends 2026-10-26, so there "last month" stays September. The chat says so in a banner. Evals pin the clock.
 - **Month-end edge.** On the last day of a month the chat's "this month" covers the whole month, so a gauge shows no estimate. `/pace` counts complete days only.
 - **One currency per brand.** Money is stored in each shop's own currency and nothing converts. The portfolio ranks brands by gap in cents, which is only meaningful when they share a currency. Both demo stores are USD. Multiple currencies are a non-goal.

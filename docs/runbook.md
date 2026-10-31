@@ -105,9 +105,9 @@ Reviewer demo logins: `reviewer-gc+clerk_test@example.com` is `gc_partner` in bo
 
 ## 8. The agent and models
 
-`lib/agent/models.ts` is the registry of models the server will use. The chat picker sends an app id (`devstral-2`, `claude-sonnet-5-5`, and so on), never a Bedrock id. Anything not in the registry is refused with `INVALID_INPUT`.
+`lib/agent/models.ts` is the registry of models the server will use. The chat picker sends an app id (`claude-sonnet-4-6`, `kimi-k3`, `minimax-m2-5`, `devstral-2`, and so on), never a Bedrock id. Anything not in the registry is refused with `INVALID_INPUT`.
 
-- With `BEDROCK_CLAUDE_ENABLED` unset, the only model is Devstral 2 (`mistral.devstral-2-123b`), used for every role.
+- With `BEDROCK_CLAUDE_ENABLED` unset, the models are Claude Sonnet 4.6 (`eu.anthropic.claude-sonnet-4-6`, the default for every role), Kimi K3 (`global.moonshotai.kimi-k3`, slow), MiniMax M2.5 (`minimax.minimax-m2.5`) and Devstral 2 (`mistral.devstral-2-123b`). All run in eu-central-1 with the app's own Bedrock key. Setting the flag adds the Claude 5.5 models and makes them the defaults.
 - With `BEDROCK_CLAUDE_ENABLED=true` (exactly that string), the Claude entries switch on: chat uses Sonnet 5.5, the "why" synthesis uses Opus 5.5, and the summary role uses Haiku 5.5 (nothing calls the summary role yet).
 - Turn it on only after AWS has granted Claude access to the account. Until then every Claude call fails with an access error. See [decisions/0000-setup.md](decisions/0000-setup.md). After flipping it, run `npm run eval`.
 - Prices in the registry feed only the spend cap, and they are estimates. Claude's reasoning effort is set through `output_config.effort`, which has not been verified on Bedrock.
@@ -121,7 +121,7 @@ Reviewer demo logins: `reviewer-gc+clerk_test@example.com` is `gc_partner` in bo
 `npm run eval -- [--case <id>]... [--model <id>] [--out <file>]` **[paid]** needs `AWS_BEARER_TOKEN_BEDROCK` in `.env.local`. It asks the real model each case against the fixture data in an in-memory database (not the live one), with the clock pinned per case. Graders are deterministic, and expected numbers come from the dataset and fixture files, not from `lib/metrics`. It exits 1 if a case fails.
 
 - The cases are in `evals/cases.ts` and `evals/why-cases.ts` (eight today: pacing gauge, remembered note, MER, and five "why" cases).
-- It writes `docs/evals/latest.md` and `latest.json` only when every case was run (no `--case`). The committed files are from the earlier three-case run (3 of 3 on Devstral 2). `--out` writes the run's JSON to a path you choose.
+- It writes `docs/evals/latest.md` and `latest.json` only when every case was run (no `--case`). The committed files are from the full 24-case run on Sonnet 4.6 (22 of 24; see the README for the two that failed). `--out` writes the run's JSON to a path you choose.
 - `AGENT_SINGLE_AGENT=true` leaves out `explain_gap`, to compare one agent with the multi-agent "why". It is for evals only.
 - Run it when you change `lib/agent`, `lib/tools`, prompts or `models.ts`. CI does not run it.
 - `docs/evals/reconciliation.md` comes from `reconcile:truth` (section 4), not from this.
@@ -194,5 +194,5 @@ Vercel builds and deploys every push to `main` (project `oasis-pace`). Environme
 | Webhook answers 401 | The HMAC failed. Check `SHOPIFY_API_SECRET` in Vercel. If new orders never arrive and nothing is logged, `shopify app deploy` may not have released the `orders/create` subscription yet |
 | Theme Check fails or times out | Theme Check runs inside the chat function on bundled docs (`next.config.ts` includes them) and may try one network fetch. If it can't finish in 30 seconds the draft fails with "Theme Check did not finish in time". This has not been verified on the deployed route. Check Vercel Logs. The bundled docs are included through `outputFileTracingIncludes` in `next.config.ts` |
 | `INTERNAL_ERROR` in chat | Provider and unexpected errors are shown as this. The detail is in Vercel Logs, and failed tool calls are in `agent_steps` |
-| Every Claude call fails with an access error | `BEDROCK_CLAUDE_ENABLED=true` was set before AWS granted access. Unset it to go back to Devstral |
+| Every Claude call fails with an access error | `BEDROCK_CLAUDE_ENABLED=true` was set before AWS granted access. Unset it to go back to Sonnet 4.6 |
 | `reconcile:truth` shows a difference | An extra order or a changed fixture. Add a note in `scripts/reconcile/explanations.ts`, or find the real cause |

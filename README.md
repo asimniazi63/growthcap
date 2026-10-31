@@ -79,7 +79,28 @@ The reasoning is recorded as short ADRs in [docs/decisions/](docs/decisions/).
 
 `npm run eval` asks the real model each case's question against the fixture data (an in-memory database, today's date pinned) and grades the answer with deterministic checks: the expected figures come from the dataset and the fixture files, never from the code under test. Results are written to [docs/evals/latest.md](docs/evals/latest.md).
 
-<!-- EVAL_TABLE -->
+The full run on the default model, Claude Sonnet 4.6 (commit `d9e0b3c`): **22 of 24 cases pass**, at an estimated $1.99.
+
+| Category | Passed | Cost |
+|---|---|---|
+| plan | 1 of 1 | $0.14 |
+| memory | 1 of 1 | $0.10 |
+| ads | 0 of 1 | $0.07 |
+| why | 5 of 5 | $0.58 |
+| lookup | 5 of 5 | $0.25 |
+| comparison | 2 of 3 | $0.21 |
+| storyline | 3 of 3 | $0.30 |
+| injection | 2 of 2 | $0.10 |
+| privacy | 1 of 1 | $0.02 |
+| isolation | 1 of 1 | $0.11 |
+| landing | 1 of 1 | $0.10 |
+
+The 24 cases are 15 core cases (5 lookups, 3 comparisons, 3 storylines, 2 prompt-injection cases, a refused request for a customer's email, a Tidepool user asking about Solenne), 5 "why did we miss plan" cases (one per planted storyline and one month where nothing was planted), the 3 Pace cases and a landing-page case. The two that failed in this run:
+
+- `mer-last-month`: the answer was right (MER 2.00) but it explained it as "for every $1 of ad spend, $2.00 of net sales", and the checker correctly refused those two dollar figures because no tool returned them.
+- `compare-may-aov-wholesale`: both figures were right ($143.12 with the wholesale order, $81.47 without); the grader's window between a label and its figure was too narrow for a table. The window was widened and the case re-run: it passes.
+
+The same suite on Devstral 2 passed 10 of 24 before the prompt fixes made after that run, so the model matters: Devstral's failures were mostly mislabelled figures (a store-wide refund total presented as one product's) and weak tool choices, not wrong numbers that slipped past the checker. The per-case results, answers and costs are in [docs/evals/latest.md](docs/evals/latest.md); the run does not depend on the day it is made or on the live store.
 
 ## Setup
 
@@ -96,7 +117,7 @@ npm run dev
 
 ## Limitations
 
-- **Interim model.** Claude on Bedrock was not yet approved for the account when this was built, so the agent runs on Devstral 2 (`mistral.devstral-2-123b`). The registry in `lib/agent/models.ts` switches to Claude with `BEDROCK_CLAUDE_ENABLED=true`. Devstral is weaker at open-ended questions: the numbers are always checked, but its explanations of why a month missed plan are less reliable than the figures behind them.
+- **Models.** The agent defaults to Claude Sonnet 4.6 on Bedrock (EU inference profile). Devstral 2, Kimi K3 (slow, about a minute for a simple question) and MiniMax M2.5 are selectable in the chat. The Claude 5.5 models were not approved for the account when this was built; `BEDROCK_CLAUDE_ENABLED=true` switches the defaults to them when they are. Spend is capped per brand per day (`TENANT_DAILY_BUDGET_USD`, default $5), and a "why" answer costs roughly ten cents on Sonnet.
 - **Demo clock.** The seeded data ends on 2026-10-31. If the newest order is more than 36 hours old the app treats the next day as today, so "last month" and "this month" stay meaningful.
 - **Theme writes.** Shopify lets an app write theme files only after an exemption request. Without it, an approved landing page is finished with `npm run landing:push`.
 - **Deferred.** Slack posting of the weekly brief and MCP access. Delivery of an approved brief is a log line until Slack is added.
