@@ -44,3 +44,16 @@ On the live Tidepool chat: "Which discount codes were used most last month?" ans
 
 - **The red "couldn't read" line** was a first tool call whose arguments failed schema validation (it never reached our tool code), which the model then repeated correctly. Such calls are now recorded in the audit log as `INVALID_INPUT` steps, with the model's arguments, and logged (`[agent] <tool> called with invalid input: ...`) so the cause is visible in Vercel Logs. The UI hides a failed tool line when the same tool succeeded afterwards.
 - **The demo clock (ruling, Asim asked for the realistic choice):** when the newest order is more than 36 hours old, "today" is now **the day after** that order (it was the order's own day). That is what a live store looks like on the morning after its last order. Solenne's data ends on Oct 31, so on the demo "last month" is October (the S9 story and the Loom's first question) and "this month" has no orders yet (`NO_DATA`, "no November data yet"). Tidepool's data ends Oct 26, so there "today" is Oct 27 and "last month" stays September. The banner now reads "counted as if it were the day after". The plan's text ("that order's date as today") is superseded by this.
+
+## Third live check: the 8 suggested questions on Solenne (2026-10-31)
+
+All 8 run with `chat:try` on Devstral 2 (about $0.045 in all, estimated prices). Five answers were right first time. Four problems, all fixed:
+
+- **A wrong number (AOV "with and without wholesale").** The model filtered to wholesale-only (`tags: ["wholesale"]`) and called that "including wholesale", so it reported $0.00. Fix: the query_metric tool description and the prompt now say that a tags filter keeps *only* those orders, and that "with and without X" is one query with no filter plus one with `excludeTags`.
+- **Wrong period label.** With no period the tools use the last 30 days, but the model wrote "this month" (Q6, Q7). The prompt now says so, and tells the model to state the period from the result's `range`.
+- **Cents in a table** (Q4, "75,120" for $751.20). The prompt now says dollars in tables too.
+- **Two checker false positives**, each with a test first: a day range ("September 1–30", "September 1 to 30", "1–30 September"; the end must be a real day and a dash takes no spaces, so "October 31 - 83 orders" still checks 83), and a digit inside a product or variant title the tools returned ("Daily Mineral SPF 50", "30 ml"). Names are taken only from title fields, never from notes, so an injected sentence cannot excuse its own numbers.
+
+Confirmed on a second paid run of Q1, Q4, Q6 and Q7 (about $0.033): dollars in the table, "October 2 to 31" stated, and Q7 now says the AOV is $76.26 with or without wholesale because there are no wholesale orders in the period (the wholesale order is S3, May 14). The two false positives left in that run ("30", "31" in a "to" range; "50" in "SPF 50") are what the checker changes above remove. They are covered by unit tests, not re-run live.
+
+Not a bug, but easy to misread: Solenne's data ends on 2026-10-31 04:50 UTC, so until about 36 hours later (2026-11-01 ~17:00 UTC) the clock is real and "last month" is September. After that the demo clock applies and "last month" is October (the S9 story). Eval cases must pin the clock (`setTestNow`) so they don't depend on the day they run.

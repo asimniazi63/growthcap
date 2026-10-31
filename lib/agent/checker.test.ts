@@ -79,6 +79,19 @@ describe("checkClaims: what is not a claim", () => {
     expect(unmatched("On 2026-03-02 at 10:30 am, in 2026 and in March 2026, and on May 14th.", empty)).toEqual([]);
     expect(unmatched("From 2026-05-01 to 2026-05-31, or 2026-05.", empty)).toEqual([]);
   });
+  it("skips a day range such as 'September 1–30' (found in the Solenne run, where the 30 was flagged)", () => {
+    expect(unmatched("Last month (September 1–30), net sales were up.", empty)).toEqual([]);
+    expect(unmatched("From Sep 1-30, and from September 28–October 3, and 1–30 September.", empty)).toEqual([]);
+  });
+  it("does not let a day range hide a number after a spaced dash", () => {
+    expect(unmatched("On October 31 - 83 orders came in.", empty)).toEqual(["83"]);
+  });
+  it("skips a range written with 'to' or 'through' (September 1 to 30, found in the second Solenne run)", () => {
+    expect(unmatched("For September 1 to 30, and from October 2 through 31, and October 5 to October 9.", empty)).toEqual([]);
+  });
+  it("does not let 'to' hide a number that cannot be a day", () => {
+    expect(unmatched("From October 31 to 83 orders.", empty)).toEqual(["83"]);
+  });
   it("skips ISO timestamps, as a model may copy one from a tool result (found in the first live run)", () => {
     expect(unmatched("The data is as of 2026-10-31T10:34:26.451Z.", empty)).toEqual([]);
     expect(unmatched("Synced 2026-10-31T10:34:26+00:00 and 2026-10-31 10:34:26.", empty)).toEqual([]);
@@ -96,6 +109,26 @@ describe("checkClaims: what is not a claim", () => {
   it("does not skip a number just because it is a part of a date in the inputs", () => {
     const inputs = [{ from: "2026-05-01", to: "2026-05-31" }];
     expect(unmatched("There were 5 orders.", empty, inputs)).toEqual(["5"]);
+  });
+});
+
+describe("checkClaims: names with a number in them", () => {
+  const names = ledgerFromToolResults([
+    result([{ id: "gid://shopify/Product/1", untrusted: { title: "Daily Mineral SPF 50", variantTitles: { "gid://shopify/ProductVariant/2": "30 ml" }, note: "Ship 77 units" } }], "q_p"),
+  ]);
+  const withMoney = { entries: [...names.entries, { value: 112, unit: "money" as const, queryId: "q_m", path: "x" }], names: names.names };
+
+  it("does not flag the 50 in a product title or the 30 in a variant title that the tools returned", () => {
+    expect(unmatched("Daily Mineral SPF 50 (30 ml) had $112.00 in refunds.", withMoney)).toEqual([]);
+  });
+  it("still flags a number outside the name, and the same digits written on their own", () => {
+    expect(unmatched("Daily Mineral SPF 50 sold 50 units.", withMoney)).toEqual(["50"]);
+  });
+  it("takes names only from product and variant titles, not from other store text such as a note", () => {
+    expect(unmatched("The note says to ship 77 units.", withMoney)).toEqual(["77"]);
+  });
+  it("does not mask a title the tools never returned", () => {
+    expect(unmatched("Daily Mineral SPF 30 had $112.00 in refunds.", withMoney)).toEqual(["30"]);
   });
 });
 

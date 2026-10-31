@@ -16,6 +16,7 @@ export interface ClaimEntry {
 
 export interface ClaimLedger {
   entries: ClaimEntry[];
+  names?: string[]; // product and variant titles with a digit in them ("SPF 50"): part of a name, not a claim
 }
 
 const METRIC_MAPS = new Set(["values", "previous", "change"]);
@@ -48,18 +49,34 @@ function walk(node: unknown, path: string, key: string, parentKey: string | unde
   // Strings (ids, dates, text) and null carry no claimable numbers.
 }
 
+// Only titles are taken, never other store text such as a note, so an injected sentence can't excuse its own numbers.
+const NAME_KEYS = new Set(["title", "product", "variant"]);
+
+function collectNames(node: unknown, key: string, parentKey: string | undefined, underUntrusted: boolean, out: Set<string>): void {
+  if (typeof node === "string") {
+    if (underUntrusted && (NAME_KEYS.has(key) || parentKey === "variantTitles") && /\d/.test(node) && node.length <= 80) out.add(node);
+  } else if (Array.isArray(node)) {
+    node.forEach((item) => collectNames(item, key, parentKey, underUntrusted, out));
+  } else if (node && typeof node === "object") {
+    for (const [k, v] of Object.entries(node)) collectNames(v, k, key, underUntrusted || k === "untrusted", out);
+  }
+}
+
 export function ledgerFromToolResults(results: ToolResult<unknown>[]): ClaimLedger {
   const entries: ClaimEntry[] = [];
+  const names = new Set<string>();
   results.forEach((r) => {
     walk(r.data, "data", "data", undefined, r.queryId, entries);
     if (r.truncated) walk(r.truncated, "truncated", "truncated", undefined, r.queryId, entries);
+    collectNames(r.data, "data", undefined, false, names);
   });
-  return { entries };
+  return { entries, names: [...names] };
 }
 
 // ---- Reading the answer
 
 const MONTH = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)";
+const DAY = "(?:0?[1-9]|[12]\\d|3[01])(?:st|nd|rd|th)?"; // 1 to 31
 const SKIP_PATTERNS: RegExp[] = [
   /\b(?:https?|gid):\/\/\S+/g, // links and Shopify ids
   /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?/g, // ISO timestamps
@@ -68,13 +85,18 @@ const SKIP_PATTERNS: RegExp[] = [
   /#\d+/g, // order numbers
   /\bCUST_[0-9a-f]+/g,
   /\b[A-Za-z][A-Za-z_-]*\d+[A-Za-z0-9_-]*\b/g, // codes and SKUs: WELCOME10, SOL-01A, P_007, Q3
+  // Day ranges come first so the end day is masked too. A dash takes no spaces, so "October 31 - 83 orders" still checks 83,
+  // and the end must be a real day, so "October 31 to 83 orders" does too.
+  new RegExp(`\\b${MONTH}[a-z]*\\.?\\s+${DAY}(?:[–—-]|\\s+(?:to|through|thru)\\s+)(?:${MONTH}[a-z]*\\.?\\s+)?${DAY}(?!\\d)\\b`, "g"), // September 1–30, Sep 1 to 30, Sep 28–Oct 3
+  new RegExp(`\\b${DAY}[–—-]${DAY}\\s+${MONTH}[a-z]*\\b`, "g"), // 1–30 September
   new RegExp(`\\b${MONTH}[a-z]*\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?\\b`, "g"), // May 14th
   new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${MONTH}[a-z]*\\b`, "g"), // 14 May
   /^[ \t]*\d+[.)](?=\s)/gm, // list numbering
 ];
 
-function mask(text: string): string {
+function mask(text: string, names: string[] = []): string {
   let out = text;
+  for (const name of names) out = out.split(name).join(" ".repeat(name.length));
   for (const re of SKIP_PATTERNS) out = out.replace(re, (m) => " ".repeat(m.length));
   return out;
 }
@@ -103,7 +125,7 @@ export interface ClaimCheck {
 
 export function checkClaims(answer: string, ledger: ClaimLedger, toolInputs: unknown[]): ClaimCheck {
   const skip = numbersInInputs(toolInputs);
-  const masked = mask(answer);
+  const masked = mask(answer, ledger.names);
   const result: ClaimCheck = { ok: true, matched: [], unmatched: [] };
 
   for (const m of masked.matchAll(TOKEN)) {
