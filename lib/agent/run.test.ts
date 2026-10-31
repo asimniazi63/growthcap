@@ -147,7 +147,7 @@ describe("a normal turn", () => {
     await collect(stream);
     await finished;
     const r = await lastRun();
-    expect(r).toMatchObject({ tenantId: ctx.tenantId, userId: "user_1", role: "gc_admin", source: "chat", modelId: "devstral-2", status: "ok", steps: 1, inputTokens: 200, outputTokens: 40 });
+    expect(r).toMatchObject({ tenantId: ctx.tenantId, userId: "user_1", role: "gc_admin", source: "chat", modelId: "claude-sonnet-4-6", status: "ok", steps: 1, inputTokens: 200, outputTokens: 40 });
     expect(r.costMicros).toBeGreaterThan(0);
     const steps = await db.select().from(agentSteps).where(eq(agentSteps.runId, r.id));
     expect(steps).toEqual([expect.objectContaining({ tool: "query_metric", ok: true, rowCount: 1, tenantId: ctx.tenantId, input: expect.objectContaining({ from: march.from }) })]);

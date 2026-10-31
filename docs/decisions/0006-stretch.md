@@ -22,7 +22,26 @@ shared files (`run.ts`, `prompt.ts`, `schema.ts`, `shopify.app.toml`, `next.conf
   quarter total, a weekend goal) are listed as "not applied", never dropped silently.
 - **Deferred:** Slack posting, MCP, the Theme Access fallback for theme writes, a single-vs-multi-agent comparison table.
 
-## Open until T11
+## Live checks and reviews (2026-10-31)
 
-Live checks for every piece, the why/plan-in/landing evals, `shopify app deploy` and the scope approvals in both stores, and a
-Theme Check run on the deployed route (it reads bundled docs and tries one network fetch).
+Run on the live site against Solenne with Devstral 2. Plan in read the SOW correctly (the three monthly net sales targets with
+their pages; the refund rate, the quarter total and the Black Friday goal came back as "not applied"). A Metric Target was approved and
+written to the store. A landing page was drafted, approved, refused by Shopify (the exemption), recorded as failed with the reason, and
+finished with `npm run landing:push`. The portfolio and the weekly brief (cron, approval, log delivery) worked. Why answers a
+finished month and refuses an unfinished one.
+
+Three independent reviews (ledger and landing pages; plan in, briefs and portfolio; Why and the agent wiring) found 30 issues. Fixed:
+writes retried after a 5xx; actions stuck in running; an unwritten landing page recorded as done; a typed price passing the lint
+("29USD", full-width digits); the cron brief running with write tools; a reviewer's brief approval changing real state; plan in's
+PDF page count, row cap, repeat reads, budget and quote display; investigators answering with their tool results stripped on Bedrock;
+a figure in a calendar title excusing itself in the checker; explain_gap spend not counted on a repeat call. Known and left: the
+payload hash proves a payload did not change in the database but is not a signature; two landing pages with the same slug overwrite
+each other; annotation dates for stores at UTC+12 or more; a Shopify target is "Total sales" (with tax and shipping), not net sales;
+the portfolio assumes one currency.
+
+Eval finding: on Devstral the free-form "why" answers were unreliable because the investigators chose the wrong tools. The evidence is
+now gathered in code and the model only interprets it.
+
+## Open until the final ship
+
+Claude on Bedrock (the evals ran on Devstral), the exemption for theme writes, Slack and MCP.

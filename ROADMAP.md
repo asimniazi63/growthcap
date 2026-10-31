@@ -15,7 +15,7 @@ What is built, what was left out on purpose, what production would add, and what
 | T6 | Pace | Done and checked live. Plan vs actual, generated views, pinned views, saved threads, confirmed notes, ad spend (MER, CAC). 3 of 3 evals pass |
 | T7 | Why | Code built, tests pass, not checked live. The single-vs-multi-agent comparison and the five "why" evals have not been run |
 | T8 | Plan in, Act | Code built, not checked live. SOW and plan-sheet upload with review, and three approved writes (Metric Target, annotation, discount off). Needs `shopify app deploy` and an approval in each store |
-| T9 | Landing pages | Code built, not checked live. Copy-only drafts, server-built Liquid, Theme Check, approval card and action ledger. Theme writes need Shopify's exemption (below) |
+| T9 | Landing pages | Built and checked live. Copy-only drafts, server-built Liquid, Theme Check, approval card and action ledger. Theme writes need Shopify's exemption (below); `npm run landing:push` finishes an approved page through the Shopify CLI |
 | T10 | Portfolio and Monday brief | In-app part built, not checked live. Slack and MCP are deferred |
 | T11 | Final ship | Not started. Always last |
 
@@ -24,7 +24,7 @@ What is built, what was left out on purpose, what production would add, and what
 - **T5, core ship.** Asim put T6 first on 2026-10-31. Still owed: the 15 eval cases (8 exist and `npm run eval` works), the README (none yet), and the backup Loom. T11 picks them up.
 - **Slack posting (T10).** No webhook is set up. An approved brief is logged, not posted. Slack goes in `lib/briefs/deliver.ts`, after the approval check.
 - **MCP server (T10).** `/api/mcp`, token-per-org access and the MCP tenant test are not built, so Liam cannot reach the read tools from Claude yet.
-- **Theme Access fallback (T9).** Shopify lets an app write theme files only with an exemption. Without it, the approval returns "not written" and gives a `shopify theme push` command. A password-based CLI path is not built.
+- **Theme writes (T9).** Shopify lets an app write theme files only with an exemption. Without it, the approval returns "not written" and `npm run landing:push -- <action id>` finishes the page through the Shopify CLI. Next: request the exemption, or use a Theme Access password so a server job can push.
 - **`read_all_orders`.** Requesting it means choosing a distribution model, which cannot be undone. Left until needed (see limitations).
 - **Single-vs-multi-agent comparison (T7).** The eval switch exists (`AGENT_SINGLE_AGENT`). The run and the table do not.
 

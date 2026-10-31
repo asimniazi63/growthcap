@@ -30,11 +30,44 @@ const CLAUDE_REGION = "eu-central-1";
 export const MODELS: ModelSpec[] = [
   {
     id: "devstral-2",
-    label: "Devstral 2 (interim)",
+    label: "Devstral 2",
     bedrockId: "mistral.devstral-2-123b",
     region: "eu-central-1",
     inputUsdPerMTok: 0.4,
     outputUsdPerMTok: 2.0,
+    priceBasis: "estimated",
+    streamsToolCalls: false,
+    isEnabled: () => true,
+  },
+  {
+    id: "claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6",
+    bedrockId: "eu.anthropic.claude-sonnet-4-6", // the EU inference profile
+    region: "eu-central-1",
+    inputUsdPerMTok: 3,
+    outputUsdPerMTok: 15,
+    priceBasis: "estimated", // Anthropic's list price; Bedrock's can differ
+    streamsToolCalls: true,
+    isEnabled: () => true,
+  },
+  {
+    id: "kimi-k3",
+    label: "Kimi K3 (slow)",
+    bedrockId: "global.moonshotai.kimi-k3", // the global inference profile
+    region: "eu-central-1",
+    inputUsdPerMTok: 1, // a cautious guess: the price is not confirmed, and it only feeds the spend cap
+    outputUsdPerMTok: 4,
+    priceBasis: "estimated",
+    streamsToolCalls: false,
+    isEnabled: () => true,
+  },
+  {
+    id: "minimax-m2-5",
+    label: "MiniMax M2.5",
+    bedrockId: "minimax.minimax-m2.5",
+    region: "eu-central-1",
+    inputUsdPerMTok: 0.5, // a cautious guess: the price is not confirmed, and it only feeds the spend cap
+    outputUsdPerMTok: 2,
     priceBasis: "estimated",
     streamsToolCalls: false,
     isEnabled: () => true,
@@ -80,10 +113,11 @@ export const MODELS: ModelSpec[] = [
 export const availableModels = (env: Env = process.env): ModelSpec[] => MODELS.filter((m) => m.isEnabled(env));
 
 const CLAUDE_DEFAULTS: Record<ModelRole, string> = { chat: "claude-sonnet-5-5", why: "claude-opus-5-5", summary: "claude-haiku-5-5" };
-const INTERIM_DEFAULT = "devstral-2";
+// Sonnet 4.6 is the default until Claude 5.5 is approved for the account (BEDROCK_CLAUDE_ENABLED=true switches the defaults to it).
+const DEFAULT_MODEL = "claude-sonnet-4-6";
 
 export function defaultModelId(role: ModelRole, env: Env = process.env): string {
-  return claudeOn(env) ? CLAUDE_DEFAULTS[role] : INTERIM_DEFAULT;
+  return claudeOn(env) ? CLAUDE_DEFAULTS[role] : DEFAULT_MODEL;
 }
 
 // `requested` comes from the client (the picker). Only ids in the registry that are switched on are accepted.
