@@ -1,6 +1,6 @@
 import "@shopify/shopify-api/adapters/web-api";
 import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
-import { REQUIRED_SCOPES } from "./connect";
+import { REQUESTED_SCOPES } from "./connect";
 import { SHOPIFY_API_VERSION } from "./version";
 
 type ShopifyApi = ReturnType<typeof shopifyApi>;
@@ -17,7 +17,7 @@ export function shopify(): ShopifyApi {
   cached ??= shopifyApi({
     apiKey: env("SHOPIFY_API_KEY"),
     apiSecretKey: env("SHOPIFY_API_SECRET"),
-    scopes: [...REQUIRED_SCOPES],
+    scopes: [...REQUESTED_SCOPES],
     hostName: new URL(env("SHOPIFY_APP_URL")).host,
     hostScheme: "https",
     apiVersion: SHOPIFY_API_VERSION as ApiVersion,

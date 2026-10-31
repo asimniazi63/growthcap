@@ -159,6 +159,17 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
               </button>
             </form>
           ) : null}
+          {ctx.role === "gc_admin" && isConnected && shop ? (
+            <form action="/api/shopify/install" method="get" className="mt-5 flex flex-col gap-2">
+              <input type="hidden" name="shop" value={shop.domain} />
+              <div>
+                <button type="submit" className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">
+                  Update permissions
+                </button>
+              </div>
+              <p className="text-sm text-neutral-500">Use this after a new version of the app asks for more access. Shopify shows what is new, and the store stays connected.</p>
+            </form>
+          ) : null}
           {ctx.role !== "gc_admin" && !isConnected ? <p className="mt-4 text-sm text-neutral-500">An admin needs to connect the store.</p> : null}
         </div>
       )}
