@@ -3,6 +3,7 @@ import { OrganizationList, OrganizationSwitcher, UserButton } from "@clerk/nextj
 import { Brand } from "@/components/shell/brand";
 import { CommandPalette, PaletteButton } from "@/components/shell/command-palette";
 import { Nav } from "@/components/shell/nav";
+import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { ToastProvider } from "@/components/ui/toast";
 import { listActions } from "@/lib/actions/ledger";
 import { getDb } from "@/lib/db/client";
@@ -40,8 +41,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/overview" appearance={switcher} />
           <PaletteButton />
           <Nav variant="side" pending={pending} />
-          <div className="border-t border-line pt-4">
-            <UserButton showName appearance={{ elements: { rootBox: "w-full", userButtonTrigger: "w-full justify-start rounded-[10px] px-2 py-1.5" } }} />
+          <div className="flex items-center gap-1 border-t border-line pt-4">
+            <div className="min-w-0 flex-1">
+              <UserButton showName appearance={{ elements: { rootBox: "w-full", userButtonTrigger: "w-full justify-start rounded-[10px] px-2 py-1.5" } }} />
+            </div>
+            <ThemeToggle />
           </div>
         </aside>
 
@@ -51,6 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Brand href="/overview" />
               <div className="flex items-center gap-2">
                 <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/overview" />
+                <ThemeToggle />
                 <UserButton />
               </div>
             </div>

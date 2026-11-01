@@ -138,18 +138,17 @@ export function PaceChart({ series, currency, compact = false }: { series: PaceS
           {hasEstimate ? (
             <>
               <path d={`M${x(D).toFixed(1)} ${lastY.toFixed(1)} L${x(N).toFixed(1)} ${y(series.projected!).toFixed(1)}`} fill="none" className="stroke-brand" strokeWidth={2.8} strokeDasharray="2 6" strokeLinecap="round" />
-              <circle cx={x(N)} cy={y(series.projected!)} r={4.5} fill="#fff" className="stroke-brand" strokeWidth={2.2} strokeDasharray="2 2" />
+              <circle cx={x(N)} cy={y(series.projected!)} r={4.5} className="fill-surface stroke-brand" strokeWidth={2.2} strokeDasharray="2 2" />
             </>
           ) : null}
-          <circle cx={x(D)} cy={lastY} r={5} fill="#fff" className="stroke-brand" strokeWidth={2.5} />
+          <circle cx={x(D)} cy={lastY} r={5} className="fill-surface stroke-brand" strokeWidth={2.5} />
           <text
             x={x(D) - 8}
             y={clamp(lastY + (ahead ? -12 : 20), pt + fs, H - pb - 4)}
             textAnchor="end"
             fontSize={fs + 0.5}
             fontWeight={650}
-            className="fill-brand-strong"
-            stroke="#fff"
+            className="fill-brand-strong stroke-surface"
             strokeWidth={3}
             strokeLinejoin="round"
             style={{ paintOrder: "stroke" }}
@@ -183,7 +182,7 @@ export function PaceChart({ series, currency, compact = false }: { series: PaceS
         {!compact && hd ? (
           <div
             aria-hidden
-            className="pointer-events-none absolute z-10 rounded-[10px] bg-ink px-3 py-2 text-[12.5px] leading-[1.45] whitespace-nowrap text-white shadow-pop"
+            className="pointer-events-none absolute z-10 rounded-[10px] bg-inverse px-3 py-2 text-[12.5px] leading-[1.45] whitespace-nowrap text-on-inverse shadow-pop"
             style={{ left: clamp(hx, 78, Math.max(78, width - 78)), top: hTop, transform: tipBelow ? "translate(-50%, 14px)" : "translate(-50%, calc(-100% - 12px))" }}
           >
             <div>{shortDate(hd.date)}</div>
@@ -198,7 +197,7 @@ export function PaceChart({ series, currency, compact = false }: { series: PaceS
             {hGap !== null ? (
               <div className={hGap >= 0 ? "text-[#86efac]" : "text-[#fdba9f]"}>{hGap === 0 ? "On plan" : `${money(Math.abs(hGap))} ${hGap > 0 ? "ahead" : "behind"}`}</div>
             ) : (
-              <div className="text-white/70">Not complete yet</div>
+              <div className="text-on-inverse/70">Not complete yet</div>
             )}
           </div>
         ) : null}

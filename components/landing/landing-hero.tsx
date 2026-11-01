@@ -26,7 +26,7 @@ export function LandingHero() {
         <figure className="m-0 min-w-0">
           <div className="card p-5 shadow-pop sm:px-6 sm:py-5 lg:-rotate-[0.6deg]">
             <div className="mb-4 flex justify-end">
-              <p className="max-w-[85%] rounded-[18px] bg-ink px-[1.125rem] py-[0.6875rem] text-white">How are we pacing this month?</p>
+              <p className="max-w-[85%] rounded-[18px] bg-inverse px-[1.125rem] py-[0.6875rem] text-on-inverse">How are we pacing this month?</p>
             </div>
             <p className="leading-[1.75]">
               Net sales are <span className="verified-figure cursor-default">$1,018.60</span>, ahead of plan by <span className="verified-figure cursor-default">$75.44</span>. On this pace the month lands at about{" "}

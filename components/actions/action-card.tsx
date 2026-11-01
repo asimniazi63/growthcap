@@ -94,9 +94,9 @@ function pretty(value: unknown, max = 4000): string {
 // A dark, scrollable block for code the reviewer should read before approving: a Liquid file or the GraphQL that would run.
 function CodeBlock({ title, children }: { title: string; children: string }) {
   return (
-    <div className="overflow-hidden rounded-xl bg-ink text-white">
-      <p className="break-all border-b border-white/10 px-3 py-2 font-mono text-xs text-white/70">{title}</p>
-      <pre className="max-h-72 overflow-auto px-3 py-3 font-mono text-xs leading-relaxed text-white">
+    <div className="overflow-hidden rounded-xl bg-inverse text-on-inverse">
+      <p className="break-all border-b border-on-inverse/10 px-3 py-2 font-mono text-xs text-on-inverse/70">{title}</p>
+      <pre className="max-h-72 overflow-auto px-3 py-3 font-mono text-xs leading-relaxed text-on-inverse">
         <code>{children}</code>
       </pre>
     </div>
@@ -107,11 +107,11 @@ function Mutations({ list }: { list: Mutation[] }) {
   return (
     <div className="space-y-3">
       {list.map((m, i) => (
-        <div key={i} className="overflow-hidden rounded-xl bg-ink text-white">
-          <p className="break-all border-b border-white/10 px-3 py-2 font-mono text-xs text-white/70">{m.name}</p>
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-3 font-mono text-xs leading-relaxed text-white">{m.query}</pre>
-          <p className="border-t border-white/10 px-3 pt-2 text-xs text-white/60">Variables</p>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-3 pb-3 pt-1 font-mono text-xs leading-relaxed text-white">{pretty(m.variables)}</pre>
+        <div key={i} className="overflow-hidden rounded-xl bg-inverse text-on-inverse">
+          <p className="break-all border-b border-on-inverse/10 px-3 py-2 font-mono text-xs text-on-inverse/70">{m.name}</p>
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-3 font-mono text-xs leading-relaxed text-on-inverse">{m.query}</pre>
+          <p className="border-t border-on-inverse/10 px-3 pt-2 text-xs text-on-inverse/60">Variables</p>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-3 pb-3 pt-1 font-mono text-xs leading-relaxed text-on-inverse">{pretty(m.variables)}</pre>
         </div>
       ))}
     </div>

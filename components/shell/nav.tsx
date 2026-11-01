@@ -49,7 +49,7 @@ function SideLink({ item, pathname, pending = 0 }: { item: Item; pathname: strin
       <Icon className={`size-[1.125rem] ${active ? "text-brand" : "text-ink-3"}`} aria-hidden />
       {item.label}
       {pending > 0 && item.href === "/actions" ? (
-        <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1.5 text-xs font-bold text-white">
+        <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1.5 text-xs font-bold text-on-brand">
           {pending}
           <span className="sr-only"> waiting for approval</span>
         </span>
@@ -69,7 +69,7 @@ function TopLink({ item, pathname, pending = 0 }: { item: Item; pathname: string
     >
       <Icon className="size-4" aria-hidden />
       {item.label}
-      {pending > 0 && item.href === "/actions" ? <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[0.6875rem] font-bold text-white">{pending}</span> : null}
+      {pending > 0 && item.href === "/actions" ? <span className="grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[0.6875rem] font-bold text-on-brand">{pending}</span> : null}
     </Link>
   );
 }

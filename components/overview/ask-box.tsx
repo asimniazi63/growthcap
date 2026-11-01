@@ -32,7 +32,7 @@ export function AskBox() {
         placeholder="Ask about sales, orders, stock or customers"
         className="min-w-0 flex-1 bg-transparent py-2.5 text-[0.9375rem] text-ink outline-none placeholder:text-ink-3"
       />
-      <button type="submit" aria-label="Ask" disabled={text.trim() === ""} className="grid size-[38px] shrink-0 place-items-center rounded-full bg-brand text-white transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-45">
+      <button type="submit" aria-label="Ask" disabled={text.trim() === ""} className="grid size-[38px] shrink-0 place-items-center rounded-full bg-brand text-on-brand transition-colors hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-45">
         <ArrowUp className="size-[18px]" aria-hidden />
       </button>
     </form>

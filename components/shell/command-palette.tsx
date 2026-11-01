@@ -161,7 +161,7 @@ export function CommandPalette({ gc }: { gc: boolean }) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-ink/45 px-4 pt-[12vh]"
+      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/55 px-4 pt-[12vh]"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) hide();
       }}

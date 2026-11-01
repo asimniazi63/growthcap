@@ -264,7 +264,7 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
                   {messages.map((m) => (
                     <li key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
                       {m.role === "user" ? (
-                        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-[0.9375rem] leading-6 text-white">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</p>
+                        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-inverse px-4 py-2.5 text-[0.9375rem] leading-6 text-on-inverse">{m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}</p>
                       ) : (
                         <div className="flex gap-3">
                           <span className="mt-0.5 shrink-0">
@@ -316,7 +316,7 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
                 placeholder="Ask about sales, orders, stock or customers"
                 className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[0.9375rem] outline-none placeholder:text-ink-3"
               />
-              <button type="submit" disabled={busy || !input.trim()} className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-brand text-white transition-colors enabled:hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-40">
+              <button type="submit" disabled={busy || !input.trim()} className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-brand text-on-brand transition-colors enabled:hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-40">
                 <ArrowUp className="size-4.5" strokeWidth={2.5} aria-hidden />
                 <span className="sr-only">Ask</span>
               </button>

@@ -42,7 +42,7 @@ function PopoverClaim({ id, entry, children }: { id: string; entry: ProvenanceEn
         {children}
       </button>
       {/* The popover element itself must not get a display class: the browser hides it with display:none until it opens. */}
-      <span id={id} popover="auto" role="dialog" aria-label={`Source: ${toolLabel(entry.tool)}`} className="m-auto w-[23rem] max-w-[92vw] overflow-hidden rounded-xl border border-line bg-surface p-0 text-left text-xs text-ink shadow-pop backdrop:bg-ink/20">
+      <span id={id} popover="auto" role="dialog" aria-label={`Source: ${toolLabel(entry.tool)}`} className="m-auto w-[23rem] max-w-[92vw] overflow-hidden rounded-xl border border-line bg-surface p-0 text-left text-xs text-ink shadow-pop backdrop:bg-black/30">
         <span className="flex items-center gap-2.5 border-b border-line px-4 py-3">
           <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand-tint text-brand-strong">
             <Check className="size-3.5" strokeWidth={3} aria-hidden />

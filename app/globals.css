@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
-/* Oasis Pace design tokens. Light only. One accent (lagoon teal); ahead and behind each have their own colour; an estimate
+/* Oasis Pace design tokens, light and dark. The dark set overrides the same tokens under html[data-theme="dark"] (set before
+   paint by the script in app/layout.tsx, flipped by components/shell/theme-toggle.tsx). One accent (lagoon teal); ahead and behind each have their own colour; an estimate
    is always dashed or hatched, never solid. Use the tokens (bg-surface, text-ink-2, border-line, text-behind) and the
    component classes below instead of raw neutral-* shades. */
 
@@ -28,8 +29,43 @@
   --color-warn: #96610a;
   --color-warn-tint: #fbf0d2;
   --color-estimate: #5f7882;
+  /* Inverted surfaces (chat bubble, tooltip, toast, code blocks, footer) and text on the brand colour */
+  --color-inverse: #0e1f22;
+  --color-on-inverse: #ffffff;
+  --color-on-brand: #ffffff;
   --shadow-card: 0 1px 0 rgb(14 31 34 / 0.04), 0 1px 3px rgb(14 31 34 / 0.05);
   --shadow-pop: 0 12px 32px -8px rgb(14 31 34 / 0.22), 0 2px 6px rgb(14 31 34 / 0.08);
+}
+
+/* Dark theme: same tokens, new values. Tinted fills get dark washes, text and accents get lighter tones so contrast holds. */
+:root {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-ink: #e6eeec;
+  --color-ink-2: #a9bcbf;
+  --color-ink-3: #809599;
+  --color-paper: #0a1416;
+  --color-paper-2: #152428;
+  --color-surface: #101d20;
+  --color-line: #223539;
+  --color-line-strong: #31494e;
+  --color-brand: #2fc7b4;
+  --color-brand-strong: #7fe3d5;
+  --color-brand-tint: #11393a;
+  --color-ahead: #4ade80;
+  --color-ahead-tint: #11321f;
+  --color-behind: #fb8f70;
+  --color-behind-tint: #3b1d15;
+  --color-warn: #f0b84a;
+  --color-warn-tint: #382b0c;
+  --color-estimate: #8aa3ad;
+  --color-inverse: #1d3338;
+  --color-on-inverse: #f2f5f4;
+  --color-on-brand: #04201d;
+  --shadow-card: 0 1px 0 rgb(0 0 0 / 0.25), 0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-pop: 0 12px 32px -8px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.35);
 }
 
 @layer base {
@@ -219,7 +255,7 @@
   }
   .btn-primary {
     background: var(--color-brand);
-    color: #fff;
+    color: var(--color-on-brand);
     box-shadow: 0 1px 0 rgb(255 255 255 / 0.18) inset;
   }
   .btn-primary:hover:not(:disabled) {
@@ -335,7 +371,7 @@
   /* Loading */
   .skeleton {
     border-radius: 8px;
-    background: linear-gradient(100deg, var(--color-paper-2) 30%, color-mix(in oklab, var(--color-paper-2) 40%, white) 50%, var(--color-paper-2) 70%);
+    background: linear-gradient(100deg, var(--color-paper-2) 30%, color-mix(in oklab, var(--color-paper-2) 40%, var(--color-surface)) 50%, var(--color-paper-2) 70%);
     background-size: 220% 100%;
     animation: skeleton-sweep 1.4s ease-in-out infinite;
   }

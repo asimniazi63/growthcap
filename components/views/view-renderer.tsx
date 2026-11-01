@@ -12,7 +12,8 @@ const TONE = { ahead: "text-ahead", behind: "text-behind", even: "muted" } as co
 const TONE_ICON = { ahead: ArrowUpRight, behind: ArrowDownRight, even: Minus } as const;
 
 // Chart colours (SVG attributes cannot use the Tailwind tokens, so these repeat them).
-const C = { brand: "#0f766e", ink: "#0e1f22", axis: "#5f7882", line: "#dbe3e1", lineStrong: "#c3cfcc", ahead: "#15803d", behind: "#b83a1d" } as const;
+// CSS variables, so the charts follow the light and dark theme.
+const C = { brand: "var(--color-brand)", ink: "var(--color-ink)", axis: "var(--color-estimate)", line: "var(--color-line)", lineStrong: "var(--color-line-strong)", ahead: "var(--color-ahead)", behind: "var(--color-behind)" } as const;
 
 const asOfText = (iso: string) => {
   const d = new Date(iso);
@@ -135,7 +136,7 @@ function Line({ data, currency }: { data: Extract<ViewData, { component: "line" 
         {points.length <= 40
           ? points.slice(0, -1).map((p, i) => <circle key={i} cx={x(i)} cy={y(p.y)} r="2.5" fill={C.brand} />)
           : null}
-        {points.length > 0 ? <circle cx={x(lastIndex)} cy={y(points[lastIndex]!.y)} r="4.5" fill={C.brand} stroke="#ffffff" strokeWidth="2" /> : null}
+        {points.length > 0 ? <circle cx={x(lastIndex)} cy={y(points[lastIndex]!.y)} r="4.5" fill={C.brand} stroke="var(--color-surface)" strokeWidth="2" /> : null}
         {points.map((p, i) => (
           <circle key={`hit-${i}`} cx={x(i)} cy={y(p.y)} r="9" fill="transparent">
             <title>{`${p.x}: ${fmt(p.y)}`}</title>
