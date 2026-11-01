@@ -207,7 +207,7 @@ export const syncRuns = pgTable(
 
 // ---- The agent's audit log (T4). One row per run and one per step. Tool inputs are recorded (they are the model's own
 // arguments: dates, filters, ids); prompts, answers and tool results are not.
-export const AGENT_SOURCES = ["chat", "eval", "brief", "audit"] as const;
+export const AGENT_SOURCES = ["chat", "eval", "brief", "audit", "playbook"] as const;
 export type AgentSource = (typeof AGENT_SOURCES)[number];
 export const AGENT_RUN_STATUSES = ["running", "ok", "error"] as const;
 
@@ -440,6 +440,28 @@ export const audits = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("audits_idx").on(t.tenantId, t.createdAt)],
+);
+
+export const PLAYBOOK_RUN_STATUSES = ["ready", "blocked"] as const;
+export type PlaybookRunStatus = (typeof PLAYBOOK_RUN_STATUSES)[number];
+
+// One run of a playbook (T18) for one brand: a saved sequence of tool calls written up by the agent loop. `blocked` means the
+// number checker found a figure no tool result holds. `playbook` is one of the ids in lib/playbooks/definitions.ts and `params`
+// holds its validated inputs (a month). Growth Capital roles only.
+export const playbookRuns = pgTable(
+  "playbook_runs",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: tenantRef(),
+    playbook: text("playbook").notNull(),
+    params: jsonb("params").$type<Record<string, string>>().notNull().default(sql`'{}'::jsonb`),
+    status: text("status").$type<PlaybookRunStatus>().notNull(),
+    body: text("body").notNull(),
+    unmatched: jsonb("unmatched").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("playbook_runs_idx").on(t.tenantId, t.playbook, t.createdAt)],
 );
 
 export const ACTION_ITEM_STATUSES = ["open", "done"] as const;

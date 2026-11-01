@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, type LucideIcon } from "lucide-react";
 import { GC_ONLY_PAGES } from "./pages";
 
 interface Item {
@@ -22,6 +22,7 @@ const GROUPS: { label: string; items: Item[] }[] = [
       { href: "/portfolio", label: "Portfolio", icon: LayoutGrid },
       { href: "/briefs", label: "Briefs", icon: Newspaper },
       { href: "/audit", label: "Audit", icon: ScanSearch },
+      { href: "/playbooks", label: "Playbooks", icon: BookOpenCheck },
     ],
   },
   {

@@ -44,7 +44,8 @@ Checks before handing work over: `npm run typecheck`, `npm run lint`, and `npx v
 
 ## 3. Database
 
-- The schema is `lib/db/schema.ts`. Migrations are SQL files in `drizzle/` (`0000` to `0005`).
+- The schema is `lib/db/schema.ts`. Migrations are SQL files in `drizzle/` (`0000` to `0008`).
+- `0008` adds `playbook_runs` (T18, additive). Apply it with `npm run db:migrate` before deploying the Playbooks page.
 - After a schema change: `npm run db:generate` writes a new SQL file (commit it), then `npm run db:migrate` applies every pending file to `DATABASE_URL` and prints the host.
 - Migrations run by hand. Neither CI nor a deploy runs them. Migrate before you deploy code that needs the change.
 - Neon runs Postgres 18. Tests run PGlite, an in-memory Postgres, so avoid features only Postgres 18 has (such as `uuidv7()`).

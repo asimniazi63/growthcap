@@ -338,11 +338,13 @@ Each extra is a feature from [feature-map.md](feature-map.md) that the brief doe
 
 ### T18: Playbooks (about 3–4 hours)
 
+**Status (2026-11-02): built; the eval case is written but not run.** The three playbooks are in `lib/playbooks/` (`bfcm-review`, `retention-check`, `monthly-review`). Each sends one fixed question, written on the server, through the shared agent loop, so the number checker runs on the write-up. `/playbooks` (GC roles only) runs one with a click through `POST /api/playbooks`, and every run is stored per brand in `playbook_runs` (migration 0008, additive). Each run is one paid call, and a brand can run each playbook once per 10 minutes. The eval case is `playbook-monthly-review-october` in `evals/t18-cases.ts`. Running it needs Asim's go-ahead (a few cents to tens of cents).
+
 **Deliverable:** saved playbooks the agent runs from the app. The Slack side is T18b below.
 
-- [ ] Playbooks (feature 38): a BFCM review, a retention check and a monthly business review. Each is a saved sequence of tool calls plus a write-up template, run through the shared agent loop so the checker runs. The output is a report view, for GC roles only.
-- [ ] Tests: every number in a playbook matches a tool result.
-- [ ] Eval case: the monthly business review for October names the budget cut (S9).
+- [x] Playbooks (feature 38): a BFCM review, a retention check and a monthly business review. Each is a saved sequence of tool calls plus a write-up template, run through the shared agent loop so the checker runs. The output is a report view, for GC roles only.
+- [x] Tests: every number in a playbook matches a tool result.
+- [x] Eval case: the monthly business review for October names the budget cut (S9). Written, not run yet.
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ### T18b: Slack bot (about 3–4 hours)

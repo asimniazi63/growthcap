@@ -14,21 +14,21 @@ import type { Expectation } from "./graders";
 const SOLENNE: StoreKey = "solenne";
 
 // The calendar and the call notes are loaded for the brand before the question (idempotent), as `fixtures:load` does.
-const withCalendarAndNotes = async (env: EvalEnv) => {
+export const withCalendarAndNotes = async (env: EvalEnv) => {
   await loadCalendar(env.db, env.ctx.tenantId, readFixtureFile(env.store, "calendar.csv"));
   await loadCallNotes(env.db, env.ctx.tenantId, readCallNoteFiles(env.store));
 };
 
 const planNetSales = (store: StoreKey, month: string) => Number(readFixtureFile(store, "plan.csv").split("\n").find((l) => l.startsWith(`${month},`))!.split(",")[1]);
 // How far the month finished from plan, in dollars (positive when behind), from truth.json's net sales and the plan file.
-const shortfall = (env: EvalEnv, month: string) => (planNetSales(env.store, month) - env.truth.monthly[month]!.net_sales) / 100;
+export const shortfall = (env: EvalEnv, month: string) => (planNetSales(env.store, month) - env.truth.monthly[month]!.net_sales) / 100;
 
 const note = (title: RegExp, date: RegExp, what: string): NonNullable<Expectation["mentions"]> => [
   { label: `cites the ${what} by its title`, pattern: title },
   { label: `cites the ${what} by its date`, pattern: date },
 ];
 
-const askedAbout = (month: string): NonNullable<Expectation["toolWhere"]> => [
+export const askedAbout = (month: string): NonNullable<Expectation["toolWhere"]> => [
   { label: `called explain_gap for ${month}`, tool: "explain_gap", test: (i) => ((i as { month?: string }).month ?? month) === month },
 ];
 

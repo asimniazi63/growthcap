@@ -1,6 +1,6 @@
 # Roadmap
 
-What is built, what was left out on purpose, what production would add, and what is known to be limited. Status as of 2026-10-31. The build order and reasons are in [docs/priorities.md](docs/priorities.md), the steps and status notes per ticket in [docs/build-plan.md](docs/build-plan.md), and how to operate the app in [docs/runbook.md](docs/runbook.md).
+What is built, what was left out on purpose, what production would add, and what is known to be limited. Status as of 2026-11-02. The build order and reasons are in [docs/priorities.md](docs/priorities.md), the steps and status notes per ticket in [docs/build-plan.md](docs/build-plan.md), and how to operate the app in [docs/runbook.md](docs/runbook.md).
 
 ## Built
 
@@ -22,26 +22,26 @@ What is built, what was left out on purpose, what production would add, and what
 | T13 | Invoices, document questions, call notes | Built 2026-11-01. A supplier invoice becomes five approved unit-cost updates, checked live end to end on Solenne (real Shopify writes). A call note becomes plan changes and action items, checked live 2026-11-02; the check found a dropped action item, fixed the same day |
 | T14 | Data-health checks and growth audit | Built 2026-11-01. `/audit` runs four fixed checks and the model writes them up; checked live on Tidepool 2026-11-02 |
 | T15 | Langfuse traces, fallback model, evals | Built. Traces are live on the deployed app (2026-11-02). The fallback decision (`lib/agent/fallback.ts`) has unit tests; the full run-level path has no test and has not been seen in a real outage. Evals run locally, not in CI, by choice (below) |
+| T18 | Playbooks | Built 2026-11-02. `/playbooks` (GC roles only) runs a Black Friday review, a retention check or a monthly business review through the agent loop, so the number checker runs, and stores each run per brand. One paid call per run, one run per brand per playbook per 10 minutes. The eval case (October's review names the budget cut, S9) is written but not run. The Slack bot is T18b |
 
 ## Deferred on purpose
 
 - **T5, core ship.** Asim put T6 first on 2026-10-31. Still owed: the 15 eval cases (8 exist and `npm run eval` works), the README (none yet), and the backup Loom. T11 picks them up.
-- **Slack posting (T10).** No webhook is set up. An approved brief is logged, not posted. Slack goes in `lib/briefs/deliver.ts`, after the approval check.
+- **Slack posting (T10, now T10b).** No webhook is set up. An approved brief is logged, not posted. Slack goes in `lib/briefs/deliver.ts`, after the approval check.
 - **MCP server (T10).** `/api/mcp`, token-per-org access and the MCP tenant test are not built, so Liam cannot reach the read tools from Claude yet.
 - **Theme writes (T9).** Shopify lets an app write theme files only with an exemption. Without it, the approval returns "not written" and `npm run landing:push -- <action id>` finishes the page through the Shopify CLI. Next: request the exemption, or use a Theme Access password so a server job can push.
 - **`read_all_orders`.** Requesting it means choosing a distribution model, which cannot be undone. Left until needed (see limitations).
 - **Follow-ups from T12 to T15 ([#22](https://github.com/asimniazi63/growthcap/issues/22)).** Those four tickets were closed on 2026-11-02 with these items moved out: the live check of "Need $X a day" on November data, one saved full eval run (three cases have never run), the audit running by itself when a store connects, Opus 5.5 as the fallback model with a whole-path test, and evals in CI (descoped: they run locally and the scoreboard is committed).
 - **Single-vs-multi-agent comparison (T7).** The eval switch exists (`AGENT_SINGLE_AGENT`). The run and the table do not.
 
-## Not started: extras T16 to T19
+## Not started: extras T16, T17, T18b and T19
 
-Each is a feature from [docs/feature-map.md](docs/feature-map.md) the brief does not ask for. T12 to T15 are built (above). The rest run in this order, and nothing outside a ticket gets built without Asim's go-ahead.
+Each is a feature from [docs/feature-map.md](docs/feature-map.md) the brief does not ask for. T12 to T15 and T18 are built (above). The rest run in this order, and nothing outside a ticket gets built without Asim's go-ahead. T10b ([#21](https://github.com/asimniazi63/growthcap/issues/21)), Slack posting of the Monday brief, stays deferred (above).
 
 | Ticket | Idea |
 |---|---|
 | T16 | Forecast, what-if scenarios, inventory runway, Black Friday war room |
 | T17 | Promo post-mortems, merchandising analyses, retention segments |
-| T18 | Saved playbooks run from the app |
 | T18b | A Slack bot that answers questions and runs playbooks (split from T18 on 2026-11-02) |
 | T19 | About 3,000 orders with the two subtle storylines (S1, S2) and the weak BFCM cohort, in fresh stores |
 
