@@ -17,7 +17,7 @@ What is built, what was left out on purpose, what production would add, and what
 | T8 | Plan in, Act | Code built, not checked live. SOW and plan-sheet upload with review, and three approved writes (Metric Target, annotation, discount off). Needs `shopify app deploy` and an approval in each store |
 | T9 | Landing pages | Built and checked live. Copy-only drafts, server-built Liquid, Theme Check, approval card and action ledger. Theme writes need Shopify's exemption (below); `npm run landing:push` finishes an approved page through the Shopify CLI |
 | T10 | Portfolio and Monday brief | In-app part built, not checked live. Slack and MCP are deferred |
-| T11 | Final ship | Not started. Always last |
+| T11 | Final ship | Closed 2026-11-01 for the first ship: full suite, 24 evals (22 of 24 on Sonnet 4.6), three independent reviews with their fixes, README, runbook, both reviewer logins checked on the live site. Asim records the final Loom when the deliverables are sent. T12 to T15 came after it |
 | T12 | Gross margin, repeat rate, zero-sales days, cohort grids, payback, "need $X a day" | Built 2026-11-01. New tools `get_cohorts`, `get_unit_economics`, `get_zero_sales_days`; a cohort heat grid in chat; "Need $X a day" on Pace. Cohort grid checked live 2026-11-02 |
 | T13 | Invoices, document questions, call notes | Built 2026-11-01. A supplier invoice becomes five approved unit-cost updates, checked live end to end on Solenne (real Shopify writes). A call note becomes plan changes and action items, checked live 2026-11-02; the check found a dropped action item, fixed the same day |
 | T14 | Data-health checks and growth audit | Built 2026-11-01. `/audit` runs four fixed checks and the model writes them up; checked live on Tidepool 2026-11-02 |
@@ -30,6 +30,7 @@ What is built, what was left out on purpose, what production would add, and what
 - **MCP server (T10).** `/api/mcp`, token-per-org access and the MCP tenant test are not built, so Liam cannot reach the read tools from Claude yet.
 - **Theme writes (T9).** Shopify lets an app write theme files only with an exemption. Without it, the approval returns "not written" and `npm run landing:push -- <action id>` finishes the page through the Shopify CLI. Next: request the exemption, or use a Theme Access password so a server job can push.
 - **`read_all_orders`.** Requesting it means choosing a distribution model, which cannot be undone. Left until needed (see limitations).
+- **Follow-ups from T12 to T15 ([#22](https://github.com/asimniazi63/growthcap/issues/22)).** Those four tickets were closed on 2026-11-02 with these items moved out: the live check of "Need $X a day" on November data, one saved full eval run (three cases have never run), the audit running by itself when a store connects, Opus 5.5 as the fallback model with a whole-path test, and evals in CI (descoped: they run locally and the scoreboard is committed).
 - **Single-vs-multi-agent comparison (T7).** The eval switch exists (`AGENT_SINGLE_AGENT`). The run and the table do not.
 
 ## Not started: extras T16 to T19
