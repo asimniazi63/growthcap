@@ -24,7 +24,7 @@ export interface ClaimLedger {
 
 const METRIC_MAPS = new Set(["values", "previous", "change"]);
 const RATE_MAPS = new Set(["pctChange", "share"]);
-const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate", "pctOfExpected", "ordersPctOfExpected", "repeatRateGap"]);
+const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate", "pctOfExpected", "ordersPctOfExpected", "repeatRateGap", "pctOfMedianUnits", "support", "confidenceAtoB", "confidenceBtoA", "shareOfCustomers", "churnRisk", "avgChurnRisk"]);
 
 function classify(key: string, parentKey: string | undefined, raw: number): { value: number; unit: ClaimUnit } {
   if (parentKey && METRIC_MAPS.has(parentKey)) {
@@ -72,7 +72,7 @@ function walk(node: unknown, path: string, key: string, parentKey: string | unde
 }
 
 // Only titles are taken, never other store text such as a note, so an injected sentence can't excuse its own numbers.
-const NAME_KEYS = new Set(["title", "product", "variant"]);
+const NAME_KEYS = new Set(["title", "product", "variant", "productA", "productB"]);
 
 function collectNames(node: unknown, key: string, parentKey: string | undefined, underUntrusted: boolean, out: Set<string>): void {
   if (typeof node === "string") {
@@ -122,8 +122,28 @@ const SKIP_PATTERNS: RegExp[] = [
   /^[ \t]*\d+[.)](?=\s)/gm, // list numbering
 ];
 
+// A table column headed "#", "No." or "Rank" numbers the rows: those are positions, not figures. Only that first column is
+// skipped, and only below such a header, so a first column of real counts is still checked. The length stays the same.
+function maskRankColumn(text: string): string {
+  let ranked = false;
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!/^\s*\|/.test(line)) {
+        ranked = false;
+        return line;
+      }
+      if (/^\s*\|\s*(?:#|no\.?|rank)\s*\|/i.test(line)) {
+        ranked = true;
+        return line;
+      }
+      return ranked ? line.replace(/^(\s*\|\s*)(\d+)(?=\s*\|)/, (_, lead: string, digits: string) => lead + " ".repeat(digits.length)) : line;
+    })
+    .join("\n");
+}
+
 function mask(text: string, names: string[] = []): string {
-  let out = text;
+  let out = maskRankColumn(text);
   for (const name of names) out = out.split(name).join(" ".repeat(name.length));
   for (const re of SKIP_PATTERNS) out = out.replace(re, (m) => " ".repeat(m.length));
   return out;

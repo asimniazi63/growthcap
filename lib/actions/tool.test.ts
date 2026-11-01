@@ -8,6 +8,7 @@ import type { TenantContext } from "../tenancy/context";
 import { annotationExecutor } from "./executors/annotation";
 import { discountDeactivateExecutor } from "./executors/discount-deactivate";
 import { metricTargetExecutor } from "./executors/metric-target";
+import { segmentCreateExecutor } from "./executors/segment-create";
 import { buildProposeActionTool, proposeActionInput, proposeActionUnion } from "./tool";
 import type { ActionView, ProposeInput } from "./types";
 
@@ -58,12 +59,32 @@ describe("propose_action", () => {
     expect(s.propose.mock.calls[1]![2]).toMatchObject({ kind: "discount_deactivate", metric: "discounts", payload: { code: "VIPGLOW25" } });
   });
 
+  it("proposes a customer segment from a segment id and a name, and has no field for a Shopify query", async () => {
+    const s = setup();
+    const segment = { kind: "segment_create", segment: "at_risk", segmentName: "At risk (Oasis)", metric: "returning_customer_rate", ...common };
+    expect(await s.call(segment)).toEqual({ proposed: true, actionId: view().id, needsApproval: true });
+    expect(s.propose.mock.calls[0]![2]).toMatchObject({ kind: "segment_create", metric: "returning_customer_rate", payload: { segment: "at_risk", name: "At risk (Oasis)" } });
+    for (const bad of [
+      { ...segment, query: "number_of_orders > 0" }, // a query is refused, never passed on
+      { ...segment, segment: "whales" },
+      { ...segment, segmentName: 'x" } { drop' },
+      { ...segment, segment: undefined },
+      { ...segment, code: "VIPGLOW25" },
+    ]) {
+      expect(await s.call(bad), JSON.stringify(bad)).toMatchObject({ error: { code: "INVALID_INPUT" } });
+    }
+    expect(s.propose).toHaveBeenCalledTimes(1);
+    const flat = z.toJSONSchema(proposeActionInput) as unknown as { properties: Record<string, unknown> };
+    expect(Object.keys(flat.properties).filter((k) => /query/i.test(k))).toEqual([]);
+  });
+
   it("never runs an executor or reaches Shopify", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
-    const runs = [metricTargetExecutor, annotationExecutor, discountDeactivateExecutor].map((e) => vi.spyOn(e, "run"));
+    const runs = [metricTargetExecutor, annotationExecutor, discountDeactivateExecutor, segmentCreateExecutor].map((e) => vi.spyOn(e, "run"));
     const s = setup();
     await s.call(target);
-    expect(s.propose).toHaveBeenCalledTimes(1);
+    await s.call({ kind: "segment_create", segment: "champions", segmentName: "Champions", metric: "returning_customer_rate", ...common });
+    expect(s.propose).toHaveBeenCalledTimes(2);
     expect(fetchSpy).not.toHaveBeenCalled();
     for (const r of runs) expect(r).not.toHaveBeenCalled();
     fetchSpy.mockRestore();

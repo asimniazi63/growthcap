@@ -52,6 +52,18 @@ describe("checkClaims: matching", () => {
     expect(unmatched("There were 3 percentage points of it.", ledger([{ value: 3, unit: "count" }]))).toEqual(["3 percentage points"]);
   });
 
+  it("skips the numbers in a table column headed #, No. or Rank, because they are positions (found in the bundles run: '| 3 |' and '| 4 |')", () => {
+    const l = ledger([{ value: 5, unit: "count" }]);
+    const ranked = "| # | Pair | Orders |\n|---|---|---|\n| 1 | A + B | 5 |\n| 2 | C + D | 5 |\n| 3 | E + F | 5 |\n| 4 | G + H | 5 |";
+    expect(unmatched(ranked, l)).toEqual([]);
+    expect(unmatched(ranked.replace("| # |", "| Rank |"), l)).toEqual([]);
+    // A first column that holds figures is not a rank column, and a number outside the first cell still counts.
+    expect(unmatched("| Orders | Pair |\n|---|---|\n| 3 | E + F |", l)).toEqual(["3"]);
+    expect(unmatched("| # | Pair | Orders |\n|---|---|---|\n| 1 | A + B | 7 |", l)).toEqual(["7"]);
+    // The skip ends with the table.
+    expect(unmatched("| # | Pair |\n|---|---|\n| 1 | A + B |\n\nThere were 3 of them.", l)).toEqual(["3"]);
+  });
+
   it("matches a plain number to a count, but not to money", () => {
     expect(unmatched("There were 3,012 orders.", ledger([{ value: 3012, unit: "count" }]))).toEqual([]);
     expect(unmatched("Net sales were $3,012.", ledger([{ value: 3012, unit: "count" }]))).toEqual(["$3,012"]);
@@ -177,6 +189,39 @@ describe("ledgerFromToolResults", () => {
     expect(unmatched("Net sales ran 265.2% above expected, orders 350% above.", l)).toEqual([]);
     expect(unmatched("Its customers came back 8.3% less often.", l)).toEqual([]);
     expect(unmatched("Net sales ran 2.7% above expected.", l)).toEqual(["2.7%"]);
+  });
+
+  it("reads the customer segments' shares and churn risk as percentages, and their days, orders and cents as counts and dollars", () => {
+    const l = ledgerFromToolResults([
+      result(
+        {
+          totalCustomers: 628,
+          segments: [{ id: "at_risk", customers: 99, shareOfCustomers: 0.1576, avgChurnRisk: 0.717, avgLtvCents: 29607, avgDaysSinceLast: 202.2 }],
+          customers: [{ customerId: "CUST_a", orders: 4, daysSinceLast: 102, ltvCents: 39320, churnRisk: 0.146 }],
+        },
+        "q_segments",
+      ),
+    ]);
+    expect(unmatched("99 of 628 customers (15.8%) are at risk, with an average churn risk of 71.7% and $296.07 of lifetime value each; 202.2 days since their last order.", l)).toEqual([]);
+    expect(unmatched("CUST_a has ordered 4 times, last 102 days ago, with a churn risk of 14.6% and $393.20 lifetime value.", l)).toEqual([]);
+    expect(unmatched("About 17% are at risk.", l)).toEqual(["17%"]);
+  });
+
+  it("reads the bundle pairs' support and confidence as percentages and lift as a plain ratio, and takes the titles as names", () => {
+    const l = ledgerFromToolResults([
+      result({ ordersInRange: 1024, pairs: [{ ordersTogether: 12, support: 0.0117, confidenceAtoB: 0.034, confidenceBtoA: 0.353, lift: 1.02, untrusted: { productA: "Serum 30 Pack", productB: "Oil Cleanser" } }] }, "q_bundles"),
+    ]);
+    expect(unmatched("12 orders had both: 3.4% of the serum's orders, 35.3% of the cleanser's, 1.2% of all orders, lift 1.02.", l)).toEqual([]);
+    expect(unmatched("Serum 30 Pack goes with the cleanser.", l)).toEqual([]);
+    expect(unmatched("About 1.0 times as often as chance, 0.3% of orders.", l)).toEqual(["0.3%"]);
+  });
+
+  it("reads a launch week's share of the median as a percentage, and its units and difference as counts", () => {
+    const l = ledgerFromToolResults([
+      result({ launches: [{ totalUnits: 31, weeks: [{ week: 1, units: 5, cumulativeUnits: 5, vsMedianUnits: -1, pctOfMedianUnits: 0.8333 }] }], benchmark: [{ week: 1, medianUnits: 6, medianCumulativeUnits: 6, launches: 4 }] }, "q_launch"),
+    ]);
+    expect(unmatched("Week 1 sold 5 units, 1 under the median of 6: 83.3% of it.", l)).toEqual([]);
+    expect(unmatched("Week 1 reached 0.8% of the median.", l)).toEqual(["0.8%"]);
   });
 
   it("reads metric rows by the unit the registry gives each metric, including change and share", () => {

@@ -42,6 +42,11 @@ describe("connectShop", () => {
     expect(decryptSecret(row!.tokenEnc!)).toBe("shpat_secret");
   });
 
+  it("connects a store whose grant lists write_customers and not read_customers (the customer segment write includes the read)", async () => {
+    const scope = "read_products,read_orders,write_customers,read_inventory,read_discounts";
+    expect(await connect({ scope })).toMatchObject({ ok: true });
+  });
+
   it("accepts a write scope in place of its read scope, because Shopify lists only the write one", async () => {
     const scope = "read_products,read_orders,read_customers,read_inventory,write_discounts,write_themes";
     expect(await connect({ scope })).toMatchObject({ ok: true });
