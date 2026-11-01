@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
-import { actions, documents, variants } from "../lib/db/schema";
+import { actionItems, actions, documents, variants } from "../lib/db/schema";
 import { invoiceProposalSchema } from "../lib/plan-in/invoice";
 import { matchInvoiceLines } from "../lib/plan-in/invoice-match";
 import { readerDeps } from "../lib/plan-in/model";
@@ -27,6 +27,7 @@ const fixturePdf = (name: string) => new Uint8Array(readFileSync(new URL(`../fix
 
 async function withInvoiceRead(env: EvalEnv): Promise<void> {
   await env.db.delete(actions).where(eq(actions.tenantId, env.ctx.tenantId));
+  await env.db.delete(actionItems).where(eq(actionItems.tenantId, env.ctx.tenantId)); // the call-note case leaves items that point at its document
   await env.db.delete(documents).where(eq(documents.tenantId, env.ctx.tenantId));
   const doc = await uploadDocument(env.db, env.ctx, { kind: "invoice", label: "invoice.pdf", bytes: fixturePdf("invoice.pdf") });
   await readDocument(env.db, env.ctx, doc.id, readerDeps()); // the real reader: two paid model calls
@@ -34,6 +35,7 @@ async function withInvoiceRead(env: EvalEnv): Promise<void> {
 
 // The SOW is stored as read without calling the reader: the question only needs its pages.
 async function withSowStored(env: EvalEnv): Promise<void> {
+  await env.db.delete(actionItems).where(eq(actionItems.tenantId, env.ctx.tenantId));
   await env.db.delete(documents).where(eq(documents.tenantId, env.ctx.tenantId));
   const doc = await uploadDocument(env.db, env.ctx, { kind: "sow", label: "sow.pdf", bytes: fixturePdf("sow.pdf") });
   await env.db.update(documents).set({ status: "read" }).where(and(eq(documents.id, doc.id), eq(documents.tenantId, env.ctx.tenantId)));

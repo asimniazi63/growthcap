@@ -155,7 +155,18 @@ async function main(): Promise<void> {
       break;
     }
     process.stdout.write(`${c.id} ... `);
-    const r = await runCase(c, envs.get(c.store)!, modelId);
+    // A case that throws (a setup or database error) is recorded as failed and the run goes on: one broken case must not throw
+    // away the paid results of the others.
+    const r = await runCase(c, envs.get(c.store)!, modelId).catch((e: unknown): CaseResult => ({
+      id: c.id,
+      category: c.category,
+      passed: false,
+      checks: [{ name: "the case ran to the end without an error", ok: false, detail: (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 300) }],
+      answer: "",
+      costUsd: 0,
+      latencyMs: 0,
+      tokens: { input: 0, output: 0 },
+    }));
     results.push(r);
     console.log(`${r.passed ? "pass" : "FAIL"} (${r.checks.filter((k) => k.ok).length}/${r.checks.length}, $${r.costUsd.toFixed(4)})`);
     for (const k of r.checks.filter((x) => !x.ok)) console.log(`    FAIL: ${k.name}${k.detail ? ` - ${k.detail}` : ""}`);
