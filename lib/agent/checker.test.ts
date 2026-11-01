@@ -43,6 +43,15 @@ describe("checkClaims: matching", () => {
     expect(unmatched("Sales were up 8.3% on last month.", ledger([{ value: 100, unit: "count" }]))).toEqual(["8.3%"]);
   });
 
+  it("reads 'percentage points', 'percent' and 'pp' after a number as a percentage (found in the VIPGLOW25 run: 'a gap of 16.7 percentage points')", () => {
+    const l = ledger([{ value: -16.7, unit: "rate" }]);
+    expect(unmatched("Its customers came back at a gap of 16.7 percentage points.", l)).toEqual([]);
+    expect(unmatched("The gap was −16.7 pp.", l)).toEqual([]);
+    expect(unmatched("Down 16.7 percent.", l)).toEqual([]);
+    expect(unmatched("A gap of 12.5 percentage points.", l)).toEqual(["12.5 percentage points"]);
+    expect(unmatched("There were 3 percentage points of it.", ledger([{ value: 3, unit: "count" }]))).toEqual(["3 percentage points"]);
+  });
+
   it("matches a plain number to a count, but not to money", () => {
     expect(unmatched("There were 3,012 orders.", ledger([{ value: 3012, unit: "count" }]))).toEqual([]);
     expect(unmatched("Net sales were $3,012.", ledger([{ value: 3012, unit: "count" }]))).toEqual(["$3,012"]);
@@ -159,6 +168,15 @@ describe("ledgerFromToolResults", () => {
     expect(by("refundedCents")).toMatchObject({ value: 1, unit: "money" });
     expect(by("units")).toMatchObject({ value: 2, unit: "count" });
     expect(by("marginRate")).toMatchObject({ value: 66, unit: "rate" });
+  });
+
+  it("reads the promo post-mortem's shares and repeat-rate gap as percentages, so '265.2%' and 'a gap of 8.3%' match", () => {
+    const l = ledgerFromToolResults([
+      result({ extra: { netSalesCents: 151263, pctOfExpected: 2.652, ordersPctOfExpected: 3.5 }, customers: { repeatRateGap: -0.0833 } }, "q_postmortem"),
+    ]);
+    expect(unmatched("Net sales ran 265.2% above expected, orders 350% above.", l)).toEqual([]);
+    expect(unmatched("Its customers came back 8.3% less often.", l)).toEqual([]);
+    expect(unmatched("Net sales ran 2.7% above expected.", l)).toEqual(["2.7%"]);
   });
 
   it("reads metric rows by the unit the registry gives each metric, including change and share", () => {
