@@ -143,7 +143,8 @@ function numbersInInputs(inputs: unknown[]): Set<number> {
   return found;
 }
 
-const TOKEN = /(?<![\w.])(\$)?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?:\s?(%|[kKmM](?![A-Za-z])|(?:st|nd|rd|th)(?![A-Za-z])))?/g;
+// A percentage is written "%", "percent", "percentage points" or "pp" (a repeat-rate gap is naturally put in points).
+const TOKEN = /(?<![\w.])(\$)?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?:\s?(%|percent(?:age\s+points?)?(?![A-Za-z])|pp(?![A-Za-z])|[kKmM](?![A-Za-z])|(?:st|nd|rd|th)(?![A-Za-z])))?/g;
 
 export interface ClaimCheck {
   ok: boolean;
@@ -166,7 +167,7 @@ export function checkClaims(answer: string, ledger: ClaimLedger, toolInputs: unk
     const multiplier = suffix === "k" || suffix === "K" ? 1e3 : suffix === "m" || suffix === "M" ? 1e6 : 1;
     const decimals = frac?.length ?? 0;
     const value = Number(`${whole!.replace(/,/g, "")}${frac !== undefined ? `.${frac}` : ""}`) * multiplier;
-    const unit: ClaimUnit = dollar ? "money" : suffix === "%" ? "rate" : "count";
+    const unit: ClaimUnit = dollar ? "money" : suffix === "%" || /^(percent|pp)/.test(suffix ?? "") ? "rate" : "count";
     if (unit === "count" && skip.has(value)) continue; // asked for by the tool input
     if (unit === "count" && rangeDays.has(value) && /^[\s-]?days?\b/i.test(masked.slice(m.index! + text.length))) continue; // "30 days", when a result covers 30
 
