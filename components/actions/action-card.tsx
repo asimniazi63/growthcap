@@ -91,6 +91,29 @@ function pretty(value: unknown, max = 4000): string {
   return text.length > max ? `${text.slice(0, max)}\n…` : text;
 }
 
+// What a finished action did, in words. The raw result is for developers and is never shown: each kind says what changed.
+function doneSummary(view: LedgerView): { headline: string; lines: string[] } {
+  const result = (view.result ?? {}) as Record<string, unknown>;
+  switch (view.kind) {
+    case "unit_cost_update": {
+      const updated = Array.isArray(result.updated) ? (result.updated as { sku?: unknown }[]) : [];
+      const skus = new Set(updated.map((u) => String(u.sku ?? "")));
+      const lines = (view.diff.rows ?? []).filter((r) => skus.has(r.label.split(":")[0] ?? "")).map((r) => `${r.label}: now ${r.after}`);
+      return { headline: updated.length > 0 ? `Updated ${updated.length} unit cost${updated.length === 1 ? "" : "s"} in Shopify.` : "The unit costs were updated in Shopify.", lines };
+    }
+    case "metric_target":
+      return { headline: "The target was created in Shopify.", lines: [] };
+    case "annotation":
+      return { headline: "The note was added to the store's charts in Shopify.", lines: [] };
+    case "discount_deactivate": {
+      const code = typeof result.code === "string" ? result.code : null;
+      return { headline: code ? `The discount code ${code} is now off in Shopify.` : "The discount code is now off in Shopify.", lines: [] };
+    }
+    default:
+      return { headline: "The change was made in Shopify.", lines: [] };
+  }
+}
+
 // A dark, scrollable block for code the reviewer should read before approving: a Liquid file or the GraphQL that would run.
 function CodeBlock({ title, children }: { title: string; children: string }) {
   return (
@@ -297,16 +320,22 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
                 </div>
               </div>
             ) : (
-              <p className="flex items-center gap-2 font-medium text-ahead">
-                <Check className="size-4 shrink-0" aria-hidden />
-                Done.
-              </p>
+              <div className="space-y-2">
+                <p className="flex items-center gap-2 font-medium text-ahead">
+                  <Check className="size-4 shrink-0" aria-hidden />
+                  {`Done. ${doneSummary(view).headline}`}
+                </p>
+                {doneSummary(view).lines.length > 0 ? (
+                  <ul className="inset divide-y divide-line text-sm">
+                    {doneSummary(view).lines.map((line) => (
+                      <li key={line} className="num break-words px-3 py-2 text-ink-2">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             )}
-            {view.result != null ? (
-              <Fold icon={FileCode} summary="Result">
-                <pre className="inset max-h-48 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs text-ink-2">{pretty(view.result)}</pre>
-              </Fold>
-            ) : null}
           </div>
         ) : null}
         {dryRun ? (
@@ -318,7 +347,9 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
                 <p className="mt-0.5">Approved by {personLabel(view.decidedBy, me)} on a reviewer login. This is the exact change that would have been sent.</p>
               </div>
             </div>
-            <Mutations list={mutationsOf(view)} />
+            <Fold icon={FileCode} summary="The exact Shopify request">
+              <Mutations list={mutationsOf(view)} />
+            </Fold>
           </div>
         ) : null}
       </div>
