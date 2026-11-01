@@ -6,9 +6,12 @@ import type { Explanation } from "./reconcile";
 const WEBHOOK_TEST =
   "Live check of the orders/create webhook, 2026-10-31: order #1103 (tag webhook-test, one unit, $16.00) was created in the Tidepool admin after the seed and reached Postgres through the webhook in about 3 seconds. It is not in truth.json.";
 
+const DEMO_EXTRA =
+  "Two extra demo orders (X_TP_001 and X_TP_002, tag demo-extra, 2026-11-01) were created with `npm run seed:extra`, and the daily top-up (`npm run seed:topup`) adds generated orders dated after 2026-10-31. None of them is in truth.json, which is pinned to the first load.";
+
 export const EXPLANATIONS: Explanation[] = [
   { store: "tidepool", where: "2026-10", note: WEBHOOK_TEST },
   { store: "tidepool", where: 'TP1 net_sales {"exclude_tag":"wholesale"} 2026-10-01..2026-10-31', note: WEBHOOK_TEST },
   { store: "tidepool", where: 'TP1 orders {"exclude_tag":"wholesale"} 2026-10-01..2026-10-31', note: WEBHOOK_TEST },
-  { store: "tidepool", where: "synced rows", metric: "orders", note: WEBHOOK_TEST },
+  { store: "tidepool", where: "synced rows", metric: "orders", note: `${WEBHOOK_TEST} ${DEMO_EXTRA}` },
 ];

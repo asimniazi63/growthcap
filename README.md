@@ -118,7 +118,7 @@ npm run dev
 ## Limitations
 
 - **Models.** The agent defaults to Claude Sonnet 4.6 on Bedrock (EU inference profile). Devstral 2, Kimi K3 (slow, about a minute for a simple question) and MiniMax M2.5 are selectable in the chat. The Claude 5.5 models were not approved for the account when this was built; `BEDROCK_CLAUDE_ENABLED=true` switches the defaults to them when they are. Spend is capped per brand per day (`TENANT_DAILY_BUDGET_USD`, default $5), and a "why" answer costs roughly ten cents on Sonnet.
-- **Demo clock.** The seeded data ends on 2026-10-31. If the newest order is more than 36 hours old the app treats the next day as today, so "last month" and "this month" stay meaningful.
+- **Demo clock.** The seeded data ends on 2026-10-31. If the newest order is more than 36 hours old the app treats the next day as today, so "last month" and "this month" stay meaningful. `npm run seed:topup` adds the days since, one complete day at a time.
 - **Theme writes.** Shopify lets an app write theme files only after an exemption request. Without it, an approved landing page is finished with `npm run landing:push`.
 - **Deferred.** Slack posting of the weekly brief and MCP access. Delivery of an approved brief is a log line until Slack is added.
 - **Single currency.** The portfolio ranks brands by gap in cents and assumes the same currency.

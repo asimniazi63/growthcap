@@ -232,7 +232,7 @@ docs/{metrics,runbook}.md, docs/decisions/*.md, docs/evals/                     
   - 4 call notes
   - `sow.md`, rendered to `sow.pdf`
   - `ad-spend.csv`, including the Meta cut from 2026-10-05
-- [ ] `topup.ts` generates with `--as-of` set to now, and loads only the orders and refunds dated up to now. Fixtures and evals stay pinned to the original seed.
+- [x] `topup.ts` generates with `--as-of` set to the last complete store-local day, and loads only the orders and refunds dated up to then (an order dated in the future is stamped with its creation time, so only past days are loaded). Fixtures and evals stay pinned to the original seed. Built 2026-11-01 as `npm run seed:topup`.
 - [ ] **Verify:**
   1. `npm run seed:generate -- --as-of <date>` run twice gives identical output.
   2. The pilot check passed, and Solenne's order count in the Shopify admin equals the dataset's count.

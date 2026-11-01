@@ -52,17 +52,19 @@ Checks before handing work over: `npm run typecheck`, `npm run lint`, and `npx v
 
 ## 4. Loading data
 
-Three different things. Do not mix them up.
+Five different things. Do not mix them up.
 
 | Command | What it does |
 |---|---|
 | `npm run seed:generate -- --store solenne\|tidepool\|all --as-of 2026-10-31` | Writes `dataset.json`, `truth.json`, `plan.csv` and `ad-spend.csv` to `fixtures/<store>/`. Deterministic (seed 42). It overwrites the committed files, which match the loaded stores, so only rerun it to change the data |
 | `npm run seed:load -- --store <store> [--dry-run] [--limit N]` **[live]** | Creates the products, customers, orders and refunds in the dev store through the seeder app. About 5 orders a minute, so a full Solenne load takes hours. Resumable: `.seed-journal/<store>.json` (git-ignored) records what is done, so keep it. `--dry-run` makes no network calls. Ask first |
+| `npm run seed:topup -- --store solenne\|tidepool\|all [--dry-run] [--through YYYY-MM-DD]` **[live]** | Adds the orders and refunds for the complete store-local days since the first load (as-of 2026-10-31), so Pace has a recent month. It regenerates in memory (the generator is deterministic and refuses to run if it no longer reproduces the first load), writes no fixture, and never touches the catalog or stock. Needs the first load's journal. Loads complete days only: Shopify stamps an order dated in the future with the moment it is created. Safe to rerun, and run it again each day before a demo. `--dry-run` makes no network calls; `--through` (dry run only) previews a later day. Ask first |
+| `npm run seed:extra -- --store tidepool [--dry-run]` **[live]** | Creates two hand-picked demo orders for Tidepool on 2026-11-01 (a new customer and a returning one, tag `demo-extra`, ids `X_TP_001` and `X_TP_002`), because the generator gave that small store no order that day. Same loader, journal and no-personal-data customers as the seed. Refuses while an order is still dated in the future (Shopify would stamp it with the creation time) and says when to run it. Safe to rerun. Ask first |
 | `npm run fixtures:load -- [--store solenne\|tidepool\|both] [--check]` | Loads `plan.csv`, `ad-spend.csv`, `calendar.csv` and `call-notes/*.md` into Postgres for the brand that owns the store. Safe to repeat. `--check` only validates the files |
 
 `fixtures:load` needs the shop to be connected to a brand already (it finds the brand from the `*_SHOP_DOMAIN` variable). It manages only the fixture plan, so a plan uploaded in the app is never overwritten. Pace needs the plan, MER and CAC need ad spend, and Why and landing pages from a campaign need the calendar.
 
-`npm run reconcile:truth -- --store solenne|tidepool [--journal <file>]` is read-only. It compares the synced data with `truth.json` through the same `queryMetric` the agent uses, writes one section per store to `docs/evals/reconciliation.md`, and exits 1 if a difference has no explanation. Explanations live in `scripts/reconcile/explanations.ts`. Add one when you make an extra order in a store, or it shows up as a difference. Without the seed journal, storyline checks on products and variants are skipped. Last run (2026-10-31): no differences on either store.
+`npm run reconcile:truth -- --store solenne|tidepool [--journal <file>]` is read-only. It compares the synced data with `truth.json` through the same `queryMetric` the agent uses, writes one section per store to `docs/evals/reconciliation.md`, and exits 1 if a difference has no explanation. Explanations live in `scripts/reconcile/explanations.ts`. Add one when you make an extra order in a store, or it shows up as a difference. Without the seed journal, storyline checks on products and variants are skipped. Last run (2026-10-31): no differences on either store. It compares against the 2026-10-31 dataset, so after a top-up it reports the new orders as differences; that is expected.
 
 ## 5. Syncing
 
