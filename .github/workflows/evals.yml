@@ -1,8 +1,9 @@
 name: Evals
 
-# Runs the agent evals against the real model. These are PAID calls, so they run on demand and on pull requests that
-# change the agent, its tools, the prompt or the model registry, with a cost cap per run. Pull requests from forks get no
-# secrets, so they skip the run.
+# Runs the agent evals against the real model. These are PAID calls, so this workflow runs on demand only, with a cost cap per
+# run. Asim chose on 2026-11-02 not to make evals part of CI yet: they are run locally (`npm run eval`) and the scoreboard in
+# docs/evals is committed. There is no pull_request trigger and no repository secrets are set. To use this workflow, add the
+# secrets listed below and start it from the Actions tab.
 
 on:
   workflow_dispatch:
@@ -15,14 +16,6 @@ on:
         description: "Model id from lib/agent/models.ts (empty = the default)"
         required: false
         default: ""
-  pull_request:
-    paths:
-      - "lib/agent/**"
-      - "lib/tools/**"
-      - "lib/agent/prompt.ts"
-      - "lib/agent/models.ts"
-      - "evals/**"
-      - ".github/workflows/evals.yml"
 
 permissions:
   contents: read

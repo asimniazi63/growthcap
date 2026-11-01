@@ -125,7 +125,7 @@ Reviewer demo logins: `reviewer-gc+clerk_test@example.com` is `gc_partner` in bo
 - The cases are in `evals/cases.ts` and `evals/why-cases.ts` (eight today: pacing gauge, remembered note, MER, and five "why" cases).
 - It writes `docs/evals/latest.md` and `latest.json` only when every case was run (no `--case`). The committed files are from the full 24-case run on Sonnet 4.6 (22 of 24; see the README for the two that failed). `--out` writes the run's JSON to a path you choose.
 - `AGENT_SINGLE_AGENT=true` leaves out `explain_gap`, to compare one agent with the multi-agent "why". It is for evals only.
-- Run it when you change `lib/agent`, `lib/tools`, prompts or `models.ts`. CI runs it on those pull requests and on demand (section 9a). `--max-cost <usd>` (or `EVAL_MAX_COST_USD`) stops starting new cases once the estimated cost reaches the cap. A full run also writes `docs/evals/scoreboard.md` and `.json`.
+- Run it when you change `lib/agent`, `lib/tools`, prompts or `models.ts`. It is run locally and the result is committed: there is no eval run in CI (section 9a). `--max-cost <usd>` (or `EVAL_MAX_COST_USD`) stops starting new cases once the estimated cost reaches the cap. A full run also writes `docs/evals/scoreboard.md` and `.json`.
 - `docs/evals/reconciliation.md` comes from `reconcile:truth` (section 4), not from this.
 
 ## 9a. Ops: tracing, model fallback and evals in CI
@@ -140,13 +140,13 @@ Reviewer demo logins: `reviewer-gc+clerk_test@example.com` is `gc_partner` in bo
 
 Prompts, answers and tool arguments or results are never recorded (`recordInputs` and `recordOutputs` are off on every call). The chat route flushes in `after()`, and `npm run eval` flushes before it exits. The code is `lib/ops/tracing.ts`, started from `instrumentation.ts`.
 
-**Evals in CI** (`.github/workflows/evals.yml`). Runs on demand (Actions, Evals, Run workflow) and on pull requests that change `lib/agent/**`, `lib/tools/**`, the prompt, `models.ts` or `evals/**`. Pull requests from forks skip it, because they get no secrets. Add these in GitHub, Settings, Secrets and variables, Actions:
+**Evals in CI (not enabled).** On 2026-11-02 Asim chose to run evals locally and commit the scoreboard instead of running them in CI. `.github/workflows/evals.yml` is kept and starts only on demand (Actions, Evals, Run workflow); it has no pull request trigger, and no secrets are set in GitHub, so starting it today fails at the first model call. To enable it, add these in GitHub, Settings, Secrets and variables, Actions:
 
 - Secret `AWS_BEARER_TOKEN_BEDROCK` (the Bedrock API key the app uses), or the pair `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (an IAM user allowed to invoke the models). Secret `AWS_REGION` (for example `eu-central-1`).
 - Optional secrets `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, to trace the runs.
 - Optional variables `EVAL_MAX_COST_USD` (the cap per run in US dollars, default 3) and `BEDROCK_CLAUDE_ENABLED`.
 
-A run stops starting new cases once the estimated cost reaches the cap and says so (`npm run eval -- --max-cost 3`, or `EVAL_MAX_COST_USD`). The scoreboard (accuracy, cost, average and p95 latency per category and overall) is in the job summary and in `docs/evals/scoreboard.md` and `.json`, uploaded with the rest of `docs/evals` as the `evals-<run id>` artifact. CI does not commit anything back: to keep a scoreboard, download the artifact and commit it.
+A run stops starting new cases once the estimated cost reaches the cap and says so (`npm run eval -- --max-cost 5`, or `EVAL_MAX_COST_USD`); with the cap hit, `latest.*` is not written. The scoreboard (accuracy, cost, average and p95 latency per category and overall) goes to `docs/evals/scoreboard.md` and `.json` with `latest.md` and `latest.json`. To keep a result, commit those four files. The 31-case full run costs about $3 on Sonnet 4.6, so run it with `--max-cost 5`.
 
 ## 10. Approved writes
 
