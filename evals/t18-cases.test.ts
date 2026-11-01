@@ -25,7 +25,7 @@ const failed = (r: EvalRun) => grade(r, review.expect(env)).filter((k) => !k.ok)
 
 describe("the playbook eval case (T18)", () => {
   it("is one case with a unique id, registered with the others", () => {
-    expect(T18_CASES.map((c) => c.id)).toEqual(["playbook-monthly-review-october"]);
+    expect(T18_CASES.map((c) => c.id)).toEqual(["playbook-monthly-review-october", "playbook-retention-check"]);
     expect(CASES).toContain(review);
     expect(CASES.filter((c) => c.id === review.id)).toHaveLength(1);
     expect(review).toMatchObject({ category: "playbook", store: "solenne", now: "2026-11-02T12:00:00-05:00" });

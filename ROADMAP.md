@@ -22,7 +22,7 @@ What is built, what was left out on purpose, what production would add, and what
 | T13 | Invoices, document questions, call notes | Built 2026-11-01. A supplier invoice becomes five approved unit-cost updates, checked live end to end on Solenne (real Shopify writes). A call note becomes plan changes and action items, checked live 2026-11-02; the check found a dropped action item, fixed the same day |
 | T14 | Data-health checks and growth audit | Built 2026-11-01. `/audit` runs four fixed checks and the model writes them up; checked live on Tidepool 2026-11-02 |
 | T15 | Langfuse traces, fallback model, evals | Built. Traces are live on the deployed app (2026-11-02). The fallback decision (`lib/agent/fallback.ts`) has unit tests; the full run-level path has no test and has not been seen in a real outage. Evals run locally, not in CI, by choice (below) |
-| T18 | Playbooks | Built 2026-11-02. `/playbooks` (GC roles only) runs a Black Friday review, a retention check or a monthly business review through the agent loop, so the number checker runs, and stores each run per brand. One paid call per run, one run per brand per playbook per 10 minutes. The eval case (October's review names the budget cut, S9) is written but not run. The Slack bot is T18b |
+| T18 | Playbooks | Built 2026-11-02. `/playbooks` (GC roles only) runs a Black Friday review, a retention check or a monthly business review through the agent loop, so the number checker runs, and stores each run per brand. One paid call per run, one run per brand per playbook per 10 minutes. The eval case (October's review names the budget cut, S9) passes, and a retention case guards the figures. Both were run once, not as part of the full set. The Slack bot is T18b |
 
 ## Deferred on purpose
 

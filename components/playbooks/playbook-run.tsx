@@ -1,10 +1,10 @@
 import { CheckCircle2, ShieldAlert } from "lucide-react";
 import type { PlaybookRunView } from "@/lib/playbooks/store";
-import { monthLabel, paragraphs } from "./format";
+import { monthLabel, paragraphs, segments } from "./format";
 
 const when = (d: Date) => new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(d) + " UTC";
 
-// One saved run of a playbook. The write-up is model text, so it is shown as plain text paragraphs: no markdown, no HTML.
+// One saved run of a playbook. The write-up is model text, shown as text paragraphs: the only markup is a bold lead-in, no HTML.
 // A blocked run lists the figures the number checker could not find in the data.
 export function PlaybookRun({ run, title }: { run: PlaybookRunView; title: string }) {
   const blocked = run.status === "blocked";
@@ -23,7 +23,7 @@ export function PlaybookRun({ run, title }: { run: PlaybookRunView; title: strin
         {text.length > 0 ? (
           text.map((p, i) => (
             <p key={i} className="whitespace-pre-line">
-              {p}
+              {segments(p).map((s, j) => (s.bold ? <strong key={j}>{s.text}</strong> : s.text))}
             </p>
           ))
         ) : (

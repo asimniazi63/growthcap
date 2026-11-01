@@ -31,3 +31,22 @@ export const paragraphs = (body: string): string[] =>
     .split(/\r?\n\s*\r?\n/)
     .map((p) => p.trim())
     .filter(Boolean);
+
+export interface Segment {
+  text: string;
+  bold: boolean;
+}
+
+// The write-up's one bit of markup: a lead-in between double asterisks. Anything else stays text, so the model can't add
+// links, images or HTML. An unpaired "**" is shown as it is.
+export function segments(paragraph: string): Segment[] {
+  const out: Segment[] = [];
+  let last = 0;
+  for (const m of paragraph.matchAll(/\*\*([^*]+?)\*\*/g)) {
+    if (m.index > last) out.push({ text: paragraph.slice(last, m.index), bold: false });
+    out.push({ text: m[1]!, bold: true });
+    last = m.index + m[0].length;
+  }
+  if (last < paragraph.length) out.push({ text: paragraph.slice(last), bold: false });
+  return out;
+}
