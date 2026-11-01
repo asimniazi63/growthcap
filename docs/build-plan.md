@@ -324,7 +324,7 @@ Each extra is a feature from [feature-map.md](feature-map.md) that the brief doe
 
 ### T17: Growth analyses: promo post-mortems, merchandising and retention segments (about 2 days)
 
-**Status (2026-11-02): slice 1 (promo post-mortems) built.** The `get_promo_postmortem` tool is in `lib/tools/promo-postmortem.ts`, with the baseline, pull-forward and cohort maths in `lib/metrics/postmortem.ts`. For a code or a date window it returns the extra sales against a baseline of the days before, the sales pulled forward from the days after, the net lift, the cost of the offer, and the repeat rate of the customers it brought against a comparison group. Its tests run on the fixtures for BFCM25 (S8) and VIPGLOW25 (S6). Still open: merchandising (bundles, launch curves) and retention segments (RFM, LTV, churn risk, a Shopify segment on approval, the Klaviyo CSV). Two eval cases are written in `evals/t17-cases.ts` (`postmortem-vipglow25`, `postmortem-bfcm25`) and have not been run. They are paid, so run them only with Asim's go-ahead.
+**Status (2026-11-02): slice 1 (promo post-mortems) built.** The `get_promo_postmortem` tool is in `lib/tools/promo-postmortem.ts`, with the baseline, pull-forward and cohort maths in `lib/metrics/postmortem.ts`. For a code or a date window it returns the extra sales against a baseline of the days before, the sales pulled forward from the days after, the net lift, the cost of the offer, and the repeat rate of the customers it brought against a comparison group. Its tests run on the fixtures for BFCM25 (S8) and VIPGLOW25 (S6). Still open: merchandising (bundles, launch curves) and retention segments (RFM, LTV, churn risk, a Shopify segment on approval, the Klaviyo CSV). Two eval cases are in `evals/t17-cases.ts`, each run once live on 2026-11-02 (they are paid, so run them only with Asim's go-ahead). `postmortem-bfcm25` passed 12 of 12 ($0.21). `postmortem-vipglow25` passed 12 of 13 ($0.13): the model wrote the repeat-rate gap as "16.7 percentage points", which the number checker then read as an untraced count. The checker now reads "percentage points", "percent" and "pp" as a percentage, and the saved answer re-checks clean offline; the case has not been re-run live.
 
 **Deliverable:** three analyses GC operators run often, as tools the agent can call.
 
@@ -335,7 +335,7 @@ Each extra is a feature from [feature-map.md](feature-map.md) that the brief doe
   - On approval, a segment is created in Shopify, through T9's approval card. A 15-minute spike confirms the segment mutation and its scope first. If it needs more than Level 1 customer data, segments stay in Oasis.
   - Export for Klaviyo is a CSV, because there's no Klaviyo account, and the README says how a sync would work.
 - [ ] Tests: the post-mortem baseline maths (done in slice 1); the RFM scoring; nothing is created in Shopify without approval.
-- [ ] Eval cases: "Was VIPGLOW25 worth it?" (S6; written, with a Black Friday case for BFCM25 (S8), not yet run); "Which customers are at risk?".
+- [ ] Eval cases: "Was VIPGLOW25 worth it?" (S6, in August; with a Black Friday case for BFCM25 (S8). Both run once live: BFCM25 12 of 12, VIPGLOW25 12 of 13 before a checker fix); "Which customers are at risk?".
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ### T18: Playbooks (about 3–4 hours)

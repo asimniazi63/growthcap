@@ -36,7 +36,7 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 | 15 | Extras | T14: Store checks: data health and growth audit | #15 | The ⭐ growth audit (features 30, 40) |
 | 16 | Extras | T15: Ops: traces, model fallback, evals in CI | #16 | Quality and reliability (features 15, 20, 44) |
 | 17 | Extras | T16: Forecasting: scenarios, runway, Black Friday war room | #17 | Features 31, 32, 33 |
-| 18 | Extras | T17: Growth analyses: post-mortems, merchandising, segments (**slice 1, promo post-mortems, built 2026-11-02; its two eval cases are written, not run; merchandising and segments are open**) | #18 | Features 34, 35, 36 |
+| 18 | Extras | T17: Growth analyses: post-mortems, merchandising, segments (**slice 1, promo post-mortems, built 2026-11-02; its two eval cases ran once live, BFCM25 12 of 12 and VIPGLOW25 12 of 13 before a checker fix; merchandising and segments are open**) | #18 | Features 34, 35, 36 |
 | 19 | Extras | T18: Playbooks (**built 2026-11-02; October review eval passes, 8 of 8**) | #19 | Feature 38 |
 | 19b | Extras | T18b: Slack bot | #23 | Feature 39 (the Slack part). Needs a Slack app from Asim. Numbered 19b so the later priorities keep their numbers |
 | 20 | Extras | T19: Fuller dataset | #20 | Features 3, 5. It replaces the demo data, so it runs last, with a day to spare |
