@@ -161,6 +161,15 @@ describe("ledgerFromToolResults", () => {
     expect(by("marginRate")).toMatchObject({ value: 66, unit: "rate" });
   });
 
+  it("reads the promo post-mortem's shares and repeat-rate gap as percentages, so '265.2%' and 'a gap of 8.3%' match", () => {
+    const l = ledgerFromToolResults([
+      result({ extra: { netSalesCents: 151263, pctOfExpected: 2.652, ordersPctOfExpected: 3.5 }, customers: { repeatRateGap: -0.0833 } }, "q_postmortem"),
+    ]);
+    expect(unmatched("Net sales ran 265.2% above expected, orders 350% above.", l)).toEqual([]);
+    expect(unmatched("Its customers came back 8.3% less often.", l)).toEqual([]);
+    expect(unmatched("Net sales ran 2.7% above expected.", l)).toEqual(["2.7%"]);
+  });
+
   it("reads metric rows by the unit the registry gives each metric, including change and share", () => {
     const l = ledgerFromToolResults([
       result([{ group: {}, values: { net_sales: 1234500, orders: 41, refund_rate: 0.03125 }, change: { net_sales: -5000, orders: -3 }, pctChange: { net_sales: -0.004, orders: null }, share: { orders: 0.25 } }], "q_m"),

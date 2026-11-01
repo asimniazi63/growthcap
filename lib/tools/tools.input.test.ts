@@ -9,6 +9,7 @@ import { describeMetrics } from "./describe";
 import { getInventory } from "./inventory";
 import { getOrders } from "./orders";
 import { searchProducts } from "./products";
+import { getPromoPostmortem } from "./promo-postmortem";
 
 let db: Db;
 let ctx: TenantContext;
@@ -28,6 +29,7 @@ const tools: Record<string, Tool> = {
   getInventory: getInventory as Tool,
   getCustomers: getCustomers as Tool,
   describeMetrics: describeMetrics as Tool,
+  getPromoPostmortem: getPromoPostmortem as Tool,
 };
 const call = (name: string, input: unknown, c: TenantContext = ctx) => tools[name]!(c, input as never, { db });
 
@@ -45,14 +47,14 @@ describe.each(Object.keys(tools))("%s", (name) => {
 });
 
 describe("dates", () => {
-  it.each(["getOrders", "getCustomers"])("%s rejects a malformed date, an impossible one, and from after to", async (name) => {
+  it.each(["getOrders", "getCustomers", "getPromoPostmortem"])("%s rejects a malformed date, an impossible one, and from after to", async (name) => {
     await expect(call(name, { from: "05/01/2026", to: "2026-05-31" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call(name, { from: "2026-02-30", to: "2026-03-01" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call(name, { from: "2026-06-01", to: "2026-05-01" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call(name, { from: "2026-06-01" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
-  it.each(["getOrders", "getCustomers"])("%s answers NO_DATA outside the data window", async (name) => {
+  it.each(["getOrders", "getCustomers", "getPromoPostmortem"])("%s answers NO_DATA outside the data window", async (name) => {
     await expect(call(name, { from: "2025-01-01", to: "2025-01-31" })).rejects.toMatchObject({ code: "NO_DATA" });
     await expect(call(name, { from: "2027-01-01", to: "2027-01-31" })).rejects.toMatchObject({ code: "NO_DATA" });
   });
@@ -66,6 +68,7 @@ describe("values", () => {
     await expect(call("getInventory", { coverWindowDays: 5 })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call("getCustomers", { view: "everyone" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call("getCustomers", { rankBy: "age" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getPromoPostmortem", { code: "BFCM25", baselineDays: 30 })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call("describeMetrics", { metrics: ["profit"] })).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 

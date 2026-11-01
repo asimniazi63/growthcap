@@ -324,16 +324,18 @@ Each extra is a feature from [feature-map.md](feature-map.md) that the brief doe
 
 ### T17: Growth analyses: promo post-mortems, merchandising and retention segments (about 2 days)
 
+**Status (2026-11-02): slice 1 (promo post-mortems) built.** The `get_promo_postmortem` tool is in `lib/tools/promo-postmortem.ts`, with the baseline, pull-forward and cohort maths in `lib/metrics/postmortem.ts`. For a code or a date window it returns the extra sales against a baseline of the days before, the sales pulled forward from the days after, the net lift, the cost of the offer, and the repeat rate of the customers it brought against a comparison group. Its tests run on the fixtures for BFCM25 (S8) and VIPGLOW25 (S6). Still open: merchandising (bundles, launch curves) and retention segments (RFM, LTV, churn risk, a Shopify segment on approval, the Klaviyo CSV). Two eval cases are written in `evals/t17-cases.ts` (`postmortem-vipglow25`, `postmortem-bfcm25`) and have not been run. They are paid, so run them only with Asim's go-ahead.
+
 **Deliverable:** three analyses GC operators run often, as tools the agent can call.
 
-- [ ] Promo post-mortems (feature 34): for a code or an event, the extra sales against sales pulled forward (baselines from the weeks before and after), and the quality of the customers it brought (repeat rate, from T12). Demo on BFCM25 (S8) and VIPGLOW25 (S6).
+- [x] Promo post-mortems (feature 34): for a code or an event, the extra sales against sales pulled forward (baselines from the weeks before and after), and the quality of the customers it brought (repeat rate, from T12). Demo on BFCM25 (S8) and VIPGLOW25 (S6). Built in slice 1; the demo is the tool's tests on the fixtures, and the answers the agent gives are the unrun eval cases below.
 - [ ] Merchandising (feature 36): products often bought together, as bundle candidates; and launch curves (units by days since launch).
 - [ ] Retention segments (feature 35):
   - RFM scores, LTV and churn risk per pseudonymous customer, and segments such as champions, at risk, one-and-done and due to reorder.
   - On approval, a segment is created in Shopify, through T9's approval card. A 15-minute spike confirms the segment mutation and its scope first. If it needs more than Level 1 customer data, segments stay in Oasis.
   - Export for Klaviyo is a CSV, because there's no Klaviyo account, and the README says how a sync would work.
-- [ ] Tests: the post-mortem baseline maths; the RFM scoring; nothing is created in Shopify without approval.
-- [ ] Eval cases: "Was VIPGLOW25 worth it?" (S6); "Which customers are at risk?".
+- [ ] Tests: the post-mortem baseline maths (done in slice 1); the RFM scoring; nothing is created in Shopify without approval.
+- [ ] Eval cases: "Was VIPGLOW25 worth it?" (S6; written, with a Black Friday case for BFCM25 (S8), not yet run); "Which customers are at risk?".
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ### T18: Playbooks (about 3–4 hours)

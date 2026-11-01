@@ -24,7 +24,7 @@ export interface ClaimLedger {
 
 const METRIC_MAPS = new Set(["values", "previous", "change"]);
 const RATE_MAPS = new Set(["pctChange", "share"]);
-const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate"]);
+const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate", "pctOfExpected", "ordersPctOfExpected", "repeatRateGap"]);
 
 function classify(key: string, parentKey: string | undefined, raw: number): { value: number; unit: ClaimUnit } {
   if (parentKey && METRIC_MAPS.has(parentKey)) {

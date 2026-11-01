@@ -7,6 +7,7 @@ import { AppError } from "../errors";
 import { getDataHealthTool } from "../health/tool";
 import { askDocumentTool } from "../plan-in/ask-tool";
 import { getCohortsTool } from "../tools/cohorts";
+import { getPromoPostmortemTool } from "../tools/promo-postmortem";
 import { getUnitEconomicsTool } from "../tools/unit-economics";
 import { getZeroSalesDaysTool } from "../tools/zero-sales-days";
 import { queryMetric, queryMetricInputSchema } from "../metrics/query";
@@ -62,6 +63,7 @@ export const TOOL_DEFS: Record<string, ToolDef> = {
   ask_document: askDocumentTool as unknown as ToolDef,
   get_cohorts: getCohortsTool as unknown as ToolDef,
   get_unit_economics: getUnitEconomicsTool as unknown as ToolDef,
+  get_promo_postmortem: getPromoPostmortemTool as unknown as ToolDef,
   get_zero_sales_days: getZeroSalesDaysTool as unknown as ToolDef,
   get_action_items: getActionItemsTool as unknown as ToolDef,
   get_data_health: getDataHealthTool as unknown as ToolDef,

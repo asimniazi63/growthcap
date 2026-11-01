@@ -41,7 +41,7 @@ Each is a feature from [docs/feature-map.md](docs/feature-map.md) the brief does
 | Ticket | Idea |
 |---|---|
 | T16 | Forecast, what-if scenarios, inventory runway, Black Friday war room |
-| T17 | Promo post-mortems, merchandising analyses, retention segments |
+| T17 | Promo post-mortems, merchandising analyses, retention segments. Slice 1 (the `get_promo_postmortem` tool) was built 2026-11-02, with its two eval cases written and not run; merchandising and retention segments are open |
 | T18b | A Slack bot that answers questions and runs playbooks (split from T18 on 2026-11-02) |
 | T19 | About 3,000 orders with the two subtle storylines (S1, S2) and the weak BFCM cohort, in fresh stores |
 

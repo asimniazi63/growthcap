@@ -10,6 +10,7 @@ import { getCustomers } from "./customers";
 import { getInventory } from "./inventory";
 import { getOrders } from "./orders";
 import { searchProducts } from "./products";
+import { getPromoPostmortem } from "./promo-postmortem";
 
 // Both stores live in one database. Tidepool's context must never see a Solenne row, whatever it is handed.
 let db: Db;
@@ -49,6 +50,7 @@ describe("the Solenne ids really exist in Solenne (so the empty answers below me
     const me = pseudonymFor(sCtx.tenantId, shopifyId.customer(x.customer.genId));
     expect((await getCustomers(sCtx, { view: "list", ...FULL, customerIds: [me] }, { db })).data.length).toBeGreaterThanOrEqual(0);
     expect(x.codes.length).toBeGreaterThan(0);
+    expect((await getPromoPostmortem(sCtx, { code: "VIPGLOW25" }, { db })).data.codeOrders!.orders).toBeGreaterThan(0);
   });
 });
 
@@ -92,6 +94,14 @@ describe("Tidepool's context, handed Solenne's ids", () => {
     expect(all.data.every((c) => tidepoolIds.has(c.customerId))).toBe(true);
     const summary = await getCustomers(tCtx, { view: "summary", ...FULL }, { db });
     expect((summary.data[0] as { activeCustomers: number }).activeCustomers).toBeLessThanOrEqual(tidepool.customers.length);
+  });
+
+  it("getPromoPostmortem finds no code that only Solenne used, and reads a shared code from Tidepool's own orders", async () => {
+    for (const code of onlySolenne().codes.filter((c) => solenne.orders.some((o) => o.discountCode === c))) {
+      await expect(getPromoPostmortem(tCtx, { code }, { db }), code).rejects.toMatchObject({ code: "NO_DATA" });
+    }
+    const shared = await getPromoPostmortem(tCtx, { code: "BFCM25" }, { db });
+    expect(shared.data.codeOrders!.orders).toBe(tidepool.orders.filter((o) => o.discountCode === "BFCM25").length);
   });
 
   it("the same shopper gets different pseudonyms in the two tenants, so they can't be joined", () => {
