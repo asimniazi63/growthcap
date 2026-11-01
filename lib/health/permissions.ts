@@ -38,6 +38,7 @@ export function permissionGroups(scopes: string): PermissionGroups {
       { id: "annotations", label: "Chart annotations", detail: "Add a dated note to charts", state: all("write_analytics_annotations") },
       { id: "discount_codes", label: "Discount codes", detail: "Turn a code off", state: all("write_discounts") },
       { id: "unit_costs", label: "Unit costs", detail: "Update a variant's cost after an invoice is approved", state: all("write_inventory") },
+      { id: "customer_segments", label: "Customer segments", detail: "Save a customer segment after it is approved", state: all("write_customers") },
       {
         id: "landing_pages",
         label: "Landing pages",

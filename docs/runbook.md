@@ -160,7 +160,7 @@ The agent can ask for a change. It cannot make one.
 
 **Reviewer dry runs.** If the approver's Clerk user id is in `REVIEWER_USER_IDS`, the approval is recorded as a dry run: the card shows the exact mutations, the action is marked `done` with `dryRun` set, and Shopify is never called. With the variable empty, nobody is a reviewer. The same applies to brief approvals (section 13).
 
-Writes need their scopes: `write_reports` (target), `write_analytics_annotations`, `write_discounts` (with `read_discounts` for the code lookup), `write_customers` (for `segment_create`, not granted yet). Shopify refuses a second target for the same metric and dates, and limits annotations per app per shop. The Oasis plan is not changed by a Metric Target.
+Writes need their scopes: `write_reports` (target), `write_analytics_annotations`, `write_discounts` (with `read_discounts` for the code lookup), `write_customers` (for `segment_create`; requested in the toml and at install, but a store has it only after `shopify app deploy` and Update permissions). Shopify refuses a second target for the same metric and dates, and limits annotations per app per shop. The Oasis plan is not changed by a Metric Target.
 
 ## 11. Landing pages
 

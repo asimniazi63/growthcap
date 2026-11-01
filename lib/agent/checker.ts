@@ -122,8 +122,28 @@ const SKIP_PATTERNS: RegExp[] = [
   /^[ \t]*\d+[.)](?=\s)/gm, // list numbering
 ];
 
+// A table column headed "#", "No." or "Rank" numbers the rows: those are positions, not figures. Only that first column is
+// skipped, and only below such a header, so a first column of real counts is still checked. The length stays the same.
+function maskRankColumn(text: string): string {
+  let ranked = false;
+  return text
+    .split("\n")
+    .map((line) => {
+      if (!/^\s*\|/.test(line)) {
+        ranked = false;
+        return line;
+      }
+      if (/^\s*\|\s*(?:#|no\.?|rank)\s*\|/i.test(line)) {
+        ranked = true;
+        return line;
+      }
+      return ranked ? line.replace(/^(\s*\|\s*)(\d+)(?=\s*\|)/, (_, lead: string, digits: string) => lead + " ".repeat(digits.length)) : line;
+    })
+    .join("\n");
+}
+
 function mask(text: string, names: string[] = []): string {
-  let out = text;
+  let out = maskRankColumn(text);
   for (const name of names) out = out.split(name).join(" ".repeat(name.length));
   for (const re of SKIP_PATTERNS) out = out.replace(re, (m) => " ".repeat(m.length));
   return out;

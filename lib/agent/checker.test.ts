@@ -52,6 +52,18 @@ describe("checkClaims: matching", () => {
     expect(unmatched("There were 3 percentage points of it.", ledger([{ value: 3, unit: "count" }]))).toEqual(["3 percentage points"]);
   });
 
+  it("skips the numbers in a table column headed #, No. or Rank, because they are positions (found in the bundles run: '| 3 |' and '| 4 |')", () => {
+    const l = ledger([{ value: 5, unit: "count" }]);
+    const ranked = "| # | Pair | Orders |\n|---|---|---|\n| 1 | A + B | 5 |\n| 2 | C + D | 5 |\n| 3 | E + F | 5 |\n| 4 | G + H | 5 |";
+    expect(unmatched(ranked, l)).toEqual([]);
+    expect(unmatched(ranked.replace("| # |", "| Rank |"), l)).toEqual([]);
+    // A first column that holds figures is not a rank column, and a number outside the first cell still counts.
+    expect(unmatched("| Orders | Pair |\n|---|---|\n| 3 | E + F |", l)).toEqual(["3"]);
+    expect(unmatched("| # | Pair | Orders |\n|---|---|---|\n| 1 | A + B | 7 |", l)).toEqual(["7"]);
+    // The skip ends with the table.
+    expect(unmatched("| # | Pair |\n|---|---|\n| 1 | A + B |\n\nThere were 3 of them.", l)).toEqual(["3"]);
+  });
+
   it("matches a plain number to a count, but not to money", () => {
     expect(unmatched("There were 3,012 orders.", ledger([{ value: 3012, unit: "count" }]))).toEqual([]);
     expect(unmatched("Net sales were $3,012.", ledger([{ value: 3012, unit: "count" }]))).toEqual(["$3,012"]);

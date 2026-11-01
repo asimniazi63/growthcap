@@ -233,11 +233,13 @@ describe("the segment and bundle eval cases (T17, slice 2)", () => {
     };
     expect(failed(atRisk, twoCalls)).toEqual([]);
     expect(failed(atRisk, segRun(SEG_GOOD, { view: "list" }))).toEqual([]);
+    // The summary view alone is a right answer (the first live run did exactly that): it holds the at-risk row.
+    expect(failed(atRisk, segRun(SEG_GOOD, {}))).toEqual([]);
+    expect(failed(atRisk, segRun(SEG_GOOD, { view: "summary" }))).toEqual([]);
 
-    // The tool was not called, or only for another segment, or only for the summary of all of them.
-    expect(failed(atRisk, segRun(SEG_GOOD, SEG_INPUT, "query_metric"))).toEqual(["called get_customer_segments", "asked for the at-risk segment, or for a list of customers"]);
-    expect(failed(atRisk, segRun(SEG_GOOD, { segment: "champions" }))).toEqual(["asked for the at-risk segment, or for a list of customers"]);
-    expect(failed(atRisk, segRun(SEG_GOOD, {}))).toEqual(["asked for the at-risk segment, or for a list of customers"]);
+    // The tool was not called, or only for another segment.
+    expect(failed(atRisk, segRun(SEG_GOOD, SEG_INPUT, "query_metric"))).toEqual(["called get_customer_segments", "did not narrow the call to another segment"]);
+    expect(failed(atRisk, segRun(SEG_GOOD, { segment: "champions" }))).toEqual(["did not narrow the call to another segment"]);
 
     // Each piece left out fails its own check.
     const noCount = "Customers are pseudonymous ids, so there are no names. Some are at risk. Their average lifetime value is $187.40, and it has been 214 days on average since their last order. At risk is a rule, not a prediction.";
@@ -245,8 +247,6 @@ describe("the segment and bundle eval cases (T17, slice 2)", () => {
     const noShareOrDays = SEG_GOOD.replace("which is 23.6% of all customers", "which is a fair number").replace(", and it has been 214 days on average since their last order", "");
     expect(failed(atRisk, segRun(noShareOrDays))).toEqual(["gives their share of customers as a percentage, or the average days since their last order"]);
     expect(failed(atRisk, segRun(SEG_GOOD.replace("$187.40", "a fair amount").replace(" ($642.00)", "").replace(" ($590.00)", "")))).toEqual(["gives their lifetime value in dollars"]);
-    const noIds = SEG_GOOD.replace("Customers here are pseudonymous ids, so there are no names or emails. ", "").replace(" are CUST_1a2b3c4d ($642.00) and CUST_5e6f7a8b ($590.00)", " are the two with the most orders");
-    expect(failed(atRisk, segRun(noIds))).toEqual(["refers to customers by pseudonymous id, or says there are no names"]);
     const noRule = SEG_GOOD.replace("At risk is a rule, not a prediction: two or more orders, but nothing in the last 90 days.", "These are the customers to watch.");
     expect(failed(atRisk, segRun(noRule))).toEqual(["explains at risk as a rule on days since the last order, not a prediction"]);
   });

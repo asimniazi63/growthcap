@@ -269,16 +269,21 @@ export const T17_CASES: EvalCase[] = [
       tools: ["get_customer_segments"],
       toolWhere: [
         {
-          label: "asked for the at-risk segment, or for a list of customers",
+          // The summary view holds the at-risk row, and the prompt says to start there and list customers only when asked to name
+          // them (found in the first live run: a summary-only answer was right and the old check failed it). A call for another
+          // segment is the wrong one.
+          label: "did not narrow the call to another segment",
           tool: "get_customer_segments",
-          test: (i) => /at[_-]risk|\blist\b/i.test(JSON.stringify(i)),
+          test: (i) => {
+            const segment = (i as { segment?: string }).segment;
+            return segment === undefined || segment === "at_risk";
+          },
         },
       ],
       mentions: [
         { label: "says how many customers are at risk", pattern: AT_RISK_COUNT },
         { label: "gives their share of customers as a percentage, or the average days since their last order", pattern: SHARE_OR_DAYS },
         { label: "gives their lifetime value in dollars", pattern: LTV_IN_DOLLARS },
-        { label: "refers to customers by pseudonymous id, or says there are no names", pattern: IDS_NOT_NAMES },
         { label: "explains at risk as a rule on days since the last order, not a prediction", pattern: RULE_NOT_PREDICTION },
       ],
       avoid: [

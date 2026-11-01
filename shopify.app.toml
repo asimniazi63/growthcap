@@ -10,7 +10,7 @@ embedded = false
 # Stretch writes (T8 Act, T9 landing pages): write_discounts, write_reports and write_analytics_annotations for the approved actions;
 # read_themes, write_themes and write_content for the landing pages. Shopify gates themeFilesUpsert behind an exemption request on top
 # of write_themes: if `shopify app deploy` refuses it, drop write_themes and use the Theme Access fallback.
-scopes = "read_products,read_orders,read_customers,read_inventory,read_discounts,write_discounts,write_reports,write_analytics_annotations,read_themes,write_themes,write_content,write_inventory"
+scopes = "read_products,read_orders,read_customers,read_inventory,read_discounts,write_discounts,write_reports,write_analytics_annotations,read_themes,write_themes,write_content,write_inventory,write_customers"
 
 [auth]
 redirect_urls = ["https://oasis-pace.vercel.app/api/shopify/callback"]
