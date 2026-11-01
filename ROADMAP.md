@@ -41,7 +41,8 @@ Each is a feature from [docs/feature-map.md](docs/feature-map.md) the brief does
 |---|---|
 | T16 | Forecast, what-if scenarios, inventory runway, Black Friday war room |
 | T17 | Promo post-mortems, merchandising analyses, retention segments |
-| T18 | Saved playbooks, a Slack bot |
+| T18 | Saved playbooks run from the app |
+| T18b | A Slack bot that answers questions and runs playbooks (split from T18 on 2026-11-02) |
 | T19 | About 3,000 orders with the two subtle storylines (S1, S2) and the weak BFCM cohort, in fresh stores |
 
 If time runs short, cut from the bottom: T19 back to T16, then T10, T8 part D, T7, T9, T8 part C and T6. Nothing in T0 to T5 is cut.

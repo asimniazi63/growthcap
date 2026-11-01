@@ -27,7 +27,8 @@
 | T15 | Claude | about 3–4 h | Extra: Langfuse traces, a fallback model, evals in CI | Ops | 15, 20, 44 |
 | T16 | Claude | about 1.5–2 days | Extra: a forecast with what-if scenarios, inventory runway and reorder points, a Black Friday war room | New: forecasting | 31, 32, 33 |
 | T17 | Claude | about 2 days | Extra: promo post-mortems, merchandising analyses, retention segments | New: growth analyses | 34, 35, 36 |
-| T18 | Claude | about 6–8 h | Extra: saved playbooks, run from the app or a Slack bot | New: playbooks, use it anywhere | 38, 39 |
+| T18 | Claude | about 3–4 h | Extra: saved playbooks run from the app | New: playbooks | 38 |
+| T18b | Both | about 3–4 h | Extra: a Slack bot that answers questions and runs playbooks (split from T18 on 2026-11-02) | New: use it anywhere | 39 (Slack part) |
 | T19 | Both | about 2 h, plus about 7 h of loading | Extra: about 3,000 orders with S1, S2 and the weak BFCM cohort, in fresh stores | Fuller demo data | 3, 5 |
 | T11 | Both | about 2–3 h | Full evals, final README, final Loom | Ship | 10, 11, 16, 45 |
 
@@ -335,21 +336,29 @@ Each extra is a feature from [feature-map.md](feature-map.md) that the brief doe
 - [ ] Eval cases: "Was VIPGLOW25 worth it?" (S6); "Which customers are at risk?".
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
-### T18: Playbooks and Slack (about 6–8 hours)
+### T18: Playbooks (about 3–4 hours)
 
-**Deliverable:** saved playbooks the agent runs, from the app or from Slack.
+**Deliverable:** saved playbooks the agent runs from the app. The Slack side is T18b below.
 
 - [ ] Playbooks (feature 38): a BFCM review, a retention check and a monthly business review. Each is a saved sequence of tool calls plus a write-up template, run through the shared agent loop so the checker runs. The output is a report view, for GC roles only.
-- [ ] A Slack bot (feature 39):
-  - It answers questions in a channel and runs a playbook on request.
-  - Each channel maps to one brand; a `gc_admin` sets the mapping, and requests run as that brand's tenant.
-  - Slack's request signature is checked, and link previews are off.
-- [ ] Asim creates the Slack app: the bot token and the signing secret.
+- [ ] Tests: every number in a playbook matches a tool result.
+- [ ] Eval case: the monthly business review for October names the budget cut (S9).
+- [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
+
+### T18b: Slack bot (about 3–4 hours)
+
+Split out of T18 on 2026-11-02 (Asim). Needs T18, because the bot runs the playbooks, and a Slack app that Asim creates. T10b (Slack posting of the Monday brief, deferred) can share that Slack app: it needs an incoming webhook, the bot needs a bot token and a signing secret.
+
+**Deliverable:** a Slack bot that answers questions and runs playbooks in a channel.
+
+- [ ] The bot answers questions in a channel and runs a playbook on request.
+- [ ] Each channel maps to one brand; a `gc_admin` sets the mapping, and requests run as that brand's tenant.
+- [ ] Slack's request signature is checked, and link previews are off.
+- [ ] Asim creates the Slack app and gives the bot token and the signing secret.
 - [ ] Tests:
   - A request with a bad signature is rejected.
   - A channel mapped to Solenne can't read Tidepool.
-  - Every number in a playbook matches a tool result.
-- [ ] Eval case: the monthly business review for October names the budget cut (S9).
+- [ ] No new eval case: the playbook case in T18 covers what the bot runs.
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ### T19: Fuller dataset: 3,000 orders and the subtle storylines (about 2 hours, plus about 7 hours of loading)

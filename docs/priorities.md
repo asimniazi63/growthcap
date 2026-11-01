@@ -37,7 +37,8 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 | 16 | Extras | T15: Ops: traces, model fallback, evals in CI | #16 | Quality and reliability (features 15, 20, 44) |
 | 17 | Extras | T16: Forecasting: scenarios, runway, Black Friday war room | #17 | Features 31, 32, 33 |
 | 18 | Extras | T17: Growth analyses: post-mortems, merchandising, segments | #18 | Features 34, 35, 36 |
-| 19 | Extras | T18: Playbooks and Slack | #19 | Features 38, 39 |
+| 19 | Extras | T18: Playbooks | #19 | Feature 38 |
+| 19b | Extras | T18b: Slack bot | #23 | Feature 39 (the Slack part). Needs a Slack app from Asim. Numbered 19b so the later priorities keep their numbers |
 | 20 | Extras | T19: Fuller dataset | #20 | Features 3, 5. It replaces the demo data, so it runs last, with a day to spare |
 | 21 | Last, always | T11: Final ship | #12 | Whatever is built gets its evals, docs and the final Loom |
 
@@ -48,6 +49,8 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 - **2026-10-31, Asim:** T0, T1 and T2 are closed on GitHub. T3 stays open until the `orders/create` check is done; T4 stays open until the suggested questions are checked on the Vercel URL after the latest fixes are deployed. T5 is deferred and T6 ran next (done 2026-10-31, with a small `npm run eval` for its three cases). Until T5 is built there is no `npm run eval`, so T6's three eval cases are listed in its ticket and written when the harness exists.
 
 - **2026-10-31, Asim:** T7, T8 (C and D), T9 and T10 were built together in one parallel pass, with full testing, evals and live checks left to T11. Slack posting and MCP (T10) are deferred. T5's owed items fold into T11.
+
+- **2026-11-02, Asim:** T18 is split in two. T18 (#19) keeps the playbooks; the Slack bot is T18b (#23), numbered 19b so the later priorities keep their numbers. T18b needs T18 and a Slack app from Asim, and can share that app with T10b (#21). T12 to T15 were closed the same day, with their follow-ups in #22.
 
 ## What this order changes in the build plan
 
