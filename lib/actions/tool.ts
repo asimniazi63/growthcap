@@ -10,6 +10,7 @@ import type { ExtraToolDeps } from "../agent/extra-types";
 import { annotationPayload } from "./executors/annotation";
 import { discountDeactivatePayload } from "./executors/discount-deactivate";
 import { metricTargetPayload } from "./executors/metric-target";
+import { segmentCreatePayload } from "./executors/segment-create";
 import type { ActionView, ProposeInput } from "./types";
 
 // propose_action: the agent can ask for a change, never make one. This only writes a proposal to the ledger and puts an
@@ -45,13 +46,16 @@ export const proposeActionUnion = z.discriminatedUnion("kind", [
     ...common,
   }),
   z.strictObject({ kind: z.literal("discount_deactivate"), ...discountDeactivatePayload.shape, metric: z.enum(METRIC_IDS), ...common }),
+  // The payload's `name` is the segment's name in Shopify, so here it is `segmentName` (the card's own name is `title`). There is no field
+  // for a Shopify query: the executor builds it from the segment id alone.
+  z.strictObject({ kind: z.literal("segment_create"), segment: segmentCreatePayload.shape.segment, segmentName: segmentCreatePayload.shape.name, metric: z.enum(METRIC_IDS), ...common }),
 ]);
 export type ProposeActionInput = z.infer<typeof proposeActionUnion>;
 
 // What the model is shown. Anthropic's tool schema must be one object at the top (a union there is refused), so the
 // model sees a flat strict object with the fields of every kind optional, and execute() checks it against the union.
 export const proposeActionInput = z.strictObject({
-  kind: z.enum(["metric_target", "annotation", "discount_deactivate"]),
+  kind: z.enum(["metric_target", "annotation", "discount_deactivate", "segment_create"]),
   title: z.string().max(120).describe("What the card says, a few words. For example: Set November net sales target"),
   hypothesis: z.string().max(240).describe("One sentence on why this should help"),
   metric: z.enum(METRIC_IDS).describe("The metric this change should move. For metric_target it is the target's own metric: net_sales or orders"),
@@ -62,6 +66,8 @@ export const proposeActionInput = z.strictObject({
   annotationTitle: z.string().optional().describe("annotation only: the title on the chart, up to 75 characters"),
   annotationText: z.string().optional().describe("annotation only: the note, up to 150 characters, plain text"),
   code: z.string().optional().describe("discount_deactivate only: the discount code in capitals, such as VIPGLOW25"),
+  segment: z.string().optional().describe("segment_create only: one of champions, at_risk, due_to_reorder, one_and_done. Never write a query"),
+  segmentName: z.string().optional().describe("segment_create only: the segment's name in Shopify, up to 80 characters of letters, digits, spaces and - & ' ( )"),
 });
 
 function toProposal(i: ProposeActionInput): ProposeInput {
@@ -74,6 +80,8 @@ function toProposal(i: ProposeActionInput): ProposeInput {
       return { ...base, payload: { date: i.date, title: i.annotationTitle, text: i.annotationText } };
     case "discount_deactivate":
       return { ...base, payload: { code: i.code } };
+    case "segment_create":
+      return { ...base, payload: { segment: i.segment, name: i.segmentName } };
   }
 }
 
@@ -83,7 +91,7 @@ export function buildProposeActionTool(d: ExtraToolDeps, propose: Propose = ledg
   let proposed = 0;
   return tool({
     description:
-      "Propose a change to the store or its analytics, only when the user asks for one. kind is metric_target (a Shopify sales or orders target for a month), annotation (a dated note on the store's Shopify charts) or discount_deactivate (turn a discount code off). Fill in only the fields for that kind. This does not make the change: it puts an approval card in the answer, and the change happens only after a Growth Capital admin or partner approves it. After calling it, say the change is waiting for that approval and never that it was done. You cannot see or state the outcome.",
+      "Propose a change to the store or its analytics, only when the user asks for one. kind is metric_target (a Shopify sales or orders target for a month), annotation (a dated note on the store's Shopify charts) discount_deactivate (turn a discount code off) or segment_create (save one of the four known customer segments, champions, at_risk, due_to_reorder or one_and_done, as a customer segment in Shopify; you never write its query). Fill in only the fields for that kind. This does not make the change: it puts an approval card in the answer, and the change happens only after a Growth Capital admin or partner approves it. After calling it, say the change is waiting for that approval and never that it was done. You cannot see or state the outcome.",
     inputSchema: proposeActionInput,
     execute: async (input) => {
       const started = Date.now();

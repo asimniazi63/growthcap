@@ -6,7 +6,10 @@ import { runGrowthAuditTool } from "../audit/tool";
 import { AppError } from "../errors";
 import { getDataHealthTool } from "../health/tool";
 import { askDocumentTool } from "../plan-in/ask-tool";
+import { getBundleCandidatesTool } from "../tools/bundles";
 import { getCohortsTool } from "../tools/cohorts";
+import { getCustomerSegmentsTool } from "../tools/customer-segments";
+import { getLaunchCurvesTool } from "../tools/launch-curves";
 import { getPromoPostmortemTool } from "../tools/promo-postmortem";
 import { getUnitEconomicsTool } from "../tools/unit-economics";
 import { getZeroSalesDaysTool } from "../tools/zero-sales-days";
@@ -64,7 +67,10 @@ export const TOOL_DEFS: Record<string, ToolDef> = {
   get_cohorts: getCohortsTool as unknown as ToolDef,
   get_unit_economics: getUnitEconomicsTool as unknown as ToolDef,
   get_promo_postmortem: getPromoPostmortemTool as unknown as ToolDef,
+  get_customer_segments: getCustomerSegmentsTool as unknown as ToolDef,
   get_zero_sales_days: getZeroSalesDaysTool as unknown as ToolDef,
+  get_launch_curves: getLaunchCurvesTool as unknown as ToolDef,
+  get_bundle_candidates: getBundleCandidatesTool as unknown as ToolDef,
   get_action_items: getActionItemsTool as unknown as ToolDef,
   get_data_health: getDataHealthTool as unknown as ToolDef,
   run_growth_audit: runGrowthAuditTool as unknown as ToolDef,

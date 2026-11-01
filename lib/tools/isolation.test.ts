@@ -6,8 +6,11 @@ import { pseudonymFor } from "../sync/map";
 import type { TenantContext } from "../tenancy/context";
 import { seedTwoStores, shopifyId } from "../../scripts/fixtures/load-db";
 import type { Dataset } from "../../scripts/seed/types.js";
+import { getBundleCandidates } from "./bundles";
+import { getCustomerSegments } from "./customer-segments";
 import { getCustomers } from "./customers";
 import { getInventory } from "./inventory";
+import { getLaunchCurves } from "./launch-curves";
 import { getOrders } from "./orders";
 import { searchProducts } from "./products";
 import { getPromoPostmortem } from "./promo-postmortem";
@@ -51,6 +54,7 @@ describe("the Solenne ids really exist in Solenne (so the empty answers below me
     expect((await getCustomers(sCtx, { view: "list", ...FULL, customerIds: [me] }, { db })).data.length).toBeGreaterThanOrEqual(0);
     expect(x.codes.length).toBeGreaterThan(0);
     expect((await getPromoPostmortem(sCtx, { code: "VIPGLOW25" }, { db })).data.codeOrders!.orders).toBeGreaterThan(0);
+    expect((await getBundleCandidates(sCtx, { minOrders: 2 }, { db })).data.ordersInRange).toBe(solenne.orders.length);
   });
 });
 
@@ -102,6 +106,37 @@ describe("Tidepool's context, handed Solenne's ids", () => {
     }
     const shared = await getPromoPostmortem(tCtx, { code: "BFCM25" }, { db });
     expect(shared.data.codeOrders!.orders).toBe(tidepool.orders.filter((o) => o.discountCode === "BFCM25").length);
+  });
+
+  it("getBundleCandidates counts only Tidepool's orders, and pairs only Tidepool's products", async () => {
+    const x = onlySolenne();
+    const own = await getBundleCandidates(tCtx, { minOrders: 2, limit: 200 }, { db });
+    expect(own.data.ordersInRange).toBe(tidepool.orders.length);
+    expect(own.data.pairs.length).toBeGreaterThan(0);
+    const tidepoolTitles = new Set(tidepool.products.map((p) => p.title));
+    expect(own.data.pairs.every((p) => tidepoolTitles.has(p.untrusted.productA) && tidepoolTitles.has(p.untrusted.productB))).toBe(true);
+    expect((await getBundleCandidates(tCtx, { minOrders: 2, productIds: [shopifyId.product(x.product.genId)] }, { db })).data.pairs).toEqual([]);
+  });
+
+  it("getLaunchCurves lists only Tidepool's own launches, and none for a Solenne-only product id", async () => {
+    const x = onlySolenne();
+    const own = await getLaunchCurves(tCtx, { limit: 200 }, { db });
+    const tidepoolIds = new Set(tidepool.products.map((p) => shopifyId.product(p.genId)));
+    expect(own.data.launches.length).toBeGreaterThan(0);
+    expect(own.data.launches.every((l) => tidepoolIds.has(l.productId))).toBe(true);
+    expect((await getLaunchCurves(tCtx, { productIds: [shopifyId.product(x.product.genId)] }, { db })).data.launches).toEqual([]);
+  });
+
+  it("getCustomerSegments scores only Tidepool's own customers, and none of Solenne's ids appear", async () => {
+    const tidepoolIds = new Set(tidepool.customers.map((c) => pseudonymFor(tCtx.tenantId, shopifyId.customer(c.genId))));
+    const solenneIds = new Set(solenne.customers.map((c) => pseudonymFor(sCtx.tenantId, shopifyId.customer(c.genId))));
+    const own = await getCustomerSegments(tCtx, { view: "list", limit: 200 }, { db });
+    expect(own.data.totalCustomers).toBe(new Set(tidepool.orders.map((o) => o.customerGenId)).size);
+    expect(own.data.totalCustomers).toBeLessThan(solenneIds.size);
+    expect(own.data.customers!.length).toBe(own.data.totalCustomers);
+    expect(own.data.customers!.every((c) => tidepoolIds.has(c.customerId) && !solenneIds.has(c.customerId))).toBe(true);
+    expect(own.data.segments.reduce((n, s) => n + s.customers, 0)).toBe(own.data.totalCustomers);
+    expect(own.range.to).toBe(tidepool.orders.map((o) => o.processedAt.slice(0, 10)).sort().at(-1));
   });
 
   it("the same shopper gets different pseudonyms in the two tenants, so they can't be joined", () => {

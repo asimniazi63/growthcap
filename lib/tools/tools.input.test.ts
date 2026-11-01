@@ -4,10 +4,13 @@ import type { Db } from "../db/client";
 import { createTestDb } from "../db/test-db";
 import type { TenantContext } from "../tenancy/context";
 import { seedTwoStores } from "../../scripts/fixtures/load-db";
+import { getBundleCandidates } from "./bundles";
+import { getCustomerSegments } from "./customer-segments";
 import { getCustomers } from "./customers";
 import { describeMetrics } from "./describe";
 import { getInventory } from "./inventory";
 import { getOrders } from "./orders";
+import { getLaunchCurves } from "./launch-curves";
 import { searchProducts } from "./products";
 import { getPromoPostmortem } from "./promo-postmortem";
 
@@ -30,6 +33,9 @@ const tools: Record<string, Tool> = {
   getCustomers: getCustomers as Tool,
   describeMetrics: describeMetrics as Tool,
   getPromoPostmortem: getPromoPostmortem as Tool,
+  getCustomerSegments: getCustomerSegments as Tool,
+  getBundleCandidates: getBundleCandidates as Tool,
+  getLaunchCurves: getLaunchCurves as Tool,
 };
 const call = (name: string, input: unknown, c: TenantContext = ctx) => tools[name]!(c, input as never, { db });
 
@@ -47,14 +53,14 @@ describe.each(Object.keys(tools))("%s", (name) => {
 });
 
 describe("dates", () => {
-  it.each(["getOrders", "getCustomers", "getPromoPostmortem"])("%s rejects a malformed date, an impossible one, and from after to", async (name) => {
+  it.each(["getOrders", "getCustomers", "getPromoPostmortem", "getBundleCandidates"])("%s rejects a malformed date, an impossible one, and from after to", async (name) => {
     await expect(call(name, { from: "05/01/2026", to: "2026-05-31" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call(name, { from: "2026-02-30", to: "2026-03-01" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call(name, { from: "2026-06-01", to: "2026-05-01" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call(name, { from: "2026-06-01" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
-  it.each(["getOrders", "getCustomers", "getPromoPostmortem"])("%s answers NO_DATA outside the data window", async (name) => {
+  it.each(["getOrders", "getCustomers", "getPromoPostmortem", "getBundleCandidates"])("%s answers NO_DATA outside the data window", async (name) => {
     await expect(call(name, { from: "2025-01-01", to: "2025-01-31" })).rejects.toMatchObject({ code: "NO_DATA" });
     await expect(call(name, { from: "2027-01-01", to: "2027-01-31" })).rejects.toMatchObject({ code: "NO_DATA" });
   });
@@ -69,6 +75,14 @@ describe("values", () => {
     await expect(call("getCustomers", { view: "everyone" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call("getCustomers", { rankBy: "age" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
     await expect(call("getPromoPostmortem", { code: "BFCM25", baselineDays: 30 })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getBundleCandidates", { minOrders: 1 })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getCustomerSegments", { segment: "whales" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getCustomerSegments", { view: "everyone" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getCustomerSegments", { sort: "random" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getCustomerSegments", { limit: 0 })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getLaunchCurves", { weeks: 13 })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getLaunchCurves", { launchedFrom: "2026-01-01" })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+    await expect(call("getLaunchCurves", { launchedFrom: "2027-01-01", launchedTo: "2027-06-30" })).rejects.toMatchObject({ code: "NO_DATA" });
     await expect(call("describeMetrics", { metrics: ["profit"] })).rejects.toMatchObject({ code: "INVALID_INPUT" });
   });
 
@@ -95,6 +109,13 @@ describe("limits", () => {
   it("getCustomers: a limit of 500 returns 200 customers and says how many were left out", async () => {
     const res = (await call("getCustomers", { view: "list", ...FULL, limit: 500 })) as { data: unknown[]; truncated?: { shown: number; total: number } };
     expect(res.data).toHaveLength(200);
+    expect(res.truncated!.shown).toBe(200);
+    expect(res.truncated!.total).toBeGreaterThan(200);
+  });
+
+  it("getCustomerSegments: a limit of 500 returns 200 customers and says how many were left out", async () => {
+    const res = (await call("getCustomerSegments", { view: "list", limit: 500 })) as { data: { customers: unknown[] }; truncated?: { shown: number; total: number } };
+    expect(res.data.customers).toHaveLength(200);
     expect(res.truncated!.shown).toBe(200);
     expect(res.truncated!.total).toBeGreaterThan(200);
   });

@@ -488,7 +488,7 @@ export const actionItems = pgTable(
   (t) => [index("action_items_idx").on(t.tenantId, t.status, t.dueOn)],
 );
 
-export const ACTION_KINDS = ["metric_target", "annotation", "discount_deactivate", "landing_page", "unit_cost_update"] as const;
+export const ACTION_KINDS = ["metric_target", "annotation", "discount_deactivate", "landing_page", "unit_cost_update", "segment_create"] as const;
 export type ActionKind = (typeof ACTION_KINDS)[number];
 export const ACTION_STATUSES = ["proposed", "approved", "running", "done", "failed", "rejected"] as const;
 export type ActionStatus = (typeof ACTION_STATUSES)[number];

@@ -24,7 +24,7 @@ export interface ClaimLedger {
 
 const METRIC_MAPS = new Set(["values", "previous", "change"]);
 const RATE_MAPS = new Set(["pctChange", "share"]);
-const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate", "pctOfExpected", "ordersPctOfExpected", "repeatRateGap"]);
+const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate", "pctOfExpected", "ordersPctOfExpected", "repeatRateGap", "pctOfMedianUnits", "support", "confidenceAtoB", "confidenceBtoA", "shareOfCustomers", "churnRisk", "avgChurnRisk"]);
 
 function classify(key: string, parentKey: string | undefined, raw: number): { value: number; unit: ClaimUnit } {
   if (parentKey && METRIC_MAPS.has(parentKey)) {
@@ -72,7 +72,7 @@ function walk(node: unknown, path: string, key: string, parentKey: string | unde
 }
 
 // Only titles are taken, never other store text such as a note, so an injected sentence can't excuse its own numbers.
-const NAME_KEYS = new Set(["title", "product", "variant"]);
+const NAME_KEYS = new Set(["title", "product", "variant", "productA", "productB"]);
 
 function collectNames(node: unknown, key: string, parentKey: string | undefined, underUntrusted: boolean, out: Set<string>): void {
   if (typeof node === "string") {

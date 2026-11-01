@@ -23,6 +23,7 @@ What is built, what was left out on purpose, what production would add, and what
 | T14 | Data-health checks and growth audit | Built 2026-11-01. `/audit` runs four fixed checks and the model writes them up; checked live on Tidepool 2026-11-02 |
 | T15 | Langfuse traces, fallback model, evals | Built. Traces are live on the deployed app (2026-11-02). The fallback decision (`lib/agent/fallback.ts`) has unit tests; the full run-level path has no test and has not been seen in a real outage. Evals run locally, not in CI, by choice (below) |
 | T18 | Playbooks | Built 2026-11-02. `/playbooks` (GC roles only) runs a Black Friday review, a retention check or a monthly business review through the agent loop, so the number checker runs, and stores each run per brand. One paid call per run, one run per brand per playbook per 10 minutes. The eval case (October's review names the budget cut, S9) passes, and a retention case guards the figures. Both were run once, not as part of the full set. The Slack bot is T18b |
+| T17 | Growth analyses | Built 2026-11-02. Promo post-mortem (`get_promo_postmortem`: extra sales against sales pulled forward, and the repeat rate of the promo's customers; both eval cases run once live, Black Friday 12 of 12 and VIPGLOW25 12 of 13 before a number-checker fix). Merchandising (`get_bundle_candidates`, `get_launch_curves`). Retention segments (`get_customer_segments`: RFM scores, lifetime value, churn risk, four segments), the `/segments` page (GC roles only) and a Klaviyo CSV of pseudonymous ids. The `segment_create` write to Shopify is tested against a fake client only: it needs the `write_customers` scope and a deploy before it can run live, and until then approving fails safely. The three new eval cases are written, not run (paid) |
 
 ## Deferred on purpose
 
@@ -34,14 +35,13 @@ What is built, what was left out on purpose, what production would add, and what
 - **Follow-ups from T12 to T15 ([#22](https://github.com/asimniazi63/growthcap/issues/22)).** Those four tickets were closed on 2026-11-02 with these items moved out: the live check of "Need $X a day" on November data, one saved full eval run (three cases have never run), the audit running by itself when a store connects, Opus 5.5 as the fallback model with a whole-path test, and evals in CI (descoped: they run locally and the scoreboard is committed).
 - **Single-vs-multi-agent comparison (T7).** The eval switch exists (`AGENT_SINGLE_AGENT`). The run and the table do not.
 
-## Not started: extras T16, T17, T18b and T19
+## Not started: extras T16, T18b and T19
 
-Each is a feature from [docs/feature-map.md](docs/feature-map.md) the brief does not ask for. T12 to T15 and T18 are built (above). The rest run in this order, and nothing outside a ticket gets built without Asim's go-ahead. T10b ([#21](https://github.com/asimniazi63/growthcap/issues/21)), Slack posting of the Monday brief, stays deferred (above).
+Each is a feature from [docs/feature-map.md](docs/feature-map.md) the brief does not ask for. T12 to T15, T17 and T18 are built (above). The rest run in this order, and nothing outside a ticket gets built without Asim's go-ahead. T10b ([#21](https://github.com/asimniazi63/growthcap/issues/21)), Slack posting of the Monday brief, stays deferred (above).
 
 | Ticket | Idea |
 |---|---|
 | T16 | Forecast, what-if scenarios, inventory runway, Black Friday war room |
-| T17 | Promo post-mortems, merchandising analyses, retention segments. Slice 1 (the `get_promo_postmortem` tool) was built 2026-11-02, with its two eval cases run once live (Black Friday 12 of 12; VIPGLOW25 12 of 13, then a number-checker fix); merchandising and retention segments are open |
 | T18b | A Slack bot that answers questions and runs playbooks (split from T18 on 2026-11-02) |
 | T19 | About 3,000 orders with the two subtle storylines (S1, S2) and the weak BFCM cohort, in fresh stores |
 

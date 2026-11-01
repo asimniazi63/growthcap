@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, Check, ChevronRight, Clock, Coins, FileCode, LayoutTemplate, Loader2, type LucideIcon, ShieldCheck, StickyNote, Target, TicketX, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, ChevronRight, Clock, Coins, FileCode, LayoutTemplate, Loader2, type LucideIcon, ShieldCheck, StickyNote, Target, TicketX, Users, X } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { RefreshNow } from "@/components/overview/refresh-now";
 import { useToast } from "@/components/ui/toast";
@@ -17,6 +17,7 @@ export const KIND_LABEL: Record<ActionKind, string> = {
   discount_deactivate: "Turn off a discount",
   landing_page: "Landing page",
   unit_cost_update: "Unit costs",
+  segment_create: "Customer segment",
 };
 
 export const KIND_ICON: Record<ActionKind, LucideIcon> = {
@@ -25,6 +26,7 @@ export const KIND_ICON: Record<ActionKind, LucideIcon> = {
   discount_deactivate: TicketX,
   landing_page: LayoutTemplate,
   unit_cost_update: Coins,
+  segment_create: Users,
 };
 
 export const STATUS_LABEL: Record<Status, string> = {
@@ -108,6 +110,10 @@ function doneSummary(view: LedgerView): { headline: string; lines: string[] } {
     case "discount_deactivate": {
       const code = typeof result.code === "string" ? result.code : null;
       return { headline: code ? `The discount code ${code} is now off in Shopify.` : "The discount code is now off in Shopify.", lines: [] };
+    }
+    case "segment_create": {
+      const name = (result.segment as { name?: unknown } | null | undefined)?.name;
+      return { headline: typeof name === "string" && name ? `The customer segment ${name} was created in Shopify. It is a saved filter: no customer was emailed or changed.` : "The customer segment was created in Shopify.", lines: [] };
     }
     default:
       return { headline: "The change was made in Shopify.", lines: [] };
