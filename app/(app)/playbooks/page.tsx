@@ -83,7 +83,7 @@ export default async function PlaybooksPage() {
           return (
             <li key={p.id} className="card overflow-hidden" aria-labelledby={headingId}>
               <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
-                <div className="min-w-0 max-w-[60ch]">
+                <div className="min-w-0 max-w-[50ch]">
                   <h2 id={headingId} className="section-title">
                     {p.title}
                   </h2>
