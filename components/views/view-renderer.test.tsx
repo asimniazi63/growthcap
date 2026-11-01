@@ -171,7 +171,7 @@ describe("cohort", () => {
     expect(out).toContain("25.0%");
     expect(out).toContain("Show the numbers");
     expect(out).toContain("60 days");
-    expect(out).toContain("rgba(15, 118, 110");
+    expect(out).toContain("color-mix(in oklab, var(--color-brand)");
   });
   it("shows a dash, not a zero, where nobody is old enough yet", () => {
     expect(html(data)).toContain("—");

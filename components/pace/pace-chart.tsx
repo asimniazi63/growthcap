@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { formatUnit, monthName } from "@/lib/pace/format";
 import type { PaceSeries } from "@/lib/pace/series";
 
-// Cumulative net sales by day against the plan. Solid teal is what happened, grey is the plan, the dashed teal run to the
+// Cumulative net sales by day against the plan. Solid brand colour is what happened, grey is the plan, the dashed brand-colour run to the
 // month's end is the estimate (never solid), the dotted line is the target. Drawn in plain SVG at the width it is given, so
 // the type stays readable on a phone. The same figures are in the aria-label and in the "Show the numbers" table.
 
-const PLAN_GREY = "#9fb1ae";
+// The ahead and behind words in the dark hover card: the scheme's own green and red, lightened toward the card's text colour so they read on it.
+const AHEAD_ON_INVERSE = "text-[color:color-mix(in_oklab,var(--color-ahead)_50%,var(--color-on-inverse))]";
+const BEHIND_ON_INVERSE = "text-[color:color-mix(in_oklab,var(--color-behind)_50%,var(--color-on-inverse))]";
 
 // The top of the y axis: a round number, so four even steps give round ticks (1, 1.2, 1.5, 2, 2.5, 3, 4, 5 or 10 times a power of ten).
 function niceMax(v: number): number {
@@ -133,7 +135,7 @@ export function PaceChart({ series, currency, compact = false }: { series: PaceS
           </text>
 
           <path d={areaPath} className="fill-brand" fillOpacity={0.09} />
-          <path d={planPath} fill="none" stroke={PLAN_GREY} strokeWidth={2.2} strokeLinejoin="round" />
+          <path d={planPath} fill="none" className="stroke-plan" strokeWidth={2.2} strokeLinejoin="round" />
           <path d={actualPath} fill="none" className="stroke-brand" strokeWidth={2.8} strokeLinejoin="round" strokeLinecap="round" />
           {hasEstimate ? (
             <>
@@ -160,7 +162,7 @@ export function PaceChart({ series, currency, compact = false }: { series: PaceS
             <g aria-hidden>
               <line x1={hx} x2={hx} y1={pt} y2={H - pb} className="stroke-ink" strokeOpacity={0.35} />
               {hActual !== null ? <circle cx={hx} cy={y(hActual)} r={4.5} className="fill-brand" /> : null}
-              <circle cx={hx} cy={y(hd.plan)} r={4} fill={PLAN_GREY} />
+              <circle cx={hx} cy={y(hd.plan)} r={4} className="fill-plan" />
             </g>
           ) : null}
           {!compact ? (
@@ -195,7 +197,7 @@ export function PaceChart({ series, currency, compact = false }: { series: PaceS
               Plan <b className="num font-semibold">{money(hd.plan)}</b>
             </div>
             {hGap !== null ? (
-              <div className={hGap >= 0 ? "text-[#86efac]" : "text-[#fdba9f]"}>{hGap === 0 ? "On plan" : `${money(Math.abs(hGap))} ${hGap > 0 ? "ahead" : "behind"}`}</div>
+              <div className={hGap >= 0 ? AHEAD_ON_INVERSE : BEHIND_ON_INVERSE}>{hGap === 0 ? "On plan" : `${money(Math.abs(hGap))} ${hGap > 0 ? "ahead" : "behind"}`}</div>
             ) : (
               <div className="text-on-inverse/70">Not complete yet</div>
             )}
@@ -211,7 +213,7 @@ export function PaceChart({ series, currency, compact = false }: { series: PaceS
               Actual
             </li>
             <li className="inline-flex items-center gap-2">
-              <span aria-hidden className="inline-block w-5 border-t-[3px]" style={{ borderColor: PLAN_GREY }} />
+              <span aria-hidden className="inline-block w-5 border-t-[3px] border-plan" />
               Plan ({series.spread === "last_year" ? "last year's daily pattern" : "spread evenly"})
             </li>
             {hasEstimate ? (

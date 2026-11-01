@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpenCheck, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Settings, type LucideIcon } from "lucide-react";
 import { GC_ONLY_PAGES } from "./pages";
 
 interface Item {
@@ -34,6 +34,11 @@ const GROUPS: { label: string; items: Item[] }[] = [
   },
 ];
 const CONNECT: Item = { href: "/connect", label: "Connect", icon: Plug };
+const SETTINGS: Item = { href: "/settings", label: "Settings", icon: Settings };
+
+// The links at the foot of the sidebar (and the end of the mobile bar). They are for everyone, so unlike the groups they never
+// depend on the person's role.
+export const FOOTER_ITEMS: Item[] = [CONNECT, SETTINGS];
 
 // The groups a person sees: the pages that are Growth Capital's alone are left out for everyone else, and a group with nothing
 // left goes too.
@@ -51,10 +56,10 @@ function SideLink({ item, pathname, pending = 0 }: { item: Item; pathname: strin
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={`flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "bg-surface text-ink shadow-card ring-1 ring-line" : "text-ink-2 hover:bg-paper-2 hover:text-ink"
+        active ? "bg-rail-active text-on-rail shadow-card ring-1 ring-line" : "text-on-rail-2 hover:bg-paper-2 hover:text-on-rail"
       }`}
     >
-      <Icon className={`size-[1.125rem] ${active ? "text-brand" : "text-ink-3"}`} aria-hidden />
+      <Icon className={`size-[1.125rem] ${active ? "text-brand" : "text-on-rail-3"}`} aria-hidden />
       {item.label}
       {pending > 0 && item.href === "/actions" ? (
         <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-brand px-1.5 text-xs font-bold text-on-brand">
@@ -89,7 +94,7 @@ export function Nav({ variant, gc, pending = 0 }: { variant: "side" | "top"; gc:
   if (variant === "top") {
     return (
       <nav aria-label="Main" className="flex gap-1 overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] lg:hidden">
-        {[...groups.flatMap((g) => g.items), CONNECT].map((item) => (
+        {[...groups.flatMap((g) => g.items), ...FOOTER_ITEMS].map((item) => (
           <TopLink key={item.href} item={item} pathname={pathname} pending={pending} />
         ))}
       </nav>
@@ -100,7 +105,7 @@ export function Nav({ variant, gc, pending = 0 }: { variant: "side" | "top"; gc:
     <nav aria-label="Main" className="flex flex-1 flex-col">
       {groups.map((g) => (
         <div key={g.label} className="mb-5">
-          {g.label ? <p className="px-3 pb-1.5 text-xs font-medium text-ink-3">{g.label}</p> : null}
+          {g.label ? <p className="px-3 pb-1.5 text-xs font-medium text-on-rail-3">{g.label}</p> : null}
           <ul className="space-y-0.5">
             {g.items.map((item) => (
               <li key={item.href}>
@@ -110,9 +115,13 @@ export function Nav({ variant, gc, pending = 0 }: { variant: "side" | "top"; gc:
           </ul>
         </div>
       ))}
-      <div className="mt-auto">
-        <SideLink item={CONNECT} pathname={pathname} />
-      </div>
+      <ul className="mt-auto space-y-0.5">
+        {FOOTER_ITEMS.map((item) => (
+          <li key={item.href}>
+            <SideLink item={item} pathname={pathname} />
+          </li>
+        ))}
+      </ul>
     </nav>
   );
 }

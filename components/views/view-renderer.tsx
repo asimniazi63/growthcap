@@ -238,7 +238,7 @@ const percent = (share: number) => `${(share * 100).toFixed(1)}%`;
 function Cohort({ data }: { data: Extract<ViewData, { component: "cohort" }> }) {
   const shares = data.rows.flatMap((r) => r.cells.map((c) => c.repeatShare).filter((x): x is number => x !== null));
   const max = Math.max(...shares, 0);
-  const shade = (share: number) => `rgba(15, 118, 110, ${(max > 0 ? Math.min(share / max, 1) * 0.55 : 0).toFixed(2)})`;
+  const shade = (share: number) => `color-mix(in oklab, var(--color-brand) ${(max > 0 ? Math.min(share / max, 1) * 55 : 0).toFixed(0)}%, transparent)`;
   const columns = data.windowMonths;
   const label = `Repeat rate by first-order month and months since the first order${data.firstOrderCode ? `, first orders with ${data.firstOrderCode}` : ""}: ${data.rows.length} cohorts, ${data.rows[0]?.cohort} to ${data.rows.at(-1)?.cohort}${max > 0 ? `, up to ${percent(max)}` : ""}`;
   const cellWords = (c: CohortRow["cells"][number]) => (c.repeatShare === null ? "not enough time has passed" : `${percent(c.repeatShare)} of ${c.customers}`);

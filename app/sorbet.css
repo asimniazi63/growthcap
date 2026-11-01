@@ -1,0 +1,175 @@
+/* Styles that apply only when data-scheme="sorbet". Everything is scoped under [data-scheme="sorbet"], which sits on <html>.
+
+   Colours do not live here: the navy rail, the page canvas and the brand colours are tokens in themes.css. This file holds
+   what a colour alone cannot change: the typeface, pill buttons, small square tags, the white top bar and the way the
+   side-rail links read on navy. The look is modelled on artifacts/ui-redraw/redraw.css (the Sorbet block).
+
+   Two kinds of rule, on purpose:
+   - Shape rules for shared classes (.btn, .badge, .card) sit in @layer components, so they beat the plain component styles in
+     globals.css by specificity but still lose to Tailwind utilities (p-0, px-3, rounded-full) used on a single element.
+   - Rules for the rail, the mobile bar and the top bar are unlayered, so they beat the Tailwind utilities that style those
+     elements for the other schemes (the pale rail colours, the ring on the active link). */
+
+/* Lexend is loaded in app/layout.tsx as --font-lexend. Body and headings read the two font variables; Tailwind's font-display
+   and font-sans utilities are inlined, so they are set again here. */
+[data-scheme="sorbet"] {
+  --font-sans: var(--font-lexend), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-lexend), ui-sans-serif, system-ui, sans-serif;
+}
+[data-scheme="sorbet"] .font-display,
+[data-scheme="sorbet"] .font-sans {
+  font-family: var(--font-lexend), ui-sans-serif, system-ui, sans-serif;
+}
+[data-scheme="sorbet"] body {
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+/* Headings are weight 500 in Sorbet. These sit in cascade layers so a weight utility on a heading (font-[650], font-semibold) still wins. */
+@layer base {
+  [data-scheme="sorbet"] h1,
+  [data-scheme="sorbet"] h2,
+  [data-scheme="sorbet"] h3 {
+    font-weight: 500;
+  }
+}
+
+@layer components {
+  [data-scheme="sorbet"] .page-title,
+  [data-scheme="sorbet"] .section-title {
+    font-weight: 500;
+  }
+  /* Buttons are pills, status tags are small rounded squares, cards are a little tighter and flatter. */
+  [data-scheme="sorbet"] .btn {
+    border-radius: 999px;
+    font-weight: 500;
+    padding: 0.6rem 1.25rem;
+  }
+  [data-scheme="sorbet"] .btn-sm {
+    border-radius: 999px;
+    padding: 0.38rem 0.95rem;
+  }
+  [data-scheme="sorbet"] .btn-secondary {
+    border-color: var(--color-ink-2);
+    background: transparent;
+    color: var(--color-ink);
+  }
+  [data-scheme="sorbet"] .btn-secondary:hover:not(:disabled) {
+    border-color: var(--color-ink);
+    background: var(--color-paper-2);
+  }
+  [data-scheme="sorbet"] .badge {
+    border-radius: 5px;
+    padding: 0.2rem 0.55rem;
+  }
+  [data-scheme="sorbet"] .card {
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgb(45 62 80 / 0.07), 0 1px 1px rgb(45 62 80 / 0.04);
+  }
+  [data-scheme="sorbet"][data-mode="dark"] .card {
+    box-shadow: var(--shadow-card);
+  }
+}
+
+/* The navy side rail. The rail colour, its text and the active link's background are tokens (bg-rail, text-on-rail,
+   text-on-rail-2, bg-rail-active) set in the markup; this adds the parts a token cannot. */
+[data-scheme="sorbet"] .app-rail {
+  border-color: transparent;
+}
+[data-scheme="sorbet"] .app-rail nav a {
+  font-weight: 400;
+}
+[data-scheme="sorbet"] .app-rail nav a:not([aria-current="page"]):hover {
+  background: rgb(255 255 255 / 0.08);
+}
+[data-scheme="sorbet"] .app-rail nav a[aria-current="page"] {
+  box-shadow: none;
+  font-weight: 500;
+}
+[data-scheme="sorbet"] .app-rail nav a[aria-current="page"] svg {
+  color: #ff9378;
+}
+[data-scheme="sorbet"] .rail-me {
+  border-color: rgb(255 255 255 / 0.14);
+}
+[data-scheme="sorbet"] .app-rail .cl-userButtonTrigger:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+[data-scheme="sorbet"] .app-rail .btn-ghost:hover,
+[data-scheme="sorbet"] .app-mobilebar .btn-ghost:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+/* The top bar holds the search now, so the rail's own search button goes (Ctrl K still works). */
+[data-scheme="sorbet"] .side-palette {
+  display: none;
+}
+
+/* The same navy on small screens, where the rail becomes the bar at the top. */
+[data-scheme="sorbet"] .app-mobilebar {
+  border-color: transparent;
+  background: var(--color-rail);
+  backdrop-filter: none;
+}
+[data-scheme="sorbet"] .app-mobilebar nav a {
+  color: rgb(255 255 255 / 0.82);
+}
+[data-scheme="sorbet"] .app-mobilebar nav a:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+}
+[data-scheme="sorbet"] .app-mobilebar nav a[aria-current="page"] {
+  background: rgb(255 255 255 / 0.13);
+  color: #fff;
+}
+
+/* The white top bar with one control, the search pill. It is in the markup for every scheme and shown only here, and only
+   where the rail is (1024px up, the same breakpoint as lg:). Its left edge lines up with the page content below it. */
+@media (min-width: 64rem) {
+  [data-scheme="sorbet"] .app-topbar {
+    display: flex;
+    align-items: center;
+    height: 60px;
+    padding: 0 calc(max(0px, (100% - 1120px) / 2) + 3rem);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-line);
+  }
+}
+[data-scheme="sorbet"] .app-topbar-search {
+  flex: 1;
+  max-width: 560px;
+}
+[data-scheme="sorbet"] .app-topbar-search .btn {
+  height: 38px;
+  padding: 0 8px 0 14px;
+  border-color: var(--color-line-strong);
+  background: var(--color-paper);
+  color: var(--color-ink-2);
+  font-weight: 400;
+}
+[data-scheme="sorbet"] .app-topbar-search .btn:hover:not(:disabled) {
+  border-color: var(--color-ink-3);
+  background: var(--color-paper);
+}
+[data-scheme="sorbet"] .app-topbar-search kbd {
+  padding: 0.1rem 0.5rem;
+  border-width: 1px;
+  border-radius: 999px;
+  font-weight: 400;
+}
+
+/* Clerk's switcher and user button on the navy rail. Their text colours are set in app/globals.css for every scheme. */
+[data-scheme="sorbet"] .app-rail .cl-organizationSwitcherTrigger {
+  background: rgb(255 255 255 / 0.08);
+  border-color: rgb(255 255 255 / 0.16);
+  box-shadow: none;
+}
+[data-scheme="sorbet"] .app-rail .cl-organizationSwitcherTriggerIcon,
+[data-scheme="sorbet"] .app-mobilebar .cl-organizationSwitcherTriggerIcon {
+  color: var(--color-on-rail-2);
+}
+
+/* On large screens the top bar sits above the page, so full-height pages (Chat) subtract its height from the viewport. */
+@media (min-width: 64rem) {
+  [data-scheme="sorbet"] {
+    --topbar-h: 60px;
+  }
+}

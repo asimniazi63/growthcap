@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { navGroups } from "./nav";
+import { FOOTER_ITEMS, navGroups } from "./nav";
 import { GC_ONLY_PAGES } from "./pages";
 
 const hrefs = (gc: boolean) => navGroups(gc).flatMap((g) => g.items.map((i) => i.href));
@@ -17,5 +17,12 @@ describe("navGroups: the sidebar only links to pages the person may open", () =>
   it("hides exactly the pages in the shared Growth-Capital-only list, which the command palette also reads", () => {
     const hidden = hrefs(true).filter((h) => !hrefs(false).includes(h));
     expect(hidden.sort()).toEqual([...GC_ONLY_PAGES].sort());
+  });
+
+  it("keeps Connect and Settings at the foot for everyone, and Settings is not one of the Growth-Capital-only pages", () => {
+    expect(FOOTER_ITEMS.map((i) => i.href)).toEqual(["/connect", "/settings"]);
+    expect(GC_ONLY_PAGES).not.toContain("/settings");
+    expect(hrefs(false)).not.toContain("/settings");
+    expect(hrefs(true)).not.toContain("/settings");
   });
 });

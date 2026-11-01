@@ -1,37 +1,20 @@
 "use client";
 
 import { Moon, Sun } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useAppearance } from "@/lib/appearance/use-appearance";
 
-// The theme lives on <html data-theme>. The script in app/layout.tsx sets it before first paint (the saved choice, else the
-// system setting); this button flips it and saves the choice.
-
-export const THEME_KEY = "oasis-theme";
-const THEME_EVENT = "oasis:theme";
-
-const subscribe = (onChange: () => void) => {
-  window.addEventListener(THEME_EVENT, onChange);
-  return () => window.removeEventListener(THEME_EVENT, onChange);
-};
-const current = () => (document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+// A one-click light/dark shortcut. It goes through the same hook as the Settings page, so the two can never disagree: dark becomes
+// light, anything else (light, or "match my device" showing light) becomes dark.
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const theme = useSyncExternalStore(subscribe, current, () => "light");
-  const next = theme === "dark" ? "light" : "dark";
-  const Icon = theme === "dark" ? Sun : Moon;
+  const { mode, setMode } = useAppearance();
+  const next = mode === "dark" ? "light" : "dark";
+  const Icon = mode === "dark" ? Sun : Moon;
 
   return (
     <button
       type="button"
-      onClick={() => {
-        document.documentElement.dataset.theme = next;
-        try {
-          localStorage.setItem(THEME_KEY, next);
-        } catch {
-          // Private mode: the choice just lasts until the page closes.
-        }
-        window.dispatchEvent(new Event(THEME_EVENT));
-      }}
+      onClick={() => setMode(next)}
       aria-label={`Switch to ${next} mode`}
       title={`Switch to ${next} mode`}
       className={`btn btn-ghost size-9 shrink-0 p-0 ${className}`}

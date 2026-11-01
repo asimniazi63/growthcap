@@ -1,9 +1,12 @@
 @import "tailwindcss";
+@import "./themes.css";
+@import "./sorbet.css";
 
-/* Oasis Pace design tokens, light and dark. The dark set overrides the same tokens under html[data-theme="dark"] (set before
-   paint by the script in app/layout.tsx, flipped by components/shell/theme-toggle.tsx). One accent (lagoon teal); ahead and behind each have their own colour; an estimate
-   is always dashed or hatched, never solid. Use the tokens (bg-surface, text-ink-2, border-line, text-behind) and the
-   component classes below instead of raw neutral-* shades. */
+/* Oasis Pace design tokens. The values for each colour scheme, light and dark, live in lib/appearance/palettes.ts and are written to
+   themes.css (npm run themes:build); <html> carries data-scheme and data-mode, which pick the set. The @theme block below lists every
+   token once, with the default scheme's (Sorbet) light values as the fallback, so Tailwind generates the utilities (bg-surface, text-ink-2, bg-rail).
+   One accent per scheme; ahead and behind each have their own colour; an estimate is always dashed or hatched, never solid.
+   Use the tokens and the component classes below instead of raw neutral-* shades or hex colours. */
 
 @theme inline {
   --font-sans: var(--font-ui-face), ui-sans-serif, system-ui, sans-serif;
@@ -11,61 +14,41 @@
 }
 
 @theme {
-  --color-ink: #0e1f22;
-  --color-ink-2: #44585c;
-  --color-ink-3: #74878b;
-  --color-paper: #f2f5f4;
-  --color-paper-2: #e6ecea;
+  --color-ink: #2d3e50;
+  --color-ink-2: #516f90;
+  --color-ink-3: #5f7388;
+  --color-paper: #f5f8fa;
+  --color-paper-2: #eaf0f6;
   --color-surface: #ffffff;
-  --color-line: #dbe3e1;
-  --color-line-strong: #c3cfcc;
-  --color-brand: #0f766e;
-  --color-brand-strong: #0b5a54;
-  --color-brand-tint: #d8f0ea;
-  --color-ahead: #15803d;
-  --color-ahead-tint: #dcf3e3;
-  --color-behind: #b83a1d;
-  --color-behind-tint: #fbe6df;
-  --color-warn: #96610a;
-  --color-warn-tint: #fbf0d2;
-  --color-estimate: #5f7882;
-  /* Inverted surfaces (chat bubble, tooltip, toast, code blocks, footer) and text on the brand colour */
-  --color-inverse: #0e1f22;
+  --color-line: #dfe3eb;
+  --color-line-strong: #cbd6e2;
+  --color-brand: #d63f18;
+  --color-brand-strong: #a83210;
+  --color-brand-tint: #ffeee8;
+  --color-ahead: #00756a;
+  --color-ahead-tint: #d9f5f0;
+  --color-behind: #bd1b3d;
+  --color-behind-tint: #fde3e8;
+  --color-warn: #865400;
+  --color-warn-tint: #fff1d1;
+  --color-estimate: #62768c;
+  --color-inverse: #2d3e50;
   --color-on-inverse: #ffffff;
   --color-on-brand: #ffffff;
+  --color-plan: color-mix(in oklab, var(--color-ink-3) 70%, var(--color-surface));
+  --color-mark: #fb6038;
+  --color-on-mark: #ffffff;
+  --color-rail: #2d3e50;
+  --color-on-rail: #ffffff;
+  --color-on-rail-2: rgb(255 255 255 / 0.66);
+  --color-on-rail-3: rgb(255 255 255 / 0.62);
+  --color-rail-active: rgb(255 255 255 / 0.14);
   --shadow-card: 0 1px 0 rgb(14 31 34 / 0.04), 0 1px 3px rgb(14 31 34 / 0.05);
   --shadow-pop: 0 12px 32px -8px rgb(14 31 34 / 0.22), 0 2px 6px rgb(14 31 34 / 0.08);
 }
 
-/* Dark theme: same tokens, new values. Tinted fills get dark washes, text and accents get lighter tones so contrast holds. */
 :root {
   color-scheme: light;
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --color-ink: #e6eeec;
-  --color-ink-2: #a9bcbf;
-  --color-ink-3: #809599;
-  --color-paper: #0a1416;
-  --color-paper-2: #152428;
-  --color-surface: #101d20;
-  --color-line: #223539;
-  --color-line-strong: #31494e;
-  --color-brand: #2fc7b4;
-  --color-brand-strong: #7fe3d5;
-  --color-brand-tint: #11393a;
-  --color-ahead: #4ade80;
-  --color-ahead-tint: #11321f;
-  --color-behind: #fb8f70;
-  --color-behind-tint: #3b1d15;
-  --color-warn: #f0b84a;
-  --color-warn-tint: #382b0c;
-  --color-estimate: #8aa3ad;
-  --color-inverse: #1d3338;
-  --color-on-inverse: #f2f5f4;
-  --color-on-brand: #04201d;
-  --shadow-card: 0 1px 0 rgb(0 0 0 / 0.25), 0 1px 3px rgb(0 0 0 / 0.3);
-  --shadow-pop: 0 12px 32px -8px rgb(0 0 0 / 0.6), 0 2px 6px rgb(0 0 0 / 0.35);
 }
 
 @layer base {
@@ -383,4 +366,13 @@
       background-position: -120% 0;
     }
   }
+}
+
+/* Clerk's own styles are not in a cascade layer, so Tailwind utilities lose to them. The organization and user names in the side
+   rail and the mobile bar take their colour from the rail token here, so they read on every scheme's rail. The selectors are scoped
+   to the switcher button, because the same Clerk element also names the rows in its dropdown, which sit on the card colour. */
+.app-rail .cl-organizationPreviewMainIdentifier__organizationSwitcherTrigger,
+.app-rail .cl-userButtonOuterIdentifier,
+.app-mobilebar .cl-organizationPreviewMainIdentifier__organizationSwitcherTrigger {
+  color: var(--color-on-rail);
 }

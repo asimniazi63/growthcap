@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, useOrganizationList } from "@clerk/nextjs";
-import { BookOpenCheck, Building2, CornerDownLeft, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Search, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, Building2, CornerDownLeft, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Search, Settings, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { SUGGESTED_QUESTIONS } from "../chat/suggestions";
@@ -34,6 +34,7 @@ const PAGES: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/plan", label: "Plan", icon: FileText },
   { href: "/actions", label: "Actions", icon: ListChecks },
   { href: "/connect", label: "Connect", icon: Plug },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 // With nothing typed, only the first few questions show, so the pages and brands stay in view.

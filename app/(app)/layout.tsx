@@ -4,6 +4,7 @@ import { Brand } from "@/components/shell/brand";
 import { CommandPalette, PaletteButton } from "@/components/shell/command-palette";
 import { Nav } from "@/components/shell/nav";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
+import { TopBar } from "@/components/shell/top-bar";
 import { ToastProvider } from "@/components/ui/toast";
 import { listActions } from "@/lib/actions/ledger";
 import { getDb } from "@/lib/db/client";
@@ -13,6 +14,14 @@ const switcher = {
   elements: {
     rootBox: "w-full",
     organizationSwitcherTrigger: "w-full justify-between rounded-[10px] border border-line bg-surface px-3 py-2 shadow-card",
+  },
+};
+
+// The switcher in the mobile bar has no background of its own, so its icon follows the bar (navy in the Sorbet scheme). Its name takes
+// the rail colour from app/globals.css, scoped to the button so the rows in its dropdown keep the card's text colour.
+const mobileSwitcher = {
+  elements: {
+    organizationSwitcherTriggerIcon: "text-on-rail-2",
   },
 };
 
@@ -36,31 +45,35 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <ToastProvider>
       <div className="min-h-screen lg:grid lg:grid-cols-[264px_minmax(0,1fr)]">
-        <aside className="sticky top-0 hidden h-screen flex-col gap-5 border-r border-line bg-surface/50 px-4 py-5 lg:flex">
-          <Brand href="/overview" className="px-2" />
+        <aside className="app-rail sticky top-0 hidden h-screen flex-col gap-5 border-r border-line bg-rail px-4 py-5 lg:flex">
+          <Brand href="/overview" className="px-2 text-on-rail" />
           <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/overview" appearance={switcher} />
-          <PaletteButton />
+          <div className="side-palette">
+            <PaletteButton />
+          </div>
           <Nav variant="side" gc={gc} pending={pending} />
-          <div className="flex items-center gap-1 border-t border-line pt-4">
+          <div className="rail-me flex items-center gap-1 border-t border-line pt-4">
             <div className="min-w-0 flex-1">
-              <UserButton showName appearance={{ elements: { rootBox: "w-full", userButtonTrigger: "w-full justify-start rounded-[10px] px-2 py-1.5" } }} />
+              <UserButton showName appearance={{ elements: { rootBox: "w-full", userButtonTrigger: "w-full justify-start rounded-[10px] px-2 py-1.5", userButtonOuterIdentifier: "text-on-rail" } }} />
             </div>
-            <ThemeToggle />
+            <ThemeToggle className="text-on-rail-2 hover:text-on-rail" />
           </div>
         </aside>
 
         <div className="min-w-0">
-          <header className="sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur lg:hidden">
+          <header className="app-mobilebar sticky top-0 z-30 border-b border-line bg-paper/90 backdrop-blur lg:hidden">
             <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <Brand href="/overview" />
+              <Brand href="/overview" className="text-on-rail" />
               <div className="flex items-center gap-2">
-                <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/overview" />
-                <ThemeToggle />
+                <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/overview" appearance={mobileSwitcher} />
+                <ThemeToggle className="text-on-rail-2 hover:text-on-rail" />
                 <UserButton />
               </div>
             </div>
             <Nav variant="top" gc={gc} pending={pending} />
           </header>
+
+          <TopBar />
 
           <main className="mx-auto w-full max-w-[1120px] px-5 py-8 sm:px-8 lg:px-12 lg:py-10">
             {orgId ? (
