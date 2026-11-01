@@ -40,7 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Brand href="/overview" className="px-2" />
           <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/overview" appearance={switcher} />
           <PaletteButton />
-          <Nav variant="side" pending={pending} />
+          <Nav variant="side" gc={gc} pending={pending} />
           <div className="flex items-center gap-1 border-t border-line pt-4">
             <div className="min-w-0 flex-1">
               <UserButton showName appearance={{ elements: { rootBox: "w-full", userButtonTrigger: "w-full justify-start rounded-[10px] px-2 py-1.5" } }} />
@@ -59,7 +59,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <UserButton />
               </div>
             </div>
-            <Nav variant="top" pending={pending} />
+            <Nav variant="top" gc={gc} pending={pending} />
           </header>
 
           <main className="mx-auto w-full max-w-[1120px] px-5 py-8 sm:px-8 lg:px-12 lg:py-10">

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, type LucideIcon } from "lucide-react";
+import { GC_ONLY_PAGES } from "./pages";
 
 interface Item {
   href: string;
@@ -32,6 +33,12 @@ const GROUPS: { label: string; items: Item[] }[] = [
   },
 ];
 const CONNECT: Item = { href: "/connect", label: "Connect", icon: Plug };
+
+// The groups a person sees: the pages that are Growth Capital's alone are left out for everyone else, and a group with nothing
+// left goes too.
+export function navGroups(gc: boolean): { label: string; items: Item[] }[] {
+  return GROUPS.map((g) => ({ label: g.label, items: g.items.filter((i) => gc || !GC_ONLY_PAGES.includes(i.href)) })).filter((g) => g.items.length > 0);
+}
 
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -74,13 +81,14 @@ function TopLink({ item, pathname, pending = 0 }: { item: Item; pathname: string
   );
 }
 
-export function Nav({ variant, pending = 0 }: { variant: "side" | "top"; pending?: number }) {
+export function Nav({ variant, gc, pending = 0 }: { variant: "side" | "top"; gc: boolean; pending?: number }) {
   const pathname = usePathname() ?? "";
+  const groups = navGroups(gc);
 
   if (variant === "top") {
     return (
       <nav aria-label="Main" className="flex gap-1 overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] lg:hidden">
-        {[...GROUPS.flatMap((g) => g.items), CONNECT].map((item) => (
+        {[...groups.flatMap((g) => g.items), CONNECT].map((item) => (
           <TopLink key={item.href} item={item} pathname={pathname} pending={pending} />
         ))}
       </nav>
@@ -89,7 +97,7 @@ export function Nav({ variant, pending = 0 }: { variant: "side" | "top"; pending
 
   return (
     <nav aria-label="Main" className="flex flex-1 flex-col">
-      {GROUPS.map((g) => (
+      {groups.map((g) => (
         <div key={g.label} className="mb-5">
           {g.label ? <p className="px-3 pb-1.5 text-xs font-medium text-ink-3">{g.label}</p> : null}
           <ul className="space-y-0.5">

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { SUGGESTED_QUESTIONS } from "../chat/suggestions";
 import { useToast } from "../ui/toast";
+import { GC_ONLY_PAGES } from "./pages";
 
 // Ctrl K or Cmd K (or the sidebar button) opens a small search over three things: the pages, the other brands the person
 // belongs to, and the suggested questions. Everything it does is a navigation the person could make by hand: it reads no
@@ -22,15 +23,15 @@ interface Entry {
   run: () => void;
 }
 
-const PAGES: { href: string; label: string; icon: LucideIcon; gc?: boolean }[] = [
+const PAGES: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessagesSquare },
   { href: "/pace", label: "Pace", icon: Gauge },
-  { href: "/portfolio", label: "Portfolio", icon: LayoutGrid, gc: true },
+  { href: "/portfolio", label: "Portfolio", icon: LayoutGrid },
   { href: "/briefs", label: "Briefs", icon: Newspaper },
-  { href: "/audit", label: "Audit", icon: ScanSearch, gc: true },
-  { href: "/plan", label: "Plan", icon: FileText, gc: true },
-  { href: "/actions", label: "Actions", icon: ListChecks, gc: true },
+  { href: "/audit", label: "Audit", icon: ScanSearch },
+  { href: "/plan", label: "Plan", icon: FileText },
+  { href: "/actions", label: "Actions", icon: ListChecks },
   { href: "/connect", label: "Connect", icon: Plug },
 ];
 
@@ -87,7 +88,7 @@ export function CommandPalette({ gc }: { gc: boolean }) {
         }
       })();
     };
-    const pages: Entry[] = PAGES.filter((p) => gc || !p.gc).map((p) => ({ id: `page:${p.href}`, group: "Jump to", label: p.label, icon: p.icon, run: () => router.push(p.href) }));
+    const pages: Entry[] = PAGES.filter((p) => gc || !GC_ONLY_PAGES.includes(p.href)).map((p) => ({ id: `page:${p.href}`, group: "Jump to", label: p.label, icon: p.icon, run: () => router.push(p.href) }));
     const brands: Entry[] =
       (memberships?.length ?? 0) > 1 ? memberships!.map((m) => ({ id: `brand:${m.organization.id}`, group: "Switch brand", label: m.organization.name, icon: Building2, hint: m.organization.id === orgId ? "Current brand" : undefined, run: () => switchTo(m.organization.id) })) : [];
     const asks: Entry[] = SUGGESTED_QUESTIONS.map((q) => ({ id: `ask:${q}`, group: "Ask", label: q, icon: MessagesSquare, run: () => router.push(askUrl(q)) }));
