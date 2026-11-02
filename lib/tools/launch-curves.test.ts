@@ -8,7 +8,7 @@ import type { Dataset } from "../../scripts/seed/types.js";
 import type { TenantContext } from "../tenancy/context";
 import { ledgerFromToolResults } from "../agent/checker";
 import { addDays } from "../metrics/dates";
-import { benchmarkOf, compareWithBenchmark, launchCurve, median, splitFirstSales, weeksOf } from "../metrics/launch";
+import { benchmarkOf, compareWithBenchmark, launchCurve, matchProductRefs, median, splitFirstSales, weeksOf } from "../metrics/launch";
 import { getLaunchCurves, type LaunchCurvesData } from "./launch-curves";
 
 const day = (from: string, n: number) => addDays(from, n);
@@ -20,6 +20,37 @@ describe("median", () => {
     expect(median([9, 1, 5])).toBe(5);
     expect(median([3, 10, 5, 7])).toBe(6);
     expect(median([4, 5])).toBe(4.5);
+  });
+});
+
+describe("matchProductRefs", () => {
+  const catalog = [
+    { id: "gid://shopify/Product/1", title: "Gua Sha Stone" },
+    { id: "gid://shopify/Product/2", title: "Gua Sha Oil" },
+    { id: "gid://shopify/Product/3", title: "Neck Cream" },
+  ];
+
+  it("keeps an entry that is a product id as it is", () => {
+    expect(matchProductRefs(["gid://shopify/Product/3"], catalog)).toEqual({ ids: ["gid://shopify/Product/3"], byName: [], unmatched: [] });
+  });
+
+  it("matches any other entry against the product titles, ignoring case", () => {
+    expect(matchProductRefs(["gua sha stone"], catalog)).toEqual({ ids: ["gid://shopify/Product/1"], byName: [{ ref: "gua sha stone", matches: 1 }], unmatched: [] });
+  });
+
+  it("a name that fits several products lists them all and says how many", () => {
+    const m = matchProductRefs(["Gua Sha"], catalog);
+    expect(m.ids).toEqual(["gid://shopify/Product/1", "gid://shopify/Product/2"]);
+    expect(m.byName).toEqual([{ ref: "Gua Sha", matches: 2 }]);
+  });
+
+  it("reports an entry that is neither an id nor part of a title, and does not name-match one or two letters", () => {
+    expect(matchProductRefs(["Serum", "Ne"], catalog)).toEqual({ ids: [], byName: [], unmatched: ["Serum", "Ne"] });
+  });
+
+  it("mixes ids and names without repeating a product", () => {
+    const m = matchProductRefs(["gid://shopify/Product/1", "Gua Sha Stone", "Neck"], catalog);
+    expect(m.ids).toEqual(["gid://shopify/Product/1", "gid://shopify/Product/3"]);
   });
 });
 
@@ -488,6 +519,25 @@ describe("the Solenne and Tidepool fixtures", () => {
     expect(one.data.launches).toHaveLength(1);
     expect(one.data.launches[0]).toEqual(all.data.launches.find((l) => l.productId === exp.productId));
     expect(one.data.benchmark).toEqual(all.data.benchmark);
+  });
+
+  it("a product named instead of identified is matched by title, so asking about the Gua Sha does not read as no sales", async () => {
+    const exp = expectedLaunches(ds, 8).launches.find((l) => l.title === "Gua Sha Stone")!;
+    const byId = await run({ productIds: [exp.productId] });
+    const byName = await run({ productIds: ["Gua Sha"] });
+    expect(byName.data.launches).toEqual(byId.data.launches);
+    expect(byName.data.launches).toHaveLength(1);
+    const text = (byName.data.caveats ?? []).join(" ");
+    expect(text).toMatch(/"Gua Sha" is not a product id, so it was matched by name to 1 product/);
+    expect(text).not.toMatch(/no sales in the data/);
+  });
+
+  it("a name that matches nothing says so, instead of saying the product has no sales", async () => {
+    const res = await run({ productIds: ["Unicorn Serum"] });
+    expect(res.data.launches).toEqual([]);
+    const text = (res.data.caveats ?? []).join(" ");
+    expect(text).toMatch(/1 of the 1 products asked for matched no product id or name in this store \("Unicorn Serum"\)/);
+    expect(text).not.toMatch(/no sales in the data/);
   });
 
   it("launch dates in a range keep to it", async () => {

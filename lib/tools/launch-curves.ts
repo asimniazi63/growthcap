@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Db } from "../db/client";
 import { AppError } from "../errors";
-import { benchmarkOf, compareWithBenchmark, firstSalesByProduct, LAUNCH_LEAD_DAYS, launchCurve, productTitles, splitFirstSales, unitsByProductDay, type BenchmarkWeek, type ComparedWeek } from "../metrics/launch";
+import { benchmarkOf, compareWithBenchmark, firstSalesByProduct, LAUNCH_LEAD_DAYS, launchCurve, productTitles, resolveProductRefs, splitFirstSales, unitsByProductDay, type BenchmarkWeek, type ComparedWeek } from "../metrics/launch";
 import type { TenantContext } from "../tenancy/context";
 import { assertInWindow, asOfOf, capLimit, dateString, dbFor, idList, limitField, loadWindow, parseInput, queryIdFor } from "./common";
 import { requireConnectedShop, type ToolResult } from "./result";
@@ -11,7 +11,7 @@ const THIN_BENCHMARK = 3; // fewer launches than this behind a week's median and
 
 // strictObject: an unknown key (a tenant, a shop, anything the model invents) is an error, not ignored.
 export const getLaunchCurvesInputSchema = z.strictObject({
-  productIds: idList.optional(), // list only these launches; the benchmark is still every launch in the range
+  productIds: idList.optional(), // product ids, or names matched by title; list only these launches; the benchmark is still every launch in the range
   launchedFrom: dateString.optional(), // first-sale dates of the launches to use; give both or neither; default every launch in the data
   launchedTo: dateString.optional(),
   weeks: z.number().int().min(1).max(12).optional(), // weeks of each curve; default 8
@@ -61,7 +61,9 @@ export async function getLaunchCurves(ctx: TenantContext, rawInput: GetLaunchCur
   const last = win.last!;
   const weeks = input.weeks ?? DEFAULT_WEEKS;
   const inRange = (date: string) => !asked || (date >= asked.from && date <= asked.to);
-  const wanted = input.productIds ? new Set(input.productIds) : null;
+  // productIds should be ids, but a name ("Gua Sha") is matched by title rather than read as a product with no sales.
+  const refs = input.productIds ? await resolveProductRefs(db, ctx.tenantId, input.productIds) : null;
+  const wanted = refs ? new Set(refs.ids) : null;
 
   const firstSales = await firstSalesByProduct(db, ctx.tenantId);
   const split = splitFirstSales(firstSales, first);
@@ -90,6 +92,11 @@ export async function getLaunchCurves(ctx: TenantContext, rawInput: GetLaunchCur
   if (group.length === 0) caveats.push(`No product launched ${where}: a launch is a product whose first sale comes at least ${LAUNCH_LEAD_DAYS} days after the store's first order (${first}).`);
   if (leftOut.length > 0)
     caveats.push(`${noun(leftOut.length, "product was", "products were")} left out because ${leftOut.length === 1 ? "it was" : "they were"} already selling when the data begins (a first sale within ${LAUNCH_LEAD_DAYS} days of the store's first order on ${first}), so ${leftOut.length === 1 ? "its launch" : "their launches"} cannot be known.`);
+  if (refs) {
+    const quoted = (ref: string) => JSON.stringify(ref.length > 60 ? `${ref.slice(0, 60)}...` : ref);
+    for (const n of refs.byName) caveats.push(`${quoted(n.ref)} is not a product id, so it was matched by name to ${noun(n.matches, "product")}.`);
+    if (refs.unmatched.length > 0) caveats.push(`${refs.unmatched.length} of the ${input.productIds!.length} products asked for matched no product id or name in this store (${refs.unmatched.map(quoted).join(", ")}).`);
+  }
   if (wanted) {
     const inGroup = new Set(group.map((l) => l.productId));
     const missing = [...wanted].filter((id) => !inGroup.has(id) && !leftOut.includes(id));
@@ -116,7 +123,7 @@ type Run = (ctx: TenantContext, input: never, deps: { db?: Db }) => Promise<Tool
 // The shape of an entry of TOOL_DEFS in lib/agent/tools.ts.
 export const getLaunchCurvesTool = {
   description:
-    "Launch curves: units sold by week since a product's launch, against the median launch in the store. The products table has no publish date, so a launch is a product's first sale, and only products whose first sale is at least 14 days after the store's first order count (a product already selling when the data begins has no knowable launch; caveats says how many were left out). Say it is the first sale, not a publish date. Week 1 is the launch day and the six after it; weeks is how many to show (1 to 12, default 8). Each launch has weeks of units and cumulativeUnits (before refunds, cancelled orders left out) with vsMedianUnits (units minus the median) and pctOfMedianUnits (a fraction of the median, 1 equals it). Both are null for a partial week: daysObserved under 7 means the data ends inside it, and fullyObserved false means the launch has not had all its weeks. benchmark is the median curve (medianUnits, medianCumulativeUnits, and launches, how many launches it rests on) over every launch in launchedFrom to launchedTo (both or neither; default all), not narrowed by productIds, so give productIds to ask how one product's launch compares with its peers. Launches are newest first. Quote every figure as written; never work out a difference, share, total or rate yourself. Read caveats and say them. Draw the curves with render_view component launch_curves (small curves of cumulative units against the median launch); the chart is shown beside your answer, which still gives the figures in words.",
+    "Launch curves: units sold by week since a product's launch, against the median launch in the store. The products table has no publish date, so a launch is a product's first sale, and only products whose first sale is at least 14 days after the store's first order count (a product already selling when the data begins has no knowable launch; caveats says how many were left out). Say it is the first sale, not a publish date. Week 1 is the launch day and the six after it; weeks is how many to show (1 to 12, default 8). Each launch has weeks of units and cumulativeUnits (before refunds, cancelled orders left out) with vsMedianUnits (units minus the median) and pctOfMedianUnits (a fraction of the median, 1 equals it). Both are null for a partial week: daysObserved under 7 means the data ends inside it, and fullyObserved false means the launch has not had all its weeks. benchmark is the median curve (medianUnits, medianCumulativeUnits, and launches, how many launches it rests on) over every launch in launchedFrom to launchedTo (both or neither; default all), not narrowed by productIds, so give productIds to ask how one product's launch compares with its peers (ids, or a product name, which is matched against the titles and which caveats says it did). Launches are newest first. Quote every figure as written; never work out a difference, share, total or rate yourself. Read caveats and say them. Draw the curves with render_view component launch_curves (small curves of cumulative units against the median launch); the chart is shown beside your answer, which still gives the figures in words.",
   schema: getLaunchCurvesInputSchema as z.ZodType,
   run: getLaunchCurves as unknown as Run,
 };

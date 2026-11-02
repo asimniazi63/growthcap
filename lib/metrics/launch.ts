@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNull, lte, min, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte, min, sql } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { orderLines, orders, products } from "../db/schema";
 import { addDays, daysBetween } from "./dates";
@@ -84,6 +84,45 @@ export async function productTitles(db: Db, tenantId: string, ids: string[]): Pr
   if (ids.length === 0) return new Map();
   const rows = await db.select({ id: products.id, title: products.title }).from(products).where(and(eq(products.tenantId, tenantId), inArray(products.id, ids)));
   return new Map(rows.map((r) => [r.id, r.title]));
+}
+
+// ---- Products asked for by name
+
+export interface ProductRefs {
+  ids: string[]; // the products the entries stand for, each once
+  byName: { ref: string; matches: number }[]; // entries that were not ids and matched titles
+  unmatched: string[]; // entries that are neither an id nor part of a title
+}
+
+const MIN_NAME_CHARS = 3; // "A" or "Ne" is not a name worth matching against every title
+
+// The model is asked for product ids but sometimes gives a name ("Gua Sha"), and a name that is not an id would read as a product with
+// no sales. An entry that is an id stays one; any other is matched against the titles, ignoring case.
+export function matchProductRefs(refs: string[], catalog: { id: string; title: string }[]): ProductRefs {
+  const known = new Set(catalog.map((p) => p.id));
+  const ids = new Set<string>();
+  const byName: ProductRefs["byName"] = [];
+  const unmatched: string[] = [];
+  for (const ref of refs) {
+    if (known.has(ref)) {
+      ids.add(ref);
+      continue;
+    }
+    const needle = ref.trim().toLowerCase();
+    const hits = needle.length >= MIN_NAME_CHARS ? catalog.filter((p) => p.title.toLowerCase().includes(needle)) : [];
+    if (hits.length === 0) {
+      unmatched.push(ref);
+      continue;
+    }
+    byName.push({ ref, matches: hits.length });
+    for (const h of hits) ids.add(h.id);
+  }
+  return { ids: [...ids], byName, unmatched };
+}
+
+export async function resolveProductRefs(db: Db, tenantId: string, refs: string[]): Promise<ProductRefs> {
+  const catalog = await db.select({ id: products.id, title: products.title }).from(products).where(eq(products.tenantId, tenantId)).orderBy(asc(products.title), asc(products.id));
+  return matchProductRefs(refs, catalog);
 }
 
 // ---- Which products are launches
