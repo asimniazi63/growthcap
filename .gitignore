@@ -21,6 +21,10 @@ next-env.d.ts
 # Seed loader journal (local state)
 .seed-journal/
 
+# README draft with screenshots, not decided yet. Remove these two lines to commit it.
+/README.screenshots.md
+/docs/screenshots/
+
 # Claude Code local settings
 .claude/settings.local.json
 
