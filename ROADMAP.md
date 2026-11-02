@@ -36,7 +36,7 @@ What is built, what was left out on purpose, what production would add, and what
 - **Follow-ups from T12 to T15 ([#22](https://github.com/asimniazi63/growthcap/issues/22)).** Those four tickets were closed on 2026-11-02 with these items moved out: the live check of "Need $X a day" on November data, one saved full eval run (three cases have never run), the audit running by itself when a store connects, Opus 5.5 as the fallback model with a whole-path test, and evals in CI (descoped: they run locally and the scoreboard is committed).
 - **Single-vs-multi-agent comparison (T7).** The eval switch exists (`AGENT_SINGLE_AGENT`). The run and the table do not.
 
-## Not started: extras T16, T18b and T19
+## Not started: extras T16 and T18b
 
 Each is a feature from [docs/feature-map.md](docs/feature-map.md) the brief does not ask for. T12 to T15, T17 and T18 are built (above). The rest run in this order, and nothing outside a ticket gets built without Asim's go-ahead. T10b ([#21](https://github.com/asimniazi63/growthcap/issues/21)), Slack posting of the Monday brief, stays deferred (above).
 
@@ -44,9 +44,8 @@ Each is a feature from [docs/feature-map.md](docs/feature-map.md) the brief does
 |---|---|
 | T16 | Forecast, what-if scenarios, inventory runway, Black Friday war room |
 | T18b | A Slack bot that answers questions and runs playbooks (split from T18 on 2026-11-02) |
-| T19 | About 3,000 orders with the two subtle storylines (S1, S2) and the weak BFCM cohort, in fresh stores |
 
-If time runs short, cut from the bottom: T19 back to T16, then T10, T8 part D, T7, T9, T8 part C and T6. Nothing in T0 to T5 is cut.
+If time runs short, cut from the bottom: T18b back to T16, then T10, T8 part D, T7, T9, T8 part C and T6. Nothing in T0 to T5 is cut.
 
 **Not built** ([priorities.md](docs/priorities.md)): benchmarks across clients (Shopify's API terms bar them), a Sidekick extension (needs an embedded app), production token handling (designed, not needed for a demo), a ShopifyQL check of the seeded data (needs Level 2 customer data), and two lower-ranked ideas (a creative-to-commerce loop, an AI-shopping readiness audit).
 

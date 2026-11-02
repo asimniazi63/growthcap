@@ -39,10 +39,9 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 | 18 | Extras | T17: Growth analyses: post-mortems, merchandising, segments (**slice 1, promo post-mortems, built 2026-11-02; its two eval cases ran once live, BFCM25 12 of 12 and VIPGLOW25 12 of 13 before a checker fix. Slice 2, merchandising and retention segments (bundles, launch curves, the `/segments` page, the Klaviyo CSV), is built; the Shopify segment write ran live once on 2026-11-02 (an approved card created a segment that shows in Shopify); its three eval cases ran once live: launch 11 of 11, at-risk 9 of 11 and bundles 9 of 10 before a case fix and a checker fix**) | #18 | Features 34, 35, 36 |
 | 19 | Extras | T18: Playbooks (**built 2026-11-02; October review eval passes, 8 of 8**) | #19 | Feature 38 |
 | 19b | Extras | T18b: Slack bot | #23 | Feature 39 (the Slack part). Needs a Slack app from Asim. Numbered 19b so the later priorities keep their numbers |
-| 20 | Extras | T19: Fuller dataset | #20 | Features 3, 5. It replaces the demo data, so it runs last, with a day to spare |
 | 21 | Last, always | T11: Final ship | #12 | Whatever is built gets its evals, docs and the final Loom |
 
-**If time runs short,** cut from the bottom: T19 back to T12, then T10, then T8 part D, then T7, then T9, then T8 part C, then T6. Nothing in T0–T5 is cut.
+**If time runs short,** cut from the bottom: T18b back to T12, then T10, then T8 part D, then T7, then T9, then T8 part C, then T6. Nothing in T0–T5 is cut.
 
 ## Changes made while building
 
@@ -53,6 +52,8 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 - **2026-11-02, Asim:** T18 is split in two. T18 (#19) keeps the playbooks; the Slack bot is T18b (#23), numbered 19b so the later priorities keep their numbers. T18b needs T18 and a Slack app from Asim, and can share that app with T10b (#21). T12 to T15 were closed the same day, with their follow-ups in #22.
 
 - **2026-11-02:** T18's playbooks are not a separate runner. Each one is a fixed question, written on the server, that goes through the shared agent loop. The "saved sequence of tool calls" is the list of tools that question asks for, and the number checker verifies the write-up as it does for chat.
+
+- **2026-11-03, Asim:** T19 (the fuller dataset, #20) is dropped. The brief asks for a dev store with test data, which Solenne and Tidepool already are, and no step of the demo uses the extra volume or the S1 and S2 storylines. Solenne stays at about 1,000 orders. Priority 20 and issue #20 are gone; T11 keeps priority 21 so the later numbers stay put.
 
 ## What this order changes in the build plan
 
@@ -81,7 +82,7 @@ These stay because they're where the thinking shows.
 Every feature in [feature-map.md](feature-map.md) now has a ticket, except those listed under "Not built" below.
 
 - **Folded into existing tickets, at no extra time:** feature 2, the Plus plan, is in T0. Feature 24, Shopify CLI with the Theme Access app as the fallback for theme writes, is in T9.
-- **New tickets T12–T19** cover the rest, as in the priority order above.
+- **New tickets T12–T18b** cover the rest, as in the priority order above.
 
 **Not built**
 

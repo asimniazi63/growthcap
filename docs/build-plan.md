@@ -1,6 +1,6 @@
 # Oasis Pace: Build Plan
 
-> **For agentic workers:** These are the steps for each ticket: the core in one day (T0–T5), every stretch feature (T6–T10), the extras from [feature-map.md](feature-map.md) (T12–T19), and the final ship (T11). The order is set in [priorities.md](priorities.md). It cuts the take-home plan, [implementation-plan.md](implementation-plan.md), where speed matters more than hardening. Where a step says "as in T#" or "as in T5-A", follow that part of the implementation plan, including its interfaces and tests, minus the cuts listed here. `CLAUDE.md` still applies: never stage, commit or push, ask before deploys and seed loads, and stop at each checkpoint. Each ticket is also a GitHub issue.
+> **For agentic workers:** These are the steps for each ticket: the core in one day (T0–T5), every stretch feature (T6–T10), the extras from [feature-map.md](feature-map.md) (T12–T18b), and the final ship (T11). The order is set in [priorities.md](priorities.md). It cuts the take-home plan, [implementation-plan.md](implementation-plan.md), where speed matters more than hardening. Where a step says "as in T#" or "as in T5-A", follow that part of the implementation plan, including its interfaces and tests, minus the cuts listed here. `CLAUDE.md` still applies: never stage, commit or push, ask before deploys and seed loads, and stop at each checkpoint. Each ticket is also a GitHub issue.
 
 **Goal:** a deployed app with every feature in the brief working at demo quality, numbers that can be checked, and the thinking written down. Production hardening stays in [production/](production/).
 
@@ -29,13 +29,12 @@
 | T17 | Claude | about 2 days | Extra: promo post-mortems, merchandising analyses, retention segments | New: growth analyses | 34, 35, 36 |
 | T18 | Claude | about 3–4 h | Extra: saved playbooks run from the app | New: playbooks | 38 |
 | T18b | Both | about 3–4 h | Extra: a Slack bot that answers questions and runs playbooks (split from T18 on 2026-11-02) | New: use it anywhere | 39 (Slack part) |
-| T19 | Both | about 2 h, plus about 7 h of loading | Extra: about 3,000 orders with S1, S2 and the weak BFCM cohort, in fresh stores | Fuller demo data | 3, 5 |
 | T11 | Both | about 2–3 h | Full evals, final README, final Loom | Ship | 10, 11, 16, 45 |
 
 **Order:** set in [priorities.md](priorities.md).
 - **Day 1:** T0–T5. T1's load runs in the background while T2 and T3 are built.
 - **Stretch:** T6, T8 part C, T9; then T7, T8 part D, T10.
-- **Extras:** T12 to T19, in order.
+- **Extras:** T12 to T18b, in order.
 - **Last:** T11, whatever has been built.
 - **Cutting:** any ticket after T5 can be cut without breaking what's before it. The cut order is in [priorities.md](priorities.md).
 
@@ -366,16 +365,6 @@ Split out of T18 on 2026-11-02 (Asim). Needs T18, because the bot runs the playb
   - A request with a bad signature is rejected.
   - A channel mapped to Solenne can't read Tidepool.
 - [ ] No new eval case: the playbook case in T18 covers what the bot runs.
-- [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
-
-### T19: Fuller dataset: 3,000 orders and the subtle storylines (about 2 hours, plus about 7 hours of loading)
-
-**Deliverable:** the full dataset from the product plan, with the storylines skipped on day 1.
-
-- [ ] Generate about 3,000 Solenne orders, adding S1 (the price increase), S2 (the shipping threshold) and S8's weak BFCM cohort (features 3 and 5).
-- [ ] After asking Asim, load them into fresh dev stores, or reset the existing ones, because the generator's output changes for every order. Run the load overnight.
-- [ ] Reconnect, re-sync, re-run `reconcile:truth`, update the eval expectations from the new `truth.json`, and re-run the evals.
-- [ ] It replaces the demo data late in the build, so do it only with a day to spare before T11.
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ---
