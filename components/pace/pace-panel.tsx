@@ -1,66 +1,21 @@
-import { ArrowDownRight, ArrowUpRight, CalendarClock, CalendarX, CircleCheck, Gauge, Minus, Target } from "lucide-react";
+import { CalendarClock, CalendarX, Target } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { PaceChart } from "@/components/pace/pace-chart";
+import { GapBadge, gapText, ICON, NeedBadge, TEXT_TONE } from "@/components/pace/gap-parts";
+import { PaceHero } from "@/components/pace/pace-hero";
 import { PaceTrack } from "@/components/pace/pace-track";
-import { formatGap, formatPct, formatValue, monthName, type Tone } from "@/lib/pace/format";
+import type { PaceAnnotation } from "@/lib/pace/annotation-types";
+import { formatValue, monthName } from "@/lib/pace/format";
 import type { PlanGap, PlanGapMap } from "@/lib/pace/gap";
 import type { PlanMetric } from "@/lib/pace/metrics";
-import type { PaceSeries } from "@/lib/pace/series";
 import type { PaceView } from "@/lib/pace/view";
 import { METRICS } from "@/lib/metrics/registry";
 
-const TEXT_TONE: Record<Tone, string> = { ahead: "text-ahead", behind: "text-behind", even: "muted" };
-const BADGE_TONE: Record<Tone, string> = { ahead: "badge-ahead", behind: "badge-behind", even: "" };
-const ICON: Record<Tone, typeof Minus> = { ahead: ArrowUpRight, behind: ArrowDownRight, even: Minus };
 const PACED: PlanMetric[] = ["net_sales", "orders", "new_customer_orders"];
 const COMPARED: PlanMetric[] = ["aov", "returning_customer_rate"];
 const ALL: PlanMetric[] = [...PACED, ...COMPARED];
 const TILES: PlanMetric[] = ["orders", "new_customer_orders", "aov", "returning_customer_rate"];
 
 const monthDay = (ymd: string) => new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(`${ymd}T00:00:00Z`));
-
-function gapText(metric: PlanMetric, g: PlanGap, currency: string) {
-  const gap = formatGap(metric, g.gap, currency);
-  const pct = formatPct(g.pctGap);
-  return { tone: gap.tone, text: gap.text, pct: pct && METRICS[metric].unit !== "rate" ? ` (${pct})` : "" };
-}
-
-const NEED_NOUN: Partial<Record<PlanMetric, string>> = { orders: " orders", new_customer_orders: " new-customer orders" };
-
-// "Need $54.20 a day for the rest of the month", from the plan gap the tool returned (so the figure is one the checker can match).
-// Absent once the month is over; says so when the target is already met.
-function needLine(metric: PlanMetric, g: PlanGap, currency: string): { text: string; met: boolean } | null {
-  if (g.neededPerDay !== undefined) return { text: `Need ${formatValue(metric, g.neededPerDay, currency)}${NEED_NOUN[metric] ?? ""} a day for the rest of the month`, met: false };
-  if (g.targetMet) return { text: "Target for the month already met", met: true };
-  return null;
-}
-
-function NeedBadge({ metric, g, currency, className = "" }: { metric: PlanMetric; g: PlanGap; currency: string; className?: string }) {
-  const need = needLine(metric, g, currency);
-  if (!need) return null;
-  const Icon = need.met ? CircleCheck : Gauge;
-  return (
-    <p className={`flex items-start gap-1.5 font-medium ${need.met ? "text-ahead" : "text-ink-2"} ${className}`}>
-      <Icon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-      <span>{need.text}</span>
-    </p>
-  );
-}
-
-// The gap as a chip: colour and an arrow say ahead or behind, the words say by how much.
-function GapBadge({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; currency: string }) {
-  const { tone, text, pct } = gapText(metric, g, currency);
-  const Icon = ICON[tone];
-  return (
-    <span className={`badge ${BADGE_TONE[tone]} max-w-full text-[13px]`}>
-      <Icon className="size-3.5 shrink-0" aria-hidden />
-      <span>
-        {text}
-        {pct}
-      </span>
-    </span>
-  );
-}
 
 // The gap inside a table cell.
 function GapCell({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; currency: string }) {
@@ -93,47 +48,6 @@ function TrackHero({ g, currency }: { g: PlanGap; currency: string }) {
           <NeedBadge metric="net_sales" g={g} currency={currency} className="mt-2.5 text-[13.5px]" />
         </div>
         <PaceTrack label={label} actual={g.actual} planned={g.planned} target={g.target} projected={g.projected} money={money} size="lg" />
-      </div>
-    </div>
-  );
-}
-
-// The hero: net sales so far, whether that is ahead or behind, the three figures to hold it against, and the month drawn day by day.
-function ChartHero({ g, series, currency }: { g: PlanGap; series: PaceSeries; currency: string }) {
-  const money = (v: number) => formatValue("net_sales", v, currency);
-  return (
-    <div className="card p-5 sm:p-7">
-      <div className="grid gap-6 xl:grid-cols-[16rem_minmax(0,1fr)] xl:gap-10">
-        <div className="min-w-0">
-          <p className="muted font-medium">{METRICS.net_sales.label}</p>
-          <p className="stat num mt-1.5 text-4xl sm:text-5xl">{money(g.actual)}</p>
-          <p className="mt-3">
-            <GapBadge metric="net_sales" g={g} currency={currency} />
-          </p>
-          <NeedBadge metric="net_sales" g={g} currency={currency} className="mt-2.5 text-[13.5px]" />
-          <dl className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            <div>
-              <dt className="faint text-[13px]">Plan so far</dt>
-              <dd className="num text-base font-semibold">{money(g.planned)}</dd>
-            </div>
-            {g.projected !== undefined ? (
-              <div>
-                <dt className="faint text-[13px]">Month-end estimate</dt>
-                <dd className="num flex items-center gap-2 text-base font-semibold">
-                  <span aria-hidden className="hatch h-2.5 w-5 shrink-0 rounded-[3px] border border-dashed border-estimate" />
-                  {money(g.projected)}
-                </dd>
-              </div>
-            ) : null}
-            <div>
-              <dt className="faint text-[13px]">Target for the month</dt>
-              <dd className="num text-base font-semibold">{money(g.target)}</dd>
-            </div>
-          </dl>
-        </div>
-        <div className="min-w-0">
-          <PaceChart series={series} currency={currency} />
-        </div>
       </div>
     </div>
   );
@@ -203,7 +117,7 @@ function SpreadNote({ gaps }: { gaps: PlanGapMap }) {
   return <p className="muted mt-4 max-w-[70ch] text-[13px] leading-relaxed">The month&apos;s targets are spread {parts.join(", and ")}. The month-end figure is an estimate with no range: what has happened so far, plus the rest of the plan scaled by how the month has gone against its plan so far.</p>;
 }
 
-export function PacePanel({ view, currency }: { view: PaceView; currency: string }) {
+export function PacePanel({ view, currency, annotations = [] }: { view: PaceView; currency: string; annotations?: readonly PaceAnnotation[] }) {
   const thisName = monthName(view.month);
   const thisGaps = view.thisMonth?.gaps;
   const net = thisGaps?.net_sales;
@@ -236,7 +150,7 @@ export function PacePanel({ view, currency }: { view: PaceView; currency: string
           <>
             <p className="muted mt-1 text-sm">Complete days only, through {monthDay(view.through)}.</p>
             <div className="mt-4 space-y-4">
-              {net ? view.series ? <ChartHero g={net} series={view.series} currency={currency} /> : <TrackHero g={net} currency={currency} /> : null}
+              {net ? view.series ? <PaceHero gap={net} series={view.series} currency={currency} annotations={annotations} /> : <TrackHero g={net} currency={currency} /> : null}
               {tiles.length > 0 ? (
                 <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
                   {tiles.map((m) => (

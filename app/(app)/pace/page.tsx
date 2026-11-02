@@ -6,6 +6,7 @@ import { PinnedViews } from "@/components/pace/pinned-views";
 import { PageHeader } from "@/components/ui/page-header";
 import { getDb } from "@/lib/db/client";
 import { AppError, type ErrorCode } from "@/lib/errors";
+import { loadPaceAnnotations, type PaceAnnotation } from "@/lib/pace/annotations";
 import { getPaceView, type PaceView } from "@/lib/pace/view";
 import { getTenantContext, type TenantContext } from "@/lib/tenancy/context";
 
@@ -41,6 +42,17 @@ export default async function PacePage() {
     }
   }
 
+  // The markers on the chart are a garnish: if they can't be read, the chart is drawn without them. A client viewer is not offered the
+  // calendar or the call notes anywhere else (the agent's tools leave them out), so they get the markers drawn from orders only.
+  let annotations: PaceAnnotation[] = [];
+  if (view?.series) {
+    try {
+      annotations = await loadPaceAnnotations(getDb(), ctx.tenantId, view.month, { through: view.through, internal: ctx.role !== "client_viewer" });
+    } catch {
+      annotations = [];
+    }
+  }
+
   return (
     <section>
       {heading}
@@ -52,7 +64,7 @@ export default async function PacePage() {
             <span>Demo data: &quot;today&quot; is counted as the day after the newest order, so {view.through} is the last complete day.</span>
           </p>
         ) : null}
-        {view && ctx.shop ? <PacePanel view={view} currency={ctx.shop.currency} /> : null}
+        {view && ctx.shop ? <PacePanel view={view} currency={ctx.shop.currency} annotations={annotations} /> : null}
         <OpenItems ctx={ctx} />
         {ctx.shop?.status === "connected" ? <PinnedViews ctx={ctx} /> : null}
       </div>
