@@ -47,6 +47,8 @@ export const askToCreateUrl = (id: SegmentId): string => `/chat?q=${encodeURICom
 const whole = new Intl.NumberFormat("en-US");
 export const count = (n: number): string => whole.format(n);
 export const money = (cents: number, currency: string): string => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+// Whole currency units, for axis ticks: $1,000 rather than $1,000.00.
+export const moneyWhole = (cents: number, currency: string): string => new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 0 }).format(cents / 100);
 export const sharePct = (fraction: number): string => `${(fraction * 100).toFixed(1)}%`;
 export const wholePct = (fraction: number): string => `${Math.round(fraction * 100)}%`;
 export const days = (n: number): string => `${whole.format(Math.round(n))} ${Math.round(n) === 1 ? "day" : "days"}`;

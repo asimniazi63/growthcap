@@ -1,5 +1,7 @@
 import { Info, Lock, UsersRound } from "lucide-react";
 import { ErrorBanner } from "@/components/chat/error-banner";
+import { CustomerMap } from "@/components/segments/customer-map";
+import { CustomerSelectionProvider } from "@/components/segments/customer-selection";
 import { count, parseSegment, sharePct, TOP_N } from "@/components/segments/format";
 import { RfmGrid } from "@/components/segments/rfm-grid";
 import { DownloadCsvLink } from "@/components/segments/segment-actions";
@@ -11,6 +13,7 @@ import { getDb } from "@/lib/db/client";
 import { loadSegmentCustomers, summarizeSegments } from "@/lib/metrics/segments";
 import { canViewSegments } from "@/lib/segments/access";
 import type { SegmentCustomer } from "@/lib/segments/definitions";
+import { toMapPoints } from "@/lib/segments/map";
 import { getTenantContext, type TenantContext } from "@/lib/tenancy/context";
 
 async function loadTenant(): Promise<TenantContext | null> {
@@ -103,26 +106,38 @@ export default async function SegmentsPage({ searchParams }: { searchParams: Pro
         </p>
       ) : null}
 
-      <section aria-labelledby="rfm-heading" className="mt-10">
-        <h2 id="rfm-heading" className="section-title">
-          Recency and frequency
-        </h2>
-        <p className="muted mt-1 max-w-[62ch] text-sm">Every customer in the brand, scored 1 to 5 on how recently they ordered and how often. The top right is the best customers.</p>
-        <div className="card card-pad mt-4">
-          <RfmGrid customers={customers} />
-        </div>
-      </section>
+      <CustomerSelectionProvider>
+        <section aria-labelledby="map-heading" className="mt-10">
+          <h2 id="map-heading" className="section-title">
+            Customer map
+          </h2>
+          <p className="muted mt-1 max-w-[62ch] text-sm">Every customer as one dot, placed by how recently they ordered and how much they have spent. It shows where customers sit today and predicts nothing.</p>
+          <div className="card card-pad mt-4">
+            <CustomerMap points={toMapPoints(customers)} currency={currency} listed={selected} />
+          </div>
+        </section>
 
-      <section id="top-customers" aria-labelledby="top-heading" className="mt-10 scroll-mt-24">
-        <h2 id="top-heading" className="section-title">
-          Top customers
-        </h2>
-        <p className="muted mb-4 mt-1 max-w-[62ch] text-sm">The {TOP_N} highest lifetime value customers of the segment you pick. Churn risk is a simple rule-based score, not a prediction model.</p>
-        <SegmentPicker selected={selected} />
-        <div className="mt-4">
-          <TopCustomers customers={customers} segment={selected} currency={currency} />
-        </div>
-      </section>
+        <section aria-labelledby="rfm-heading" className="mt-10">
+          <h2 id="rfm-heading" className="section-title">
+            Recency and frequency
+          </h2>
+          <p className="muted mt-1 max-w-[62ch] text-sm">Every customer in the brand, scored 1 to 5 on how recently they ordered and how often. The top right is the best customers.</p>
+          <div className="card card-pad mt-4">
+            <RfmGrid customers={customers} />
+          </div>
+        </section>
+
+        <section id="top-customers" aria-labelledby="top-heading" className="mt-10 scroll-mt-24">
+          <h2 id="top-heading" className="section-title">
+            Top customers
+          </h2>
+          <p className="muted mb-4 mt-1 max-w-[62ch] text-sm">The {TOP_N} highest lifetime value customers of the segment you pick. Churn risk is a simple rule-based score, not a prediction model.</p>
+          <SegmentPicker selected={selected} />
+          <div className="mt-4">
+            <TopCustomers customers={customers} segment={selected} currency={currency} />
+          </div>
+        </section>
+      </CustomerSelectionProvider>
 
       <aside aria-labelledby="note-heading" className="inset mt-10 flex items-start gap-3 px-4 py-4">
         <Info className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />

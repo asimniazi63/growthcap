@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SEGMENT_IDS, SEGMENTS, type SegmentCustomer } from "@/lib/segments/definitions";
-import { askToCreateQuestion, askToCreateUrl, intensity, parseSegment, rfmCounts, topCustomers, TOP_N } from "./format";
+import { askToCreateQuestion, askToCreateUrl, intensity, money, moneyWhole, parseSegment, rfmCounts, topCustomers, TOP_N } from "./format";
 
 const customer = (over: Partial<SegmentCustomer> = {}): SegmentCustomer => ({
   customerId: "CUST_a",
@@ -89,5 +89,14 @@ describe("the chat link", () => {
       expect(askToCreateQuestion(s.id)).toBe(`Create the ${s.title} segment in Shopify`);
       expect(askToCreateUrl(s.id)).toBe(`/chat?q=${encodeURIComponent(`Create the ${s.title} segment in Shopify`)}`);
     }
+  });
+});
+
+describe("moneyWhole: axis ticks", () => {
+  it("prints whole currency units with separators, where money prints cents", () => {
+    expect(moneyWhole(0, "USD")).toBe("$0");
+    expect(moneyWhole(500_00, "USD")).toBe("$500");
+    expect(moneyWhole(1_000_00, "USD")).toBe("$1,000");
+    expect(money(1_000_00, "USD")).toBe("$1,000.00");
   });
 });

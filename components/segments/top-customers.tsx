@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { SegmentCustomer, SegmentId } from "@/lib/segments/definitions";
 import { SEGMENTS } from "@/lib/segments/definitions";
 import { count, days, money, topCustomers, TOP_N, wholePct } from "./format";
+import { TopCustomerRow } from "./top-customer-row";
 
 // The segment picker and the biggest customers of the chosen segment. Plain links with ?segment=, so it is rendered on the server.
 export function SegmentPicker({ selected }: { selected: SegmentId }) {
@@ -26,6 +27,7 @@ export function SegmentPicker({ selected }: { selected: SegmentId }) {
 }
 
 // Customers are shown by their pseudonymous id only. Churn risk is the segment maths' rule-based score, a fraction shown as a percentage.
+// A row is marked when its customer is the one selected on the customer map.
 export function TopCustomers({ customers, segment, currency }: { customers: SegmentCustomer[]; segment: SegmentId; currency: string }) {
   const title = SEGMENTS.find((s) => s.id === segment)?.title ?? segment;
   const rows = topCustomers(customers, segment, TOP_N);
@@ -57,13 +59,13 @@ export function TopCustomers({ customers, segment, currency }: { customers: Segm
         </thead>
         <tbody>
           {rows.map((c) => (
-            <tr key={c.customerId}>
+            <TopCustomerRow key={c.customerId} customerId={c.customerId}>
               <td className="font-mono text-[0.8125rem]">{c.customerId}</td>
               <td className="num">{count(c.orders)}</td>
               <td className="num">{money(c.ltvCents, currency)}</td>
               <td className="num">{days(c.daysSinceLast)}</td>
               <td className="num">{wholePct(c.churnRisk)}</td>
-            </tr>
+            </TopCustomerRow>
           ))}
         </tbody>
       </table>

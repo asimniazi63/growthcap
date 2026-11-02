@@ -1,13 +1,26 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SegmentCustomer } from "@/lib/segments/definitions";
+import type { MapPoint } from "@/lib/segments/map";
 import type { TenantContext } from "@/lib/tenancy/context";
 import SegmentsPage from "./page";
 
 // The session, the database handle and the loader are mocked; the real page, components and summary maths run. This checks the page's
 // states (signed out, wrong role, error, empty, store disconnected, data) and that the role gates what is on the screen.
-const m = vi.hoisted(() => ({ ctx: vi.fn<() => Promise<TenantContext>>(), load: vi.fn() }));
+const m = vi.hoisted(() => ({ ctx: vi.fn<() => Promise<TenantContext>>(), load: vi.fn(), map: vi.fn() }));
 vi.mock("@/lib/tenancy/context", () => ({ getTenantContext: m.ctx }));
+// The customer map is a client component that needs the app router; the real one still renders, behind a spy that records what the page gave it.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/components/segments/customer-map", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/components/segments/customer-map")>();
+  return {
+    ...real,
+    CustomerMap: (props: Parameters<typeof real.CustomerMap>[0]) => {
+      m.map(props);
+      return real.CustomerMap(props);
+    },
+  };
+});
 vi.mock("@/lib/db/client", () => ({ getDb: () => ({ fake: "db" }) }));
 vi.mock("@/lib/metrics/segments", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/metrics/segments")>()), loadSegmentCustomers: m.load }));
 
@@ -84,6 +97,30 @@ describe("the Segments page", () => {
     expect(out).toContain("no emails");
     expect(out).toContain("Active customers: 1 (33.3%)");
     expect(out).not.toMatch(/@[a-z0-9-]+\.[a-z]{2,}/i); // no email-looking text anywhere
+  });
+
+  it("puts the customer map between the segment cards and the recency grid, with only the six fields it draws", async () => {
+    const out = await render("at_risk");
+    expect(out).toContain(">Customer map</h2>");
+    expect(out).toContain("predicts nothing");
+    expect(out.indexOf("segment-champions")).toBeLessThan(out.indexOf("map-heading"));
+    expect(out.indexOf("map-heading")).toBeLessThan(out.indexOf("rfm-heading"));
+    expect(out.indexOf("rfm-heading")).toBeLessThan(out.indexOf("top-heading"));
+    expect(m.map).toHaveBeenCalledTimes(1);
+    const props = m.map.mock.calls[0]![0] as { points: MapPoint[]; currency: string; listed: string };
+    expect(props.listed).toBe("at_risk"); // the table's segment, so the map knows which rows are in it
+    expect(props.currency).toBe("USD");
+    expect(props.points).toHaveLength(3);
+    expect(props.points[1]).toEqual({ id: "CUST_risk", orders: 3, ltvCents: 12_345, daysSinceLast: 150, churnRisk: 0.1, segment: "at_risk" });
+    for (const point of props.points) expect(Object.keys(point).sort()).toEqual(["churnRisk", "daysSinceLast", "id", "ltvCents", "orders", "segment"]);
+    expect(out).toContain("Showing all 3 customers.");
+  });
+
+  it("does not draw the map when there is nobody to segment", async () => {
+    m.load.mockResolvedValue({ asOf: "", customers: [] });
+    const out = await render();
+    expect(out).not.toContain("Customer map");
+    expect(m.map).not.toHaveBeenCalled();
   });
 
   it("lists the customers of the segment in ?segment=, and of the first segment for anything else", async () => {
