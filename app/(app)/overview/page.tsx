@@ -82,7 +82,7 @@ export default async function OverviewPage() {
             ) : paceError ? (
               <CardError title="Net sales this month" code={paceError} role={ctx.role} />
             ) : view ? (
-              <SalesCard view={view} currency={currency} canPlan={gc} />
+              <SalesCard view={view} currency={currency} canPlan={gc} scope={ctx.tenantId} />
             ) : null}
 
             {connected ? (

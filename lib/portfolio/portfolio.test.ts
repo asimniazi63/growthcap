@@ -96,6 +96,20 @@ describe("the portfolio", () => {
     expect((await getPortfolio(db, me(), { ...deps, driverTree: tree([driver]) }))[0]!.driver).toEqual({ label: "New-customer orders", deltaCents: -80_000 });
     expect((await getPortfolio(db, me(), { ...deps, driverTree: tree([]) }))[0]).toMatchObject({ driver: null, gap: { gap: -50_000 } });
   });
+
+  it("carries the daily net sales the Pace view already built for the sparkline, and none when it has no series", async () => {
+    const days = [
+      { date: "2026-10-01", actual: 10_000, plan: 12_000 },
+      { date: "2026-10-02", actual: 25_000, plan: 24_000 },
+      { date: "2026-10-03", actual: null, plan: 36_000 },
+    ];
+    const series = { month: "2026-10", through: "2026-10-02", days, actualThrough: 25_000, planThrough: 24_000, target: 1_000_000, projected: null, spread: "even" as const };
+    const one = { memberships: memberships(everyone.slice(0, 1)), driverTree: async (): Promise<DriverTreeResult> => ({ month: "2026-10", targetCents: 0, actualCents: 0, gapCents: 0, drivers: [] }) };
+    const withSeries = await getPortfolio(db, me(), { ...one, paceView: async () => view({ series }, -50_000) });
+    expect(withSeries[0]!.spark).toEqual({ values: [10_000, 25_000], plan: [12_000, 24_000], firstDay: "2026-10-01", lastDay: "2026-10-02" });
+    expect((await getPortfolio(db, me(), { ...one, paceView: async () => view({}, -50_000) }))[0]!.spark).toBeNull();
+    expect((await getPortfolio(db, me(), { ...one, paceView: async () => view({ hasPlan: false }) }))[0]).toMatchObject({ spark: null, gap: null });
+  });
 });
 
 describe("Clerk roles", () => {

@@ -1,5 +1,9 @@
 import { ArrowDownRight, ArrowUpRight, LayoutGrid, Minus, TrendingDown, TrendingUp } from "lucide-react";
+import { CountUp } from "@/components/ui/count-up";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Sparkline } from "@/components/ui/sparkline";
+import { METRICS } from "@/lib/metrics/registry";
+import { netSalesSparkLabel } from "@/lib/overview/spark";
 import { formatGap, formatPct, formatValue, monthName, type Tone } from "@/lib/pace/format";
 import type { PortfolioRow } from "@/lib/portfolio/portfolio";
 
@@ -19,7 +23,7 @@ export function PortfolioTable({ rows }: { rows: PortfolioRow[] }) {
   }
   return (
     <div className="card overflow-x-auto">
-      <table className="data-table min-w-[820px]">
+      <table className="data-table min-w-[900px]">
         <thead>
           <tr>
             <th scope="col">Brand</th>
@@ -55,10 +59,17 @@ export function PortfolioTable({ rows }: { rows: PortfolioRow[] }) {
                 {g && gap && GapIcon ? (
                   <>
                     <td className="num">
-                      <span className="font-medium">{formatValue("net_sales", g.actual, r.currency)}</span>
-                      <span className="faint block text-xs">
-                        {monthName(g.month)}, through {g.throughDate}
-                      </span>
+                      <div className="flex items-center justify-end gap-3">
+                        {r.spark ? <Sparkline values={r.spark.values} plan={r.spark.plan} label={netSalesSparkLabel(r.spark, r.currency)} width={88} height={30} /> : null}
+                        <div className="text-right">
+                          <span className="block font-medium">
+                            <CountUp value={g.actual} unit={METRICS.net_sales.unit} currency={r.currency} align="end" />
+                          </span>
+                          <span className="faint block text-xs">
+                            {monthName(g.month)}, through {g.throughDate}
+                          </span>
+                        </div>
+                      </div>
                     </td>
                     <td className="num">
                       <span className={`block font-semibold ${TONE[gap.tone]}`}>{gap.text}</span>

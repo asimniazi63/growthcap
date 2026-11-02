@@ -354,7 +354,7 @@
   /* Loading */
   .skeleton {
     border-radius: 8px;
-    background: linear-gradient(100deg, var(--color-paper-2) 30%, color-mix(in oklab, var(--color-paper-2) 40%, var(--color-surface)) 50%, var(--color-paper-2) 70%);
+    background: linear-gradient(100deg, color-mix(in oklab, var(--color-ink) 9%, var(--color-paper)) 30%, color-mix(in oklab, var(--color-ink) 4%, var(--color-paper)) 50%, color-mix(in oklab, var(--color-ink) 9%, var(--color-paper)) 70%);
     background-size: 220% 100%;
     animation: skeleton-sweep 1.4s ease-in-out infinite;
   }
@@ -364,6 +364,51 @@
     }
     to {
       background-position: -120% 0;
+    }
+  }
+
+  /* Draw-in: a sparkline draws itself once and its last point appears after it; the plan-hit ring and tick draw once when the badge
+     sets data-play. Both are drawn and still under reduced motion, and the loading shimmer stops. */
+  .spark-line {
+    stroke-dasharray: 1;
+    animation: draw-in 0.8s ease-out both;
+  }
+  .spark-dot {
+    animation: fade-in 0.25s ease-out 0.65s both;
+  }
+  .plan-hit-ring,
+  .plan-hit-tick {
+    stroke-dasharray: 1;
+  }
+  .plan-hit[data-play="true"] .plan-hit-ring {
+    animation: draw-in 0.6s ease-out both;
+  }
+  .plan-hit[data-play="true"] .plan-hit-tick {
+    animation: draw-in 0.3s ease-out 0.6s both;
+  }
+  @keyframes draw-in {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton,
+    .spark-line,
+    .spark-dot,
+    .plan-hit[data-play="true"] .plan-hit-ring,
+    .plan-hit[data-play="true"] .plan-hit-tick {
+      animation: none;
     }
   }
 }

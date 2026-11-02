@@ -3,6 +3,7 @@ import type { Db } from "../db/client";
 import { tenants } from "../db/schema";
 import { AppError } from "../errors";
 import { NotAllowedError } from "../memory/store";
+import { netSalesSpark, type SparkData } from "../overview/spark";
 import type { PlanGap } from "../pace/gap";
 import { getPaceView, type PaceView } from "../pace/view";
 import { monthName } from "../pace/format";
@@ -20,6 +21,7 @@ export interface PortfolioRow {
   role: Role; // the signed-in person's role in this brand
   gap: PlanGap | null; // net sales this month against plan, through yesterday
   driver: { label: string; deltaCents: number } | null; // the part of the gap that pulled the most
+  spark: SparkData | null; // net sales so far this month by day, from the series the Pace view already built
   note: string | null; // why there is no gap to show
 }
 
@@ -51,7 +53,7 @@ export async function getPortfolio(db: Db, ctx: TenantContext, deps: PortfolioDe
 
 async function brandRow(db: Db, userId: string, t: { id: string; orgId: string; name: string }, role: Role, deps: PortfolioDeps): Promise<PortfolioRow> {
   const shop = await shopFor(tenantScoped(db, t.id));
-  const base = { tenantId: t.id, name: t.name, currency: shop?.currency ?? "USD", role, gap: null, driver: null };
+  const base = { tenantId: t.id, name: t.name, currency: shop?.currency ?? "USD", role, gap: null, driver: null, spark: null };
   if (!shop || shop.status !== "connected") return { ...base, note: NOT_CONNECTED };
 
   // The context is built for this brand with the person's role there; one brand failing never stops the rest.
@@ -65,7 +67,7 @@ async function brandRow(db: Db, userId: string, t: { id: string; orgId: string; 
 
     const tree = await (deps.driverTree ?? realDriverTree)(db, t.id, { month: view.month }).catch(() => null);
     const top = tree?.drivers[0]; // largest pull first; empty when the driver work has nothing to say
-    return { ...base, gap, driver: top ? { label: top.label, deltaCents: top.deltaCents } : null, note: null };
+    return { ...base, gap, driver: top ? { label: top.label, deltaCents: top.deltaCents } : null, spark: netSalesSpark(view.series), note: null };
   } catch (e) {
     const code = e instanceof AppError ? e.code : null;
     if (code === "STORE_DISCONNECTED") return { ...base, note: NOT_CONNECTED };
