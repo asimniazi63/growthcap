@@ -463,6 +463,24 @@ describe.each(["solenne", "tidepool"] as const)("%s: the pace view", (store) => 
     expect(view.lastMonth!.gaps!.net_sales).toMatchObject({ actual: fixtures[store].truth.monthly["2026-09"]!.net_sales, throughDate: "2026-09-30" });
   });
 
+  it("leaves out the month-end estimate until five days are complete, and today is never one of them", async () => {
+    setTestNow("2026-10-05T12:00:00-04:00");
+    const view = await getPaceView(ctxs[store], { db });
+    expect(view.through).toBe("2026-10-04");
+    expect(view.thisMonth!.gaps!.net_sales!.projected).toBeUndefined();
+    expect(view.thisMonth!.gaps!.net_sales!.earlyMonth).toEqual({ daysCounted: 4, estimateAfterDays: 5 });
+    // The agent asks for this_month, which runs through today: still four complete days, not five.
+    const asked = await run(store, { metrics: ["net_sales"], period: "this_month" });
+    expect(asked.data[0]!.gapToPlan!.net_sales).toMatchObject({ throughDate: "2026-10-05", earlyMonth: { daysCounted: 4, estimateAfterDays: 5 } });
+    expect(asked.data[0]!.gapToPlan!.net_sales!.projected).toBeUndefined();
+
+    setTestNow("2026-10-06T12:00:00-04:00");
+    expect((await getPaceView(ctxs[store], { db })).thisMonth!.gaps!.net_sales!.projected).toBeGreaterThan(0);
+    const later = await run(store, { metrics: ["net_sales"], period: "this_month" });
+    expect(later.data[0]!.gapToPlan!.net_sales!.projected).toBeGreaterThan(0);
+    expect(later.data[0]!.gapToPlan!.net_sales!.earlyMonth).toBeUndefined();
+  });
+
   it("carries the plan's own name and the time the data was last synced", async () => {
     setTestNow("2026-10-16T12:00:00-04:00");
     const view = await getPaceView(ctxs[store], { db });

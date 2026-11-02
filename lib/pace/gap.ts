@@ -48,6 +48,7 @@ export interface PlanGapInput {
   values: Partial<Record<MetricId, number>>; // the actual values for the range
   // Last year's same month, one value per day (day 1 first), or null when the data doesn't cover that month.
   lastYearDaily: (month: string, metric: PacedMetric) => Promise<number[] | null>;
+  today?: string; // the store's today. It is not a complete day, so a range that ends on it has one day fewer for the estimate's five.
 }
 
 // Money to whole cents, counts to one decimal, rates to four: the figures an answer can quote add up (gap = actual - planned).
@@ -72,6 +73,7 @@ export async function planGap(input: PlanGapInput): Promise<PlanGapMap | undefin
   const fromDay = Number(range.from.slice(8));
   const toDay = Number(range.to.slice(8));
   const wholeMonth = fromDay === 1 && toDay >= days;
+  const completeDays = Math.max(0, toDay - (input.today !== undefined && range.to >= input.today ? 1 : 0));
   const out: PlanGapMap = {};
 
   for (const metric of PLAN_METRICS) {
@@ -97,8 +99,8 @@ export async function planGap(input: PlanGapInput): Promise<PlanGapMap | undefin
         plannedRaw = target * shareThrough(weights, fromDay, toDay);
         if (fromDay === 1 && toDay < days) {
           const rest = target * shareThrough(weights, toDay + 1, days);
-          if (toDay >= MIN_DAYS_FOR_ESTIMATE) projectedRaw = landing(actualRaw, plannedRaw, rest) ?? undefined;
-          else earlyMonth = { daysCounted: toDay, estimateAfterDays: MIN_DAYS_FOR_ESTIMATE };
+          if (completeDays >= MIN_DAYS_FOR_ESTIMATE) projectedRaw = landing(actualRaw, plannedRaw, rest) ?? undefined;
+          else earlyMonth = { daysCounted: completeDays, estimateAfterDays: MIN_DAYS_FOR_ESTIMATE };
         }
       }
     }

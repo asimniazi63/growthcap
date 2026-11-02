@@ -383,7 +383,8 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
 
   const db = await dbFor(deps);
   const win = await loadWindow(db, ctx.tenantId);
-  const range = resolveRange(input, todayFor(shop.timezone, win));
+  const today = todayFor(shop.timezone, win);
+  const range = resolveRange(input, today);
   assertInWindow(range, win);
   const first = win.first!;
   const last = win.last!;
@@ -438,7 +439,7 @@ export async function queryMetric(ctx: TenantContext, rawInput: QueryMetricInput
   // Against the plan, when the figure is for the whole store over part or all of one month.
   if (dims.length === 0 && Object.keys(filters).length === 0 && rows.length === 1) {
     const plan = await loadPlan(db, ctx.tenantId);
-    const gap = await planGap({ plan: plan?.targets ?? null, range, metrics, values: rows[0]!.values, lastYearDaily: (month, metric) => lastYearDaily(src, win, month, metric) });
+    const gap = await planGap({ plan: plan?.targets ?? null, range, metrics, values: rows[0]!.values, lastYearDaily: (month, metric) => lastYearDaily(src, win, month, metric), today });
     if (gap) rows[0]!.gapToPlan = gap;
   }
 

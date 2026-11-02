@@ -85,6 +85,21 @@ describe("planGap: too early in the month for an estimate", () => {
     expect(g!.net_sales!.earlyMonth).toBeUndefined();
   });
 
+  it("does not count today, which is not over: a range that ends on today has one complete day fewer", async () => {
+    // Asked on the 5th for "this month": 1 to 5 includes today, so four days are complete.
+    const g = await planGap({ ...through(5), today: "2026-11-05" });
+    expect(g!.net_sales!.projected).toBeUndefined();
+    expect(g!.net_sales!.earlyMonth).toEqual({ daysCounted: 4, estimateAfterDays: 5 });
+    // Asked on the 6th, 1 to 6 has five complete days, and so does 1 to 5 (yesterday).
+    expect((await planGap({ ...through(6), today: "2026-11-06" }))!.net_sales!.projected).toBeGreaterThan(0);
+    expect((await planGap({ ...through(5), today: "2026-11-06" }))!.net_sales!.projected).toBeGreaterThan(0);
+  });
+
+  it("says no complete day when the range is only today", async () => {
+    const g = await planGap({ ...through(1), today: "2026-11-01" });
+    expect(g!.net_sales!.earlyMonth).toEqual({ daysCounted: 0, estimateAfterDays: 5 });
+  });
+
   it("still says what each remaining day has to bring, and how the month stands against plan so far", async () => {
     const g = await planGap(through(2));
     expect(g!.net_sales).toMatchObject({ planned: 66_667, actual: 80_000, gap: 13_333, neededPerDay: Math.round((1_000_000 - 80_000) / 28), daysLeft: 28 });
