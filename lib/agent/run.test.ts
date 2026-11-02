@@ -79,6 +79,7 @@ interface Verification {
   ok: boolean;
   unmatched: { text: string; value: number }[];
   matched: { span: [number, number]; value: number; queryId: string }[];
+  figures: { text: string; queryId: string; source: string; range?: { from: string; to: string }; asOf?: string; count: number }[];
 }
 const dataParts = <T = Verification>(chunks: UIMessageChunk[], type: string): T[] => chunks.filter((c) => c.type === type).map((c) => (c as unknown as { data: T }).data);
 const errorText = (chunks: UIMessageChunk[]) => (chunks.find((c) => c.type === "error") as { errorText?: string } | undefined)?.errorText;
@@ -109,6 +110,37 @@ describe("a normal turn", () => {
     expect(verification.at(-1)!.matched.every((m) => m.queryId === provenance[0]!.queryId)).toBe(true);
     expect(summary).toMatchObject({ status: "ok", repaired: false, flaggedNumbers: 0 });
     expect(model.doStreamCalls).toHaveLength(2);
+  });
+
+  it("sends each traced figure with its text, query, friendly source, dates and sync time", async () => {
+    const model = scripted(ordersCall(), say(`There were ${marchOrders()} orders and net sales of ${dollars(marchNet())} in March.`));
+    const chunks = await collect(run(model).stream);
+    const verification = dataParts(chunks, "data-verification").at(-1)!;
+    const provenance = dataParts<{ queryId: string; asOf: string }[]>(chunks, "data-provenance")[0]![0]!;
+    expect(verification.figures).toEqual([
+      { text: String(marchOrders()), queryId: provenance.queryId, source: "Sales metrics", range: { from: march.from, to: march.to }, asOf: provenance.asOf, count: 1 },
+      { text: dollars(marchNet()), queryId: provenance.queryId, source: "Sales metrics", range: { from: march.from, to: march.to }, asOf: provenance.asOf, count: 1 },
+    ]);
+    // The old fields are still there, so a consumer that does not know about figures keeps working.
+    expect(verification.matched).toHaveLength(2);
+    expect(verification).toMatchObject({ ok: true, unmatched: [] });
+  });
+
+  it("lists a figure once however often the answer repeats it, with how many times it was traced", async () => {
+    const net = dollars(marchNet());
+    const model = scripted(ordersCall(), say(`Net sales were ${net}. To repeat, net sales were ${net}, and the orders were ${marchOrders()}.`));
+    const chunks = await collect(run(model).stream);
+    const verification = dataParts(chunks, "data-verification").at(-1)!;
+    expect(verification.matched).toHaveLength(3);
+    expect(verification.figures.map((f) => [f.text, f.count])).toEqual([[net, 2], [String(marchOrders()), 1]]);
+  });
+
+  it("describes the figures of the repaired answer, not of the draft it replaced", async () => {
+    const model = scripted(ordersCall(), say(`Net sales were $999,999 in March.`), say(`Net sales were ${dollars(marchNet())} in March.`));
+    const chunks = await collect(run(model).stream);
+    const [draft, final] = dataParts(chunks, "data-verification");
+    expect(draft!.figures).toEqual([]);
+    expect(final!.figures.map((f) => f.text)).toEqual([dollars(marchNet())]);
   });
 
   it("gives the model the fixed system prompt, and today's date and the data's as-of time in the user's turn", async () => {

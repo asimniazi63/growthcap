@@ -1,13 +1,19 @@
 "use client";
 
-import { Check, TriangleAlert, X } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, TriangleAlert, X } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from "react";
+import type { TracedFigure } from "@/lib/agent/traced";
 import type { ProvenanceEntry } from "@/lib/agent/run";
+import { badgeText, figureSource } from "./traced-format";
 import { toolLabel } from "./tool-labels";
+import { formatAsOf, formatPeriod } from "./when";
+
+export { formatAsOf, formatPeriod };
 
 // The proof drawer: click a checked figure in an answer and this panel shows where it came from. It shows only what the
 // provenance entry holds (the tool, the query id, the dates, when the data was read, the arguments, the metric
-// definitions); nothing here is worked out again.
+// definitions); nothing here is worked out again. Opened from an answer's badge instead, it lists every traced figure with its
+// source, and a figure in the list opens its query, with a way back to the list.
 
 export const DRAWER_ID = "proof-drawer";
 
@@ -18,70 +24,82 @@ export interface ProofTarget {
   trigger?: HTMLElement | null; // where focus goes back to when the drawer closes
 }
 
+export interface FigureListTarget {
+  figures: TracedFigure[];
+  provenance: Record<string, ProvenanceEntry>;
+  traced: number; // every figure the checker traced, including any the server left out of `figures`
+  total: number; // traced plus not found
+  unmatched: string[];
+  trigger?: HTMLElement | null;
+}
+
 export interface ProofDrawerApi {
   current: ProofTarget | null;
-  open: (target: ProofTarget) => void;
+  list: FigureListTarget | null;
+  open: (target: ProofTarget, options?: { fromList?: boolean }) => void;
+  openList: (target: FigureListTarget) => void;
+  back: () => void; // from one query to the list it was opened from
   close: () => void;
 }
 
 export const ProofDrawerContext = createContext<ProofDrawerApi | null>(null);
 
+export interface DrawerView {
+  current: ProofTarget | null;
+  list: FigureListTarget | null;
+}
+const CLOSED: DrawerView = { current: null, list: null };
+
+type DrawerAction = { type: "open"; target: ProofTarget; fromList?: boolean } | { type: "openList"; target: FigureListTarget } | { type: "back" } | { type: "close" };
+
+// A figure clicked in the text shows its query alone; one picked from the list keeps the list to go back to.
+export function drawerReducer(view: DrawerView, action: DrawerAction): DrawerView {
+  switch (action.type) {
+    case "open":
+      return { current: action.target, list: action.fromList ? view.list : null };
+    case "openList":
+      return { current: null, list: action.target };
+    case "back":
+      return { ...view, current: null };
+    case "close":
+      return CLOSED;
+  }
+}
+
+// Where focus goes when the drawer closes: the badge when the list was open (the list's own buttons are gone by then), else the figure.
+export function returnTarget(view: DrawerView): HTMLElement | null | undefined {
+  return view.list?.trigger ?? view.current?.trigger;
+}
+
 // The drawer's state. The chat screen calls this once, provides the result through ProofDrawerContext, and renders
-// <ProofDrawerPanel />. Esc closes it, and focus goes back to the figure that opened it.
+// <ProofDrawerPanel />. Esc closes it, and focus goes back to the figure (or the badge) that opened it.
 export function useProofDrawerState(): ProofDrawerApi {
-  const [current, setCurrent] = useState<ProofTarget | null>(null);
+  const [view, dispatch] = useReducer(drawerReducer, CLOSED);
+  const { current, list } = view;
 
-  const open = useCallback((target: ProofTarget) => setCurrent(target), []);
+  const open = useCallback((target: ProofTarget, options?: { fromList?: boolean }) => dispatch({ type: "open", target, fromList: options?.fromList }), []);
+  const openList = useCallback((target: FigureListTarget) => dispatch({ type: "openList", target }), []);
+  const back = useCallback(() => dispatch({ type: "back" }), []);
   const close = useCallback(() => {
-    setCurrent(null);
-    const back = current?.trigger;
-    if (back?.isConnected) back.focus();
-  }, [current]);
+    dispatch({ type: "close" });
+    const returnTo = returnTarget({ current, list });
+    if (returnTo?.isConnected) returnTo.focus();
+  }, [current, list]);
 
+  const showing = current !== null || list !== null;
   useEffect(() => {
-    if (!current) return;
+    if (!showing) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !e.defaultPrevented) close();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [current, close]);
+  }, [showing, close]);
 
-  return useMemo(() => ({ current, open, close }), [current, open, close]);
+  return useMemo(() => ({ current, list, open, openList, back, close }), [current, list, open, openList, back, close]);
 }
 
 // ---- Plain-words formatting (pure, so it can be checked on its own) ----
-
-const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-function parseDay(text: string): { y: number; m: number; d: number } | null {
-  const hit = DAY.exec(text);
-  if (!hit) return null;
-  const [y, m, d] = [Number(hit[1]), Number(hit[2]), Number(hit[3])];
-  return m >= 1 && m <= 12 && d >= 1 && d <= 31 ? { y, m, d } : null;
-}
-
-// "2026-09-01" to "2026-09-30" reads "September 1 to 30, 2026".
-export function formatPeriod(range: { from: string; to: string }): string {
-  const a = parseDay(range.from);
-  const b = parseDay(range.to);
-  if (!a || !b) return range.from === range.to ? range.from : `${range.from} to ${range.to}`;
-  const first = `${MONTHS[a.m - 1]} ${a.d}`;
-  if (a.y === b.y && a.m === b.m && a.d === b.d) return `${first}, ${a.y}`;
-  if (a.y === b.y && a.m === b.m) return `${first} to ${b.d}, ${a.y}`;
-  if (a.y === b.y) return `${first} to ${MONTHS[b.m - 1]} ${b.d}, ${a.y}`;
-  return `${first}, ${a.y} to ${MONTHS[b.m - 1]} ${b.d}, ${b.y}`;
-}
-
-// "2026-10-31T10:34:00.000Z" reads "October 31, 10:34 UTC" (with the year when it is not this year).
-export function formatAsOf(iso: string, now: Date = new Date()): string {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return iso;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const year = at.getUTCFullYear() === now.getUTCFullYear() ? "" : `, ${at.getUTCFullYear()}`;
-  return `${MONTHS[at.getUTCMonth()]} ${at.getUTCDate()}${year}, ${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())} UTC`;
-}
 
 function humanize(key: string): string {
   const words = key
@@ -155,31 +173,124 @@ export function filterRows(input: unknown): FilterRow[] {
 
 // ---- The panel ----
 
+const PANEL_CLASS = "relative mt-3 rounded-2xl border border-line bg-surface p-5 shadow-card lg:absolute lg:inset-y-0 lg:right-0 lg:z-20 lg:mt-0 lg:w-[360px] lg:overflow-y-auto lg:rounded-none lg:border-y-0 lg:border-r-0 lg:p-6 lg:shadow-pop";
+
+// Every traced figure of one answer, each with where it came from. Opening one shows its query; this is also how a keyboard or
+// screen reader user reaches what a mouse user gets from hovering a figure.
+function FigureList({ target, drawer }: { target: FigureListTarget; drawer: ProofDrawerApi }) {
+  const { figures, provenance, traced, total, unmatched } = target;
+  const listed = figures.reduce((n, f) => n + f.count, 0);
+  const left = Math.max(0, traced - listed);
+  return (
+    <>
+      <span className={`badge ${total > traced ? "badge-warn" : "badge-brand"}`}>
+        {total > traced ? <TriangleAlert className="size-3.5" aria-hidden /> : <Check className="size-3.5" strokeWidth={3} aria-hidden />}
+        {badgeText(traced, total)}
+      </span>
+      <h3 className="mt-3 font-display text-lg font-semibold leading-snug">Figures in this answer</h3>
+      <p className="faint mt-1 text-[0.8125rem] leading-5">Each one equals a value the assistant read from the store. Pick one to see the query behind it.</p>
+
+      <ul aria-label="Traced figures" className="mt-4 divide-y divide-line border-y border-line">
+        {figures.map((f, i) => {
+          const entry = provenance[f.queryId];
+          const { source, period, synced } = figureSource(f);
+          const body = (
+            <>
+              <span className="min-w-0 flex-1">
+                <span className="num block break-words text-[0.9375rem] font-semibold">
+                  {f.text}
+                  {f.count > 1 ? <span className="faint font-normal"> ({f.count} times)</span> : null}
+                </span>
+                <span className="mt-0.5 block text-xs leading-5 text-ink-2">
+                  {source}
+                  {period ? `, ${period}` : ""}
+                </span>
+                {synced ? <span className="block text-xs leading-5 text-ink-3">Synced {synced}</span> : null}
+              </span>
+              {entry ? (
+                <span className="flex shrink-0 items-center text-brand-strong">
+                  <span className="sr-only">See the query</span>
+                  <ChevronRight className="size-4" aria-hidden />
+                </span>
+              ) : null}
+            </>
+          );
+          return (
+            <li key={`${f.text}-${f.queryId}-${i}`}>
+              {entry ? (
+                <button
+                  type="button"
+                  onClick={(e) => drawer.open({ claim: f.text, entry, key: `list-${i}`, trigger: e.currentTarget }, { fromList: true })}
+                  className="flex w-full cursor-pointer items-center gap-3 px-1 py-2.5 text-left transition-colors hover:bg-paper"
+                >
+                  {body}
+                </button>
+              ) : (
+                <div className="flex w-full items-center gap-3 px-1 py-2.5">{body}</div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {left > 0 ? <p className="faint mt-2 text-xs">And {left} more traced {left === 1 ? "figure" : "figures"}, not listed here.</p> : null}
+
+      {unmatched.length > 0 ? (
+        <section aria-label="Figures not found" className="mt-5 rounded-xl border border-warn/30 bg-warn-tint px-3.5 py-3 text-[0.8125rem] leading-5 text-ink">
+          <h4 className="flex items-center gap-2 font-semibold">
+            <TriangleAlert className="size-3.5 shrink-0 text-warn" aria-hidden />
+            Not found in the store data
+          </h4>
+          <p className="num mt-1 break-words">{unmatched.join(", ")}</p>
+          <p className="mt-1 text-ink-2">Treat {unmatched.length === 1 ? "this number" : "these numbers"} with care.</p>
+        </section>
+      ) : null}
+    </>
+  );
+}
+
 export function ProofDrawerPanel() {
   const drawer = useContext(ProofDrawerContext);
   const closeRef = useRef<HTMLButtonElement>(null);
   const current = drawer?.current ?? null;
+  const list = drawer?.list ?? null;
 
-  // Move focus into the panel when it opens or switches to another figure.
+  // Move focus into the panel when it opens or switches to another figure or back to the list.
   useEffect(() => {
-    if (current) closeRef.current?.focus();
-  }, [current]);
+    if (current || list) closeRef.current?.focus();
+  }, [current, list]);
 
-  if (!drawer || !current) return null;
-  const { claim, entry } = current;
+  if (!drawer || (!current && !list)) return null;
+
+  const closeButton = (
+    <button ref={closeRef} type="button" onClick={drawer.close} aria-label="Close" className="btn btn-ghost absolute right-3 top-3 p-1.5">
+      <X className="size-4" aria-hidden />
+    </button>
+  );
+
+  if (!current && list) {
+    return (
+      <aside id={DRAWER_ID} aria-label="Figures traced in this answer" className={PANEL_CLASS}>
+        {closeButton}
+        <FigureList target={list} drawer={drawer} />
+      </aside>
+    );
+  }
+
+  const { claim, entry } = current!;
   const asked = isObject(entry.input) && typeof entry.input.period === "string" ? scalarText(entry.input.period) : null;
   const rows = filterRows(entry.input);
   const definitions = Object.entries(entry.definitions);
 
   return (
-    <aside
-      id={DRAWER_ID}
-      aria-label="Where this number came from"
-      className="relative mt-3 rounded-2xl border border-line bg-surface p-5 shadow-card lg:absolute lg:inset-y-0 lg:right-0 lg:z-20 lg:mt-0 lg:w-[360px] lg:overflow-y-auto lg:rounded-none lg:border-y-0 lg:border-r-0 lg:p-6 lg:shadow-pop"
-    >
-      <button ref={closeRef} type="button" onClick={drawer.close} aria-label="Close" className="btn btn-ghost absolute right-3 top-3 p-1.5">
-        <X className="size-4" aria-hidden />
-      </button>
+    <aside id={DRAWER_ID} aria-label="Where this number came from" className={PANEL_CLASS}>
+      {closeButton}
+
+      {list ? (
+        <button type="button" onClick={drawer.back} className="btn btn-ghost btn-sm -ml-2 mb-2">
+          <ChevronLeft className="size-4" aria-hidden />
+          All figures in this answer
+        </button>
+      ) : null}
 
       <span className="badge badge-brand">
         <Check className="size-3.5" strokeWidth={3} aria-hidden />

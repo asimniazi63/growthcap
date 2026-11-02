@@ -2,11 +2,10 @@
 
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { ArrowUp, Boxes, Check, LoaderCircle, MessageSquareText, Plus, Receipt, ShieldCheck, ShoppingBag, Sparkles, TicketPercent, Trash2, TrendingUp, TriangleAlert, Undo2, Users, type LucideIcon } from "lucide-react";
+import { ArrowUp, Boxes, Check, LoaderCircle, MessageSquareText, Plus, Receipt, ShoppingBag, Sparkles, TicketPercent, Trash2, TrendingUp, TriangleAlert, Undo2, Users, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionView } from "@/lib/actions/types";
-import { linkClaims, type MatchedClaim } from "@/lib/agent/links";
 import type { ProvenanceEntry } from "@/lib/agent/run";
 import type { Role } from "@/lib/tenancy/context";
 import type { ViewPayload } from "@/lib/views/types";
@@ -20,13 +19,9 @@ import { followUps } from "./follow-ups";
 import { ProofDrawerContext, ProofDrawerPanel, useProofDrawerState } from "./proof-drawer";
 import { SafeMarkdown } from "./safe-markdown";
 import { toolLabel } from "./tool-labels";
-
-interface Verification {
-  attempt: number;
-  ok: boolean;
-  unmatched: { text: string; value: number }[];
-  matched: MatchedClaim[];
-}
+import { InspectScope } from "./traced-figure";
+import { finalVerification, tracedSummary } from "./verification";
+import { VerifiedBadge } from "./verified-badge";
 
 type Part = UIMessage["parts"][number];
 
@@ -65,11 +60,15 @@ function ToolChip({ part }: { part: Part }) {
 
 // onAsk is given only to the newest answer once it has finished, so follow-up chips never show on older messages or mid-stream.
 function AssistantMessage({ message, role, currency, userId, onAsk }: { message: UIMessage; role: Role; currency: string; userId?: string; onAsk?: (question: string) => void }) {
-  const provenanceList = dataOf<ProvenanceEntry[]>(message, "data-provenance") ?? [];
-  const provenance = Object.fromEntries(provenanceList.map((p) => [p.queryId, p]));
-  const verification = dataOf<Verification>(message, "data-verification");
+  const provenanceData = dataOf<ProvenanceEntry[]>(message, "data-provenance");
+  const provenanceList = useMemo(() => provenanceData ?? [], [provenanceData]);
+  const provenance = useMemo(() => Object.fromEntries(provenanceList.map((p) => [p.queryId, p])), [provenanceList]);
   const repairAt = message.parts.findIndex((p) => p.type === "data-repair");
   const lastText = message.parts.findLastIndex((p) => p.type === "text");
+  // Only a verification that arrived after the final text is about it, so nothing shows while a repaired answer is still streaming.
+  const verification = finalVerification(message.parts, lastText);
+  const finalText = lastText >= 0 ? (message.parts[lastText] as { text: string }).text : "";
+  const traced = useMemo(() => (verification ? tracedSummary(verification, finalText, provenance) : null), [verification, finalText, provenance]);
   const truncated = provenanceList.filter((p) => p.truncated);
   // A call that failed and was then made again successfully (the model fixing its own arguments) is not worth a red line.
   const toolParts = message.parts.filter((p) => toolName(p) && !QUIET_TOOLS.has(toolName(p)!));
@@ -77,7 +76,7 @@ function AssistantMessage({ message, role, currency, userId, onAsk }: { message:
   const chips = toolParts.filter((p, i) => (p as { state?: string }).state !== "output-error" || !toolParts.slice(i + 1).some((q) => toolName(q) === toolName(p) && (q as { state?: string }).state === "output-available"));
 
   return (
-    <div className="space-y-3.5">
+    <InspectScope className="space-y-3.5">
       {chips.length > 0 ? (
         <ul aria-label="What the assistant looked at" className="ml-[7px] space-y-1.5 border-l border-line pl-4">
           {chips.map((p, i) => (
@@ -113,30 +112,15 @@ function AssistantMessage({ message, role, currency, userId, onAsk }: { message:
             </details>
           );
         }
-        // The matched spans belong to the final answer, so only that text gets clickable numbers.
-        const final = i === lastText && verification?.matched ? linkClaims(text, verification.matched) : text;
-        return <SafeMarkdown key={i} text={final} provenance={provenance} />;
+        // The traced figures belong to the final answer, so only that text marks them.
+        return <SafeMarkdown key={i} text={text} provenance={provenance} traced={i === lastText ? traced?.figures : undefined} />;
       })}
       {truncated.map((p) => (
         <p key={p.queryId} className="num text-xs text-ink-3">
           Showing {p.truncated!.shown} of {p.truncated!.total}.
         </p>
       ))}
-      {verification ? (
-        verification.ok ? (
-          <p className="flex items-start gap-1.5 text-xs leading-5 text-ink-3">
-            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-brand-strong" aria-hidden />
-            Every number here was checked against the store data. Click one to see where it came from.
-          </p>
-        ) : (
-          <div role="status" className="flex max-w-[70ch] items-start gap-2.5 rounded-xl border border-warn/30 bg-warn-tint px-3.5 py-3 text-sm leading-6 text-ink">
-            <TriangleAlert className="mt-1 size-4 shrink-0 text-warn" aria-hidden />
-            <p>
-              Couldn&apos;t verify: {verification.unmatched.map((u) => u.text).join(", ")}. Treat {verification.unmatched.length === 1 ? "that number" : "those numbers"} with care.
-            </p>
-          </div>
-        )
-      ) : null}
+      {traced ? <VerifiedBadge traced={traced.traced} total={traced.total} figures={traced.figures} provenance={provenance} unmatched={traced.unmatched} /> : null}
       {onAsk && questions.length > 0 ? (
         <ul aria-label="Follow-up questions" className="flex flex-wrap gap-2 pt-0.5">
           {questions.map((q) => (
@@ -152,7 +136,7 @@ function AssistantMessage({ message, role, currency, userId, onAsk }: { message:
           ))}
         </ul>
       ) : null}
-    </div>
+    </InspectScope>
   );
 }
 

@@ -1,20 +1,27 @@
 "use client";
 
 import { Check, X } from "lucide-react";
-import { Children, cloneElement, createContext, isValidElement, useContext, useId, type ReactElement, type ReactNode } from "react";
-import Markdown, { type Components } from "react-markdown";
+import { Children, cloneElement, createContext, isValidElement, memo, useContext, useId, useMemo, type ReactElement, type ReactNode } from "react";
+import Markdown, { type Components, type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { isAllowedLink, provenanceId } from "@/lib/agent/links";
 import type { ProvenanceEntry } from "@/lib/agent/run";
+import type { TracedFigure } from "@/lib/agent/traced";
 import { DRAWER_ID, ProofDrawerContext } from "./proof-drawer";
 import { toolLabel } from "./tool-labels";
+import { TracedContext, TracedFigureSpan } from "./traced-figure";
+import { rehypeTraced, TRACED_TAG } from "./traced-text";
 
 export { toolLabel };
 
 // Answers are rendered from an allow-list: no images, no raw HTML (react-markdown drops it), and links only to this app
 // and the Shopify admin. A number the checker matched is a button that opens the query behind it: in the chat it opens
 // the proof drawer; anywhere without a drawer (no provider) it falls back to a small popover.
-const ALLOWED = ["p", "strong", "em", "del", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "code", "pre", "blockquote", "h1", "h2", "h3", "h4", "br", "hr", "a"];
+//
+// The `traced` prop is the newer way to mark figures: the answer is left as it is, and the figures the checker traced are found in
+// its rendered text (never in code or link text) and drawn with a card that says where each came from. <traced-figure> is made
+// only by that step; raw HTML in an answer is shown as text, so it can never produce one.
+const ALLOWED = ["p", "strong", "em", "del", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "code", "pre", "blockquote", "h1", "h2", "h3", "h4", "br", "hr", "a", TRACED_TAG];
 
 // The queries behind this answer's figures. The link component below reads them from here, so the component map can be
 // one fixed object: a new map on every render would remount every figure each time the page re-rendered.
@@ -162,18 +169,29 @@ const COMPONENTS: Components = {
   pre: ({ children }) => <pre className="inset overflow-x-auto p-3 font-mono text-xs leading-5 [&_code]:bg-transparent [&_code]:p-0">{children}</pre>,
   table: ({ children }) => <AlignedTable>{children}</AlignedTable>,
   a: Anchor,
-};
+  [TRACED_TAG]: TracedFigureSpan,
+} as Components;
 
 const URL_TRANSFORM = (url: string) => (provenanceId(url) || isAllowedLink(url) ? url : "");
 
-export function SafeMarkdown({ text, provenance = {} }: { text: string; provenance?: Record<string, ProvenanceEntry> }) {
+const REMARK_PLUGINS = [remarkGfm];
+
+const NO_PROVENANCE: Record<string, ProvenanceEntry> = {};
+
+// `traced` is opt-in: pass the figures the checker traced and each is marked where it appears in the text. The component is
+// memoised: a long conversation re-renders on every streamed chunk, and an earlier answer has no reason to be parsed again.
+export const SafeMarkdown = memo(function SafeMarkdown({ text, provenance = NO_PROVENANCE, traced }: { text: string; provenance?: Record<string, ProvenanceEntry>; traced?: TracedFigure[] }) {
+  const rehypePlugins = useMemo<Options["rehypePlugins"]>(() => (traced?.length ? [[rehypeTraced, { figures: traced }]] : undefined), [traced]);
+  const tracedState = useMemo(() => ({ figures: traced ?? [], provenance }), [traced, provenance]);
   return (
     <ProvenanceContext.Provider value={provenance}>
-      <div className="space-y-3.5 text-[0.9375rem] leading-7 text-ink [&>:first-child]:mt-0">
-        <Markdown remarkPlugins={[remarkGfm]} allowedElements={ALLOWED} unwrapDisallowed urlTransform={URL_TRANSFORM} components={COMPONENTS}>
-          {text}
-        </Markdown>
-      </div>
+      <TracedContext.Provider value={tracedState}>
+        <div className="space-y-3.5 text-[0.9375rem] leading-7 text-ink [&>:first-child]:mt-0">
+          <Markdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={rehypePlugins} allowedElements={ALLOWED} unwrapDisallowed urlTransform={URL_TRANSFORM} components={COMPONENTS}>
+            {text}
+          </Markdown>
+        </div>
+      </TracedContext.Provider>
     </ProvenanceContext.Provider>
   );
-}
+});

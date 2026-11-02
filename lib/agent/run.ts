@@ -15,6 +15,7 @@ import { costUsd, fallbackModelFor, resolveModel, type ModelSpec } from "./model
 import { repairInstruction, SYSTEM_PROMPT, turnContext } from "./prompt";
 import { createModel, providerOptionsFor } from "./provider";
 import { telemetryFor, withTrace } from "../ops/tracing";
+import { tracedFigures } from "./traced";
 import { buildExtraTools, trackedCalls } from "./extra-tools";
 import { buildTools, type ToolHooks } from "./tools";
 import { buildRememberTool, buildRenderViewTool, type TurnCall } from "./view-tools";
@@ -405,7 +406,9 @@ export function runAgent(ctx: TenantContext, input: AgentInput, deps: AgentDeps 
 
         const verify = (answer: string, attempt: number) => {
           const check = checkClaims(answer, ledgerFromToolResults(results), inputs);
-          writer.write({ type: "data-verification", data: { attempt, ok: check.ok, unmatched: check.unmatched, matched: check.matched } });
+          // `figures` is what the chat underlines and lists: each traced figure's text, query and source. `matched` and
+          // `unmatched` stay as they were, and are what the badge counts.
+          writer.write({ type: "data-verification", data: { attempt, ok: check.ok, unmatched: check.unmatched, matched: check.matched, figures: tracedFigures(answer, check.matched, (id) => provenance.get(id)) } });
           return check;
         };
 
