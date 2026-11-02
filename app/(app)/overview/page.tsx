@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AskBox } from "@/components/overview/ask-box";
 import { AttentionCard } from "@/components/overview/attention-card";
 import { BriefCard } from "@/components/overview/brief-card";
+import { PinnedAnswers } from "@/components/overview/pinned-answers";
 import { SalesCard } from "@/components/overview/sales-card";
 import { WaitingCard } from "@/components/overview/waiting-card";
 import { ErrorBanner } from "@/components/chat/error-banner";
@@ -65,6 +66,7 @@ export default async function OverviewPage() {
       <PageHeader title="Overview" description={lede} />
       <div className="space-y-4">
         {connected ? <AskBox /> : null}
+        {connected ? <PinnedAnswers orgId={ctx.orgId} userId={ctx.userId} /> : null}
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-4">
             {!connected ? (
