@@ -80,6 +80,7 @@ The full design is in [docs/production/product-plan.md](docs/production/product-
 - **Tracing and fallback.** Runs are logged in `agent_runs` and `agent_steps`. Langfuse tracing is opt-in (three variables) and records no prompts or answers. A turn moves once to a fallback model when the chat model fails before any text streams; the decision has unit tests, the full run-level path has no test, and it has not been seen in a real outage.
 - **Evals are not in CI.** They run locally (`npm run eval`) and the scoreboard in `docs/evals/` is committed. `.github/workflows/evals.yml` is manual-only and has no secrets set.
 - **Spend cap.** One value for every brand.
+- **Reading prose.** A follow-up in a call note that is written only in prose depends on the model finding it. Lines listed under an "Action items" (or "Next steps", "Follow-ups", "To-dos") heading are always read, a safety net added after a hand test showed the model skipping one.
 - **Theme Check** has not been run on the deployed route.
 - **Shared Bedrock key.** The key also serves another project and its policy allows more than invoking models. Production would use short-lived credentials.
 - **Wrong time of day.** Solenne's last four orders (O_01021 to O_01024) carry the load time, not the planned one. Daily totals are unaffected.
