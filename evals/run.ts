@@ -15,6 +15,7 @@ import { runAgent, type RunSummary } from "../lib/agent/run";
 import type { TenantContext } from "../lib/tenancy/context";
 import type { ViewPayload } from "../lib/views/types";
 import { loadDataset, readFixture } from "../scripts/fixtures/load-db";
+import { loadCostAssumptions, loadCosts } from "../scripts/fixtures/load-costs";
 import { loadAdSpend, loadPlan, readFixtureFile } from "../scripts/fixtures/load-pace";
 import { STORES } from "../scripts/seed/stores.js";
 import type { StoreKey } from "../scripts/seed/types.js";
@@ -141,6 +142,9 @@ async function main(): Promise<void> {
     await loadDataset(db, tenant!.id, store, fx.dataset);
     await loadAdSpend(db, tenant!.id, readFixtureFile(store, "ad-spend.csv"));
     await loadPlan(db, tenant!.id, readFixtureFile(store, "plan.csv"), `${STORES[store].name} plan (fixture)`);
+    // The cost sheet and its rates, which get_ebitda reads: without them every month would have no operating costs.
+    await loadCosts(db, tenant!.id, readFixtureFile(store, "costs.csv"));
+    await loadCostAssumptions(db, tenant!.id, readFixtureFile(store, "cost-assumptions.csv"));
     const ctx: TenantContext = { tenantId: tenant!.id, orgId: `org_${store}`, userId: "eval", role: "gc_admin", shop: { domain: `${store}.myshopify.com`, timezone: STORES[store].timezone, currency: "USD", status: "connected" } };
     envs.set(store, { store, db, ctx, dataset: fx.dataset, truth: fx.truth });
   }

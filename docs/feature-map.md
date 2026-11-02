@@ -57,3 +57,4 @@ Every feature we considered for the take-home, sorted under the item of the orig
 | | 39 | Use it anywhere | Beyond | Slack bot, MCP server, Sidekick extension |
 | | 40 | Data-health monitor | Beyond | Tracking gaps, missing costs, skewing orders, sync lag |
 | | 47 | AI-shopping readiness audit | Ranked lower | How well the catalog shows up in ChatGPT and Gemini shopping |
+| | 48 | EBITDA calculator | Beyond | Net sales to EBITDA by month, with a seeded, editable cost sheet, card fees and fulfilment at assumed rates, and what-if levers for price, ads, product cost, volume and operating costs. Extends 25 (ad data and contribution margin) and 32 (scenario planner) |

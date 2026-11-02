@@ -11,6 +11,8 @@ import { AS_OF, FICTIONAL_LINE, SEED, STORES } from "./stores.js";
 import type {
   AdSpendRow,
   CoreMetricId,
+  CostAssumptionRow,
+  CostRow,
   Customer,
   Dataset,
   Discount,
@@ -26,7 +28,7 @@ import { buildCatalog, type BuiltCatalog } from "./catalog.js";
 import { hexId, makeRng, weightedIndex, type Rng } from "./rng.js";
 import { addDays, daysBetween, eachDay, localIso, weekday } from "./time.js";
 import { roundHalfUp } from "./money.js";
-import { buildTruth, metricValue, monthlyMetrics, type Filter, type StorylineSpec } from "./truth.js";
+import { buildTruth, metricValue, monthlyMetrics, monthsBetween, type Filter, type StorylineSpec } from "./truth.js";
 
 export interface GenerateOptions {
   asOf: string;
@@ -886,6 +888,48 @@ export function adSpendRows(store: StoreKey, asOf: string, storylines: boolean, 
   return rows;
 }
 
+// ---------- cost sheet (EBITDA) ----------
+// Operating costs for a founder-run brand, sized to its sales: Solenne nets about $6,000 to $7,000 a month and Tidepool about $1,000, so a
+// realistic payroll would swamp them. Amounts are in cents and fixed (no random draws). Tidepool's software bill is set above what its
+// best month earns before operating costs (April 2026, about $146), so that none of its months makes a profit: it spends most of its
+// sales on ads and never breaks even, and the calculator says so.
+const SOFTWARE_BASE: Record<StoreKey, number> = { solenne: 25000, tidepool: 18000 };
+
+// Solenne's cost storylines, switched off with the rest: the software bill creeps up on the first month of each quarter from
+// 2026-01, a part-time creative contractor starts in 2026-03, and a one-off shoot lands in 2026-06.
+const SOFTWARE_STEP_MONTHS = ["2026-01", "2026-04", "2026-07", "2026-10"];
+const SOFTWARE_STEP = 2500;
+const CONTRACTOR_FROM = "2026-03";
+const CONTRACTOR_MONTHLY = 30000;
+const SHOOT_MONTH = "2026-06";
+const SHOOT_COST = 90000;
+
+/** One row per month and category, from the store's first month to asOf's month. A category with no cost that month has no row. */
+export function operatingCostRows(store: StoreKey, asOf: string, storylines: boolean): CostRow[] {
+  const planted = storylines && store === "solenne";
+  const rows: CostRow[] = [];
+  for (const month of monthsBetween(STORES[store].from, asOf)) {
+    const steps = planted ? SOFTWARE_STEP_MONTHS.filter((m) => m <= month).length : 0;
+    rows.push({ month, category: "software", amountCents: SOFTWARE_BASE[store] + steps * SOFTWARE_STEP });
+    if (planted && month >= CONTRACTOR_FROM) rows.push({ month, category: "contractors", amountCents: CONTRACTOR_MONTHLY });
+    if (planted && month === SHOOT_MONTH) rows.push({ month, category: "other", amountCents: SHOOT_COST });
+  }
+  return rows;
+}
+
+// The rates behind the card-fee and fulfilment lines: 2.9% + 30 cents on every order, and $4.50 to pick, pack and ship one. Both
+// stores use the same rates, but they are listed per store so that one can differ.
+const STANDARD_RATES: CostAssumptionRow[] = [
+  { key: "card_fee_bps", value: 290 },
+  { key: "card_fee_fixed_cents", value: 30 },
+  { key: "fulfilment_cents_per_order", value: 450 },
+];
+const COST_RATES: Record<StoreKey, CostAssumptionRow[]> = { solenne: STANDARD_RATES, tidepool: STANDARD_RATES };
+
+export function costAssumptionRows(store: StoreKey): CostAssumptionRow[] {
+  return COST_RATES[store].map((r) => ({ ...r }));
+}
+
 export function datasetHash(ds: Dataset): string {
   return createHash("sha256").update(JSON.stringify(ds)).digest("hex");
 }
@@ -902,6 +946,11 @@ function stringifyDataset(ds: Dataset): string {
 function csv(header: string[], rows: (string | number)[][]): string {
   return [`# ${FICTIONAL_LINE}`, header.join(","), ...rows.map((r) => r.join(","))].join("\n") + "\n";
 }
+
+// The two cost sheet files, as text. Exported so a test can compare them with the checked-in copies.
+export const costsCsv = (store: StoreKey, asOf: string, storylines: boolean): string =>
+  csv(["month", "category", "amount"], operatingCostRows(store, asOf, storylines).map((c) => [c.month, c.category, c.amountCents]));
+export const costAssumptionsCsv = (store: StoreKey): string => csv(["key", "value"], costAssumptionRows(store).map((r) => [r.key, r.value]));
 
 function main(argv: string[]): void {
   const arg = (name: string) => {
@@ -925,6 +974,8 @@ function main(argv: string[]): void {
       csv(["month", "net_sales", "orders", "new_customer_orders", "aov", "returning_customer_rate"], planRows(store).map((p) => [p.month, p.net_sales, p.orders, p.new_customer_orders, p.aov, p.returning_customer_rate])),
     );
     writeFileSync(join(dir, "ad-spend.csv"), csv(["date", "channel", "spend"], adSpendRows(store, asOf, storylines).map((a) => [a.date, a.channel, a.spend])));
+    writeFileSync(join(dir, "costs.csv"), costsCsv(store, asOf, storylines));
+    writeFileSync(join(dir, "cost-assumptions.csv"), costAssumptionsCsv(store));
     console.log(`${store}: ${ds.orders.length} orders, ${ds.customers.length} customers, ${ds.refunds.length} refunds, hash ${datasetHash(ds).slice(0, 12)} -> ${dir}`);
   }
 }

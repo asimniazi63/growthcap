@@ -42,7 +42,7 @@ The brief asked for a test Shopify app, a test dev store and an AI agent that qu
 | Stretch: document parsing | Built | `/plan`: upload a SOW PDF or plan CSV, review the targets read from it with their page, confirm as the active plan. A supplier invoice (PDF) becomes unit-cost updates that a person approves, a call note becomes plan changes and action items, and `ask_document` answers questions about an uploaded document with the page it came from |
 | Stretch: Shopify Liquid page generation | Built | `draft_landing_page`: copy from the model, Liquid built and checked on the server, approval card. Shopify lets an app write theme files only after an exemption, so an approved page is pushed with `npm run landing:push` (Shopify CLI) |
 | Stretch: additional data sources | Built | Ad spend (MER, CAC), marketing calendar, call notes, plan targets, supplier invoices |
-| Beyond the list | Built | Why a month missed plan (`explain_gap`), approved writes to Shopify (Metric Target, annotation, discount off, unit cost, customer segment), weekly brief, portfolio view, team memory, a growth audit (`/audit`), saved playbooks (`/playbooks`), cohort grids and unit economics, promo post-mortems (`get_promo_postmortem`), bundle candidates (`get_bundle_candidates`), launch curves (`get_launch_curves`), retention segments with a Klaviyo CSV (`get_customer_segments`, `/segments`), data-health checks, an Overview home page, a store-health Connect page, colour schemes, optional Langfuse tracing and a fallback model |
+| Beyond the list | Built | Why a month missed plan (`explain_gap`), approved writes to Shopify (Metric Target, annotation, discount off, unit cost, customer segment), weekly brief, portfolio view, team memory, a growth audit (`/audit`), saved playbooks (`/playbooks`), cohort grids and unit economics, an EBITDA calculator with an editable cost sheet and what-if scenarios (`/ebitda`, `get_ebitda`, `get_ebitda_scenario`), promo post-mortems (`get_promo_postmortem`), bundle candidates (`get_bundle_candidates`), launch curves (`get_launch_curves`), retention segments with a Klaviyo CSV (`get_customer_segments`, `/segments`), data-health checks, an Overview home page, a store-health Connect page, colour schemes, optional Langfuse tracing and a fallback model |
 
 ### Every feature, what it does and what it changes
 
@@ -137,7 +137,28 @@ The table above is the index. Below, each brief item is broken into its features
 | Retention segments | Champions, at risk, due to reorder and one and done, scored by recency, frequency and value, with a Klaviyo CSV of pseudonymous ids. | It shows who to win back, and hands the list to an email tool. |
 | Team memory | The agent keeps notes for a brand, such as why a month dipped, which a Growth Capital person confirms. | What the team learns survives from one conversation to the next. |
 | Roles | Growth Capital staff see several brands, and a client viewer sees one brand, read only. | A client can look at their own numbers without seeing another brand or any write tool. |
-| Evals | 38 cases ask the real model questions with known right answers and grade them with deterministic checks. | A change to the prompt or the model is tested instead of guessed. |
+| Evals | 40 cases ask the real model questions with known right answers and grade them with deterministic checks. | A change to the prompt or the model is tested instead of guessed. |
+
+#### Beyond the list: the EBITDA calculator
+
+| Feature | What it does | Impact |
+|---|---|---|
+| EBITDA by month (`/ebitda`) | Takes each month from net sales down to EBITDA in steps: less cost of goods, card fees, fulfilment and ad spend (what is left is profit after variable costs), then less operating costs. A waterfall chart draws one month, and every line names where its number comes from. | It shows whether a brand makes money after its running costs, and which line moved, not only whether sales were up. |
+| Cost sheet | The costs Shopify does not hold (payroll, software, rent, contractors, other) by month, plus the card-fee and fulfilment rates. Both demo brands come with one. Growth Capital admins and partners edit it on the page and other roles read it. An edit saves at once, is stored with who made it and when, and never reaches Shopify. | The person who knows the real bill can correct a figure, and a month with no costs entered is flagged, not shown as zero. |
+| What-if scenarios | Sliders for price, ad spend, product cost, order volume and operating costs show how EBITDA would change over the last three complete months. A target box works the other way: how many orders it would take to reach a chosen EBITDA. | A team can test "what if we cut ads by a fifth?" before acting, with the assumptions behind the answer in view. |
+| The same figures in chat | `get_ebitda` and `get_ebitda_scenario` run on the same arithmetic as the page, so the number checker covers EBITDA answers like any other. | The page and the chat show the same figures, and the agent never works out a profit figure itself. |
+
+**Try it:** on Solenne, open **EBITDA** in the sidebar for the monthly bridge, then pull the ad-spend slider down to -20% and read the line that says what the cut assumes. Or ask Chat `What was Solenne's EBITDA in August 2026, and what is it made of?` or `What happens to our profit if we cut ad spend by 20%?`
+
+**Limits to know:**
+
+- Card fees and fulfilment are assumed rates, not Shopify data: 2.9% of net sales plus 30 cents an order for card fees, and $4.50 an order for fulfilment. The page lists the rates under "Where each line comes from" and in the cost sheet, not beside the figures they produce.
+- The demo cost sheets are invented, and small on purpose. From August to October 2026 Solenne's net sales averaged about $7,000 a month and Tidepool's about $1,000, so a realistic payroll would swamp them. Solenne's sheet has a software bill that creeps up each quarter, a part-time creative contractor from March 2026 and a one-off shoot in June 2026. In those three months Tidepool spent about 70% of its net sales on ads, and it is meant to show a loss.
+- Cost of goods uses today's unit cost from Shopify for every sale, as unit economics does, not the cost on the day of the sale. Units sold on variants with no unit cost have no cost of goods here.
+- When a month has no cost-sheet rows, or some units have no unit cost, costs are missing and the true EBITDA can only be lower than shown. That month is marked a **ceiling**, and the agent says so instead of presenting a firm figure. A month still running has its operating costs prorated by the days gone, and scenarios use complete months only.
+- Scenarios rest on two assumptions, both stated beside the answer. A price change moves orders by a price elasticity of `-1.5`, so a 10% price rise loses 15% of orders. Cutting ad spend loses new-customer orders in proportion at today's cost to win a customer and leaves returning-customer orders alone; without that rule, cutting ads would always look free.
+
+**A design, not built:** a QuickBooks or Xero connection (operating costs come only from the seeded sheet and from edits on the page) and a CSV upload for the cost sheet (the reader used for the seed files could serve one later). Tax, interest, depreciation and amortisation have no line, because EBITDA leaves them out by definition.
 
 ## What is in the app
 
@@ -150,6 +171,7 @@ The table above is the index. Below, each brief item is broken into its features
 **Track against the plan**
 
 - **Pace** (`/pace`): month to date against the plan. A target is spread over days using last year's pattern for the same month, so Black Friday does not make November look behind for three weeks. Where the month will land is shown as an estimate once five complete days exist (before that one big day would swing it by thousands, so the screens, the chat and the brief all say it is too early), and "Need $X a day" says what each remaining day must sell to reach the target. A day-by-day chart and metric tiles show ahead or behind plan. The chart carries a lane of markers for calendar entries, call notes, new discount codes and possible stockouts, and a slider replays the month day by day with the plan gap recomputed as of that day.
+- **EBITDA** (`/ebitda`): each month's bridge from net sales down to EBITDA, a waterfall for one month, receipts that say where every line comes from, what-if sliders for price, ads, product cost, volume and operating costs, and the cost sheet. Everyone who can open the brand can read it, and a Growth Capital admin or partner can edit the cost sheet. The agent reads the same figures through `get_ebitda` and `get_ebitda_scenario`. The assumptions and limits are [above](#beyond-the-list-the-ebitda-calculator).
 - **Why** (`explain_gap`): splits a finished month's gap into new and returning orders, their average order values and refunds (a midpoint split, so the parts add up exactly), looks for evidence in the store data, the marketing calendar and the call notes, and writes the explanation. A client viewer's version uses store data only.
 - **Portfolio** (`/portfolio`) and **Briefs** (`/briefs`): brands ranked by dollars behind plan with the biggest driver of each; a weekly brief drafted through the same agent loop, blocked from approval if the checker finds a number it cannot source.
 
@@ -170,7 +192,7 @@ The table above is the index. Below, each brief item is broken into its features
 
 - **Settings** (`/settings`): five colour schemes (Sorbet is the default) and light, dark or match-my-device, saved in a cookie in your browser.
 - Every data page has a skeleton loader, every animation stops under reduced motion, and every chart has a text alternative.
-- **Roles:** `gc_admin` and `gc_partner` (Growth Capital staff, several brands) and `client_viewer` (one brand, read only: the chat with store data and the approved weekly briefs; no call notes, no write tools, no audit, no playbooks). The sidebar leaves out Portfolio, Audit, Playbooks, Plan and Actions for a client viewer, and those pages say they are for Growth Capital roles only if the link is typed.
+- **Roles:** `gc_admin` and `gc_partner` (Growth Capital staff, several brands) and `client_viewer` (one brand, read only: the chat with store data, the EBITDA page and the approved weekly briefs; no call notes, no write tools, no audit, no playbooks). The sidebar leaves out Portfolio, Audit, Playbooks, Plan and Actions for a client viewer, and those pages say they are for Growth Capital roles only if the link is typed.
 
 ### Export for Klaviyo
 
@@ -257,7 +279,7 @@ You need Node 22 or newer and npm (plus the Shopify CLI to deploy). Accounts: Sh
 ```
 npm ci
 npm run db:migrate
-npm run fixtures:load      # plan, ad spend, calendar and call notes
+npm run fixtures:load      # plan, ad spend, cost sheet, calendar and call notes
 npm run dev
 ```
 
@@ -272,7 +294,7 @@ Local runs, scripts and the deployed app share one Neon database. Connect and re
 | `npm test` | The test suite (about 100 seconds; it uses an in-memory Postgres and needs no secrets) |
 | `npm run eval` **[paid]** | The eval suite against the real model; add `-- --case <id>` for one case |
 | `npm run db:migrate` | Apply the SQL migrations in `drizzle/` to the database |
-| `npm run fixtures:load` | Load each brand's plan, ad spend, marketing calendar and call notes |
+| `npm run fixtures:load` | Load each brand's plan, ad spend, cost sheet, marketing calendar and call notes |
 | `npm run tenant:create -- --org <clerkOrgId>` | Add a brand for a Clerk organisation |
 | `npm run chat:try -- --store solenne --q "..."` **[paid]** | Ask the real agent one question from the terminal |
 | `npm run reconcile:truth` | Compare the synced numbers with `truth.json` |
@@ -299,12 +321,12 @@ Everything else, including connecting a store, syncing, adding a brand, the revi
 | `lib/pace/`, `lib/why/`, `lib/overview/`, `lib/portfolio/` | Plan-versus-actual maths, the "why" explanation, the Overview data, the portfolio ranking |
 | `lib/plan-in/`, `lib/call-notes/`, `lib/action-items/`, `lib/memory/` | Document reading, call notes, follow-ups and team memory |
 | `lib/actions/`, `lib/landing/` | The approval ledger and the executors that write to Shopify; landing-page building and checks |
-| `lib/briefs/`, `lib/playbooks/`, `lib/audit/`, `lib/segments/`, `lib/health/` | The weekly brief, playbooks, the growth audit, retention segments, store-health checks |
+| `lib/briefs/`, `lib/playbooks/`, `lib/audit/`, `lib/segments/`, `lib/health/`, `lib/ebitda/` | The weekly brief, playbooks, the growth audit, retention segments, store-health checks, the EBITDA cost sheet and monthly figures (the arithmetic itself is `lib/metrics/ebitda.ts`) |
 | `lib/views/`, `lib/threads/`, `lib/shell/`, `lib/appearance/` | Charts the agent draws and pinned views, saved threads, the palette and shortcuts, colour schemes |
 | `lib/db/`, `drizzle/` | Database schema and client, the in-memory test database, and the SQL migrations |
 | `lib/tenancy/`, `lib/crypto/`, `lib/ops/` | Tenant from the session, token encryption, Langfuse tracing |
 | `scripts/` | Command-line tools: migrate, seed, reconcile, `chat:try`, `landing:push`, `tenant:create` |
-| `fixtures/` | Demo data per brand: orders, `truth.json`, plan, ad spend, calendar, call notes, invoice and SOW |
+| `fixtures/` | Demo data per brand: orders, `truth.json`, plan, ad spend, cost sheet, calendar, call notes, invoice and SOW |
 | `evals/` | The eval cases, graders and runner |
 | `docs/` | Product plan, implementation plan, build plan, priorities, runbook, decision records, eval results, and the production design |
 
@@ -323,8 +345,8 @@ Everything else, including connecting a store, syncing, adding a brand, the revi
 | **Solenne, Tidepool** | The two demo brands, each a Shopify dev store. Solenne is a fictional premium clean-skincare brand with about 1,000 orders. Tidepool is a fictional baby brand with about 100. |
 | **Storyline** | An event planted in the demo data (a bad batch that drove refunds, a leaked discount code, a budget cut) so the agent has real things to find and the evals have a known right answer. |
 | **Clerk** | The sign-in service. A Clerk organisation is a brand, and a member's role in it decides what they can see and do. The instance is invite-only. |
-| **`gc_admin`, `gc_partner`** | Growth Capital staff who can see several brands. Both can chat, read Pace, propose and approve actions, upload plans and approve briefs. Only `gc_admin` connects stores. |
-| **`client_viewer`** | A client who sees one brand, read only: the chat with store data, Pace and the approved weekly briefs. |
+| **`gc_admin`, `gc_partner`** | Growth Capital staff who can see several brands. Both can chat, read Pace, propose and approve actions, upload plans, approve briefs and edit the EBITDA cost sheet. Only `gc_admin` connects stores. |
+| **`client_viewer`** | A client who sees one brand, read only: the chat with store data, Pace, EBITDA and the approved weekly briefs. |
 | **Reviewer login** | A demo account for people reviewing this work: one `gc_partner` in both brands and one `client_viewer` in Solenne. Approvals made from a reviewer login are dry runs that never touch a store. |
 
 ### Shopify and the data
@@ -343,7 +365,7 @@ Everything else, including connecting a store, syncing, adding a brand, the revi
 | **Postgres (Neon), Drizzle** | The database the app reads (hosted on Neon) and the tool that defines its tables and migrations (`drizzle/`). |
 | **Pseudonymous customer id** | A customer is stored as `CUST_` plus a hash. There is no name, email, phone or address column, and a test enforces that. |
 | **Seeding** | Filling a dev store with demo orders. `seed:generate` makes them, `seed:load` writes them to Shopify, `seed:topup` adds the days since, and `seed:extra` adds a few hand-picked orders. |
-| **Fixtures** | The demo files for each brand in `fixtures/`: orders, plan, ad spend, marketing calendar, call notes, an invoice and a SOW. |
+| **Fixtures** | The demo files for each brand in `fixtures/`: orders, plan, ad spend, cost sheet, marketing calendar, call notes, an invoice and a SOW. |
 | **`truth.json`** | The known right answers for the demo data, worked out apart from the app's code. The reconcile script and the evals check against it. |
 | **Reconcile** | `npm run reconcile:truth` compares what the app computes from the synced data with `truth.json`. |
 | **Demo clock** | The seeded orders end on 31 October 2026. If the newest order is more than 36 hours old, the app treats the day after it as "today", so "last month" and "this month" stay meaningful. |
@@ -369,6 +391,9 @@ Money is stored as integer cents and rates as fractions (0.18 means 18%). Every 
 | **Gross margin** | Net sales minus unit cost times the units kept, divided by net sales. It uses today's unit cost from the product catalogue, and variants with no unit cost are left out. |
 | **Contribution margin** | Net sales minus the cost of goods minus ad spend, per month, also shown as a share of net sales. |
 | **Payback** | How many months it takes a month's new customers to earn back what they cost to win: the first month where their cumulative gross margin covers the ad spend. |
+| **EBITDA** | Earnings before interest, tax, depreciation and amortisation (the yearly write-down of equipment and other long-lived purchases): what a business makes from trading before those items. Here it is net sales minus cost of goods, card fees, fulfilment, ad spend and operating costs, month by month. There is no line for interest, tax, depreciation or amortisation, which is what the name means. |
+| **Profit after variable costs** | Net sales minus cost of goods, card fees, fulfilment and ad spend: what is left from sales before operating costs, and the subtotal just above EBITDA. It is not called contribution margin, because that name already means net sales minus cost of goods minus ad spend (above), and two meanings under one name would let a figure be read the wrong way. |
+| **Ceiling (EBITDA)** | An EBITDA figure that can only be too high. A month is marked a ceiling when no operating costs were entered for it, or when some units sold have no unit cost, so costs are missing and the true figure can only be lower. The page and the agent say so instead of showing a firm number. |
 | **Repeat rate** | The share of a cohort that orders again within 30, 60 or 180 days of the first order. |
 | **Cohort, cohort grid** | A cohort is the customers whose first order fell in one month. The grid is a heat map of how many of each cohort ordered again, month by month. |
 | **Zero-sales days** | Days with no sales for a variant that averaged at least 0.5 units a day over the previous 28 days: a suspected stockout. |
@@ -381,6 +406,8 @@ Money is stored as integer cents and rates as fractions (0.18 means 18%). Every 
 | **Lift and dip** | The post-mortem chart: the rise in sales during a promotion and the dip after it, when some of those buyers would have bought anyway. |
 | **Bundle candidates, lift** | Products bought together: the orders that held both, their share, and the lift, which is how many times more often the pair is bought together than chance alone would give. |
 | **Launch curve** | A product's first weeks of sales set against the median launch. The first sale counts as the launch because there is no publish date. |
+| **What-if scenario** | A test of "what if" on the last few complete months: move one or more levers (price, ad spend, product cost, order volume, operating costs, each as a share such as -20%) and EBITDA is worked out again. It is arithmetic on recent months, not a forecast. |
+| **Price elasticity** | How far the number of orders moves when the price moves. The calculator assumes `-1.5`, so a 10% price rise loses 15% of orders. It is an assumption you can change, not something learned from this data. |
 
 ### The agent
 
@@ -425,6 +452,7 @@ Money is stored as integer cents and rates as fractions (0.18 means 18%). Every 
 | **Why (`explain_gap`)** | The explanation of a finished month's miss: new against returning orders, their order values and refunds, plus evidence from the store data, the calendar and the call notes. |
 | **Marketing calendar** | Dated events (launches, promotions, sends) that the agent can use as evidence. |
 | **Ad spend file** | Daily ad spend per channel, loaded from a file because it does not come from Shopify. It feeds MER and CAC. |
+| **Cost sheet** | A brand's operating costs by month and category (payroll, software, rent, contractors, other), with the card-fee and fulfilment rates. Shopify does not hold these, so they sit in two small tables in the app's database, loaded from a file for each brand and editable by Growth Capital admins and partners. The demo brands' sheets are invented and small. Reloading the file never overwrites a cell a person has edited. |
 | **Call note** | Notes from a client call. They become plan changes and action items. |
 | **Action item** | A follow-up from a call note. It shows on Pace until someone marks it done. |
 
@@ -454,6 +482,7 @@ Money is stored as integer cents and rates as fractions (0.18 means 18%). Every 
 | **Overview** `/overview` | The home page: net sales against plan, what needs attention, what waits for approval, the latest brief and pinned answers. |
 | **Chat** `/chat` | Ask the agent anything about the store. Saved threads, proof drawer, charts, model picker. |
 | **Pace** `/pace` | The month against the plan, with the chart, markers, replay slider and "Need $X a day". |
+| **EBITDA** `/ebitda` | Each month's bridge from net sales to EBITDA, a waterfall for one month, where each line comes from, what-if sliders and the cost sheet. Every role can read it. Growth Capital admins and partners can edit the cost sheet. |
 | **Plan** `/plan` | Upload a SOW (PDF) or plan sheet (CSV), review the targets read from it, and confirm them as the active plan. Growth Capital roles only. |
 | **Actions** `/actions` | The approval cards and the action ledger. Growth Capital roles only. |
 | **Portfolio** `/portfolio` | Brands ranked by dollars behind plan, with the biggest driver of each. Growth Capital roles only. |

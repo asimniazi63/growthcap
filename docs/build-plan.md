@@ -1,6 +1,6 @@
 # Oasis Pace: Build Plan
 
-> **For agentic workers:** These are the steps for each ticket: the core in one day (T0–T5), every stretch feature (T6–T10), the extras from [feature-map.md](feature-map.md) (T12–T18b), and the final ship (T11). The order is set in [priorities.md](priorities.md). It cuts the take-home plan, [implementation-plan.md](implementation-plan.md), where speed matters more than hardening. Where a step says "as in T#" or "as in T5-A", follow that part of the implementation plan, including its interfaces and tests, minus the cuts listed here. `CLAUDE.md` still applies: never stage, commit or push, ask before deploys and seed loads, and stop at each checkpoint. Each ticket is also a GitHub issue.
+> **For agentic workers:** These are the steps for each ticket: the core in one day (T0–T5), every stretch feature (T6–T10), the extras from [feature-map.md](feature-map.md) (T12–T18b and T22), and the final ship (T11). The order is set in [priorities.md](priorities.md). It cuts the take-home plan, [implementation-plan.md](implementation-plan.md), where speed matters more than hardening. Where a step says "as in T#" or "as in T5-A", follow that part of the implementation plan, including its interfaces and tests, minus the cuts listed here. `CLAUDE.md` still applies: never stage, commit or push, ask before deploys and seed loads, and stop at each checkpoint. Each ticket is also a GitHub issue.
 
 **Goal:** a deployed app with every feature in the brief working at demo quality, numbers that can be checked, and the thinking written down. Production hardening stays in [production/](production/).
 
@@ -29,12 +29,13 @@
 | T17 | Claude | about 2 days | Extra: promo post-mortems, merchandising analyses, retention segments | New: growth analyses | 34, 35, 36 |
 | T18 | Claude | about 3–4 h | Extra: saved playbooks run from the app | New: playbooks | 38 |
 | T18b | Both | about 3–4 h | Extra: a Slack bot that answers questions and runs playbooks (split from T18 on 2026-11-02) | New: use it anywhere | 39 (Slack part) |
+| T22 | Claude | about 6–8 h | Extra: EBITDA by month from synced store data and a seeded, editable cost sheet, a bridge and waterfall page, what-if scenarios, and two agent tools | New: EBITDA calculator. Extends additional data sources and the scenario planner | 48 (extends 25, 32) |
 | T11 | Both | about 2–3 h | Full evals, final README, final Loom | Ship | 10, 11, 16, 45 |
 
 **Order:** set in [priorities.md](priorities.md).
 - **Day 1:** T0–T5. T1's load runs in the background while T2 and T3 are built.
 - **Stretch:** T6, T8 part C, T9; then T7, T8 part D, T10.
-- **Extras:** T12 to T18b, in order.
+- **Extras:** T12 to T18b, in order, then T22.
 - **Last:** T11, whatever has been built.
 - **Cutting:** any ticket after T5 can be cut without breaking what's before it. The cut order is in [priorities.md](priorities.md).
 
@@ -365,6 +366,59 @@ Split out of T18 on 2026-11-02 (Asim). Needs T18, because the bot runs the playb
   - A request with a bad signature is rejected.
   - A channel mapped to Solenne can't read Tidepool.
 - [ ] No new eval case: the playbook case in T18 covers what the bot runs.
+- [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
+
+### T22: EBITDA calculator: cost sheet, bridge and what-if scenarios (about 6–8 hours)
+
+Added 2026-11-03 as feature 48, extending features 25 and 32. The GitHub issue is to be opened. The design is in `docs/superpowers/plans/2026-11-03-ebitda-calculator.md`. It needs no other extra, so it does not wait for T16: it reads T6's ad-spend file and T12's unit costs the way unit economics does, and it exports the default price elasticity (`-1.5`) that T16's scenarios can import.
+
+**Deliverable:** a brand's EBITDA by month from its synced store data plus a seeded, editable cost sheet, with what-if levers to test it. One pure engine does all the arithmetic and feeds both agent tools and the `/ebitda` page, so chat and page show the same figures and every figure names its source. Nothing is written to Shopify.
+
+**What EBITDA means here:** net sales, less cost of goods, card fees, fulfilment, ad spend and operating costs. The subtotal before operating costs is **profit after variable costs**, not "contribution margin", because `get_unit_economics` already uses that name for net sales less cost of goods less ad spend, and two meanings would confuse the agent and the number checker. `get_unit_economics` is left alone.
+
+**Where each line comes from:** net sales, orders and new-customer orders from the synced Shopify orders; cost of goods from the unit cost on each variant times the units kept (today's cost, as in unit economics); ad spend from the ad-spend file, which is not from Shopify; card fees and fulfilment from assumed rates (2.9% of net sales plus 30 cents per order, and $4.50 per order); operating costs from the cost sheet.
+
+**Design notes, not built:**
+
+- A QuickBooks or Xero connection. Operating costs come only from the seeded cost sheet and from edits made on the page.
+- A CSV upload for the cost sheet. The reader written for the seed files could be reused for one later.
+- Tax, interest, depreciation and amortisation lines. EBITDA leaves them out by definition.
+- Forecasting beyond a baseline window, which T16 owns.
+
+**Limits, which the page and the agent state:**
+
+- Card fees and fulfilment are assumed rates, not Shopify data.
+- The seeded cost sheet is invented, and small to match the seeded sales: from August to October 2026 Solenne's net sales averaged about $7,000 a month and Tidepool's about $1,000, so a realistic payroll would swamp them. Solenne's sheet has a software bill that creeps up each quarter, a part-time creative contractor from March 2026 and a one-off shoot in June 2026. In those three months Tidepool spent about 70% of its net sales on ads, and it is meant to show a loss.
+- Cost of goods uses today's unit cost on every sale, not the cost on the day of the sale. Units sold on variants with no unit cost have no cost of goods here.
+- A month with no cost-sheet row, or with units sold on variants that have no unit cost, is a ceiling: costs are missing, so the true EBITDA can only be lower. The agent says so instead of presenting a firm figure.
+- A part month has its operating costs prorated by the days gone. Scenarios use complete months only.
+- Scenarios rest on two assumptions. A price change moves orders by a price elasticity of `-1.5` (a 10% rise loses 15% of orders). Cutting ad spend loses new-customer orders in proportion at today's cost to win a customer, and leaves returning-customer orders alone; without that rule a cut would always look free.
+
+**Steps:**
+
+- [ ] The cost sheet, in two small tables (migration 0009, additive): `operating_costs` by month and category (payroll, software, rent, contractors, other: a closed list, so a cost cannot carry free text into a prompt) and `cost_assumptions` for the card-fee and fulfilment rates. Seeded from `costs.csv` and `cost-assumptions.csv` in each brand's fixtures, written by `seed:generate` and loaded by `npm run fixtures:load`. A reload never overwrites a cell a person has edited.
+- [ ] The engine, `lib/metrics/ebitda.ts`: pure arithmetic with no database or React imports, so the scenario panel can run it in the browser. It builds the bridge from net sales to EBITDA, runs the five-lever what-if, works backwards from a target EBITDA to the order volume needed, and prorates a part month. Money lines are rounded to whole cents and EBITDA is the sum of the rounded lines, so every bridge adds up exactly.
+- [ ] `get_ebitda`: each month in a range (default the last 6 months) with its bridge, its operating-cost lines, a `partial` flag and the source of every line. A ceiling month is flagged and the agent must say so (the same rule as `unitsWithoutCost` in unit economics).
+- [ ] `get_ebitda_scenario`: five levers as fractions (`priceChange`, `adSpendChange`, `unitCostChange`, `volumeChange`, `operatingCostChange`, so a 20% cut is `-0.2`) and an `elasticity` (default `-1.5`), applied to the last N complete months (default 3), with an optional target EBITDA per month that returns the volume change and the orders needed. The assumptions above are in the result's definitions, and the prompt tells the agent to call them assumptions.
+- [ ] Both tools are registered with a label and a prompt bullet each, and their rate fields are added to the number checker, so a fraction such as `ebitdaRate` is read as a percentage.
+- [ ] The `/ebitda` page, for every role, in the sidebar under Track after Pace and in the Ctrl K palette. A bridge table (a row per month, ceilings and part months marked), a waterfall for the chosen month (`?month=YYYY-MM`, default the latest complete month) with a "Show the numbers" table, and receipts that name the source of every line and show the assumed rates. A ceiling month shows why. A disconnected store shows the usual banner.
+- [ ] The scenario panel and the cost-sheet editor, on the same page. The panel has five sliders, an elasticity field marked as an assumption, a "Target EBITDA per month" field that says how many orders it would take, a reset button and a plain-words line on the ad-spend rule; it runs the same engine as the tool, in the browser. The sheet is read-only for a `client_viewer`. A `gc_admin` or `gc_partner` edits a cell or the rates through `PUT /api/ebitda/costs`. An edit is a direct write stamped with who made it and when, not an approval card, because it is the brand's own planning input and nothing goes to Shopify. The brand comes from the session only: a body that names a tenant, an unknown category, or a negative or fractional amount is rejected.
+- [ ] Tests, each named after the failure it guards against, most likely first:
+  - A month with no cost-sheet row is a ceiling with no operating costs, never a silent $0 shown as a firm profit.
+  - A part current month has its operating costs prorated by the days gone, and is flagged.
+  - Extreme levers (ads cut to nothing when every order is new, a baseline with no sales, price down 50%) give no NaN, no negative orders and no division by zero.
+  - A client viewer's edit gets a 403, a body that names a tenant is rejected, and one brand's edit never shows for the other.
+  - Variants with no unit cost carry `unitsWithoutCost` through and make the month a ceiling.
+  - Also: every month's bridge adds up, the figures match `truth.json` and the fixture files, and the number checker reads the new rate fields as rates.
+- [ ] Eval cases in `evals/ebitda-cases.ts`, paid:
+  - `ebitda-solenne-august`: "What was Solenne's EBITDA in August 2026, and what is it made of?" It calls `get_ebitda`, states August's operating costs from `costs.csv`, and says card fees and fulfilment are assumed rates.
+  - `ebitda-ads-cut`: "What happens to our profit if we cut ad spend by 20%?" It calls `get_ebitda_scenario`, says fewer ads lose new-customer orders or that it is an assumption, and does not call the cut free.
+- [ ] **Final check, in this order:**
+  1. `npm run typecheck && npm run lint`.
+  2. `npm test`, the one full run for the ticket (about a minute).
+  3. After asking Asim: `npm run db:migrate` (additive: two new tables), then `npm run fixtures:load -- --store both`.
+  4. Tell Asim the cost first (two cases, about $0.20 to $0.30), then `npm run eval -- --case ebitda-solenne-august --case ebitda-ads-cut`. Report each case's result as it is, including a failure.
+  5. Open `/ebitda` in a browser only if Asim asks.
 - [ ] **Checkpoint:** stop. List the changed files and suggest a commit message for Asim.
 
 ---

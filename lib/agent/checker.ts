@@ -24,7 +24,7 @@ export interface ClaimLedger {
 
 const METRIC_MAPS = new Set(["values", "previous", "change"]);
 const RATE_MAPS = new Set(["pctChange", "share"]);
-const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate", "pctOfExpected", "ordersPctOfExpected", "repeatRateGap", "pctOfMedianUnits", "support", "confidenceAtoB", "confidenceBtoA", "shareOfCustomers", "churnRisk", "avgChurnRisk"]);
+const RATE_KEYS = new Set(["marginRate", "repeatRate", "repeatShare", "contributionMarginRate", "pctOfExpected", "ordersPctOfExpected", "repeatRateGap", "pctOfMedianUnits", "support", "confidenceAtoB", "confidenceBtoA", "shareOfCustomers", "churnRisk", "avgChurnRisk", "ebitdaRate", "profitAfterVariableCostsRate", "cardFeeRate", "priceChange", "adSpendChange", "unitCostChange", "volumeChange", "operatingCostChange"]);
 
 function classify(key: string, parentKey: string | undefined, raw: number): { value: number; unit: ClaimUnit } {
   if (parentKey && METRIC_MAPS.has(parentKey)) {
@@ -34,7 +34,7 @@ function classify(key: string, parentKey: string | undefined, raw: number): { va
     return { value: raw, unit: "count" };
   }
   if ((parentKey && RATE_MAPS.has(parentKey)) || RATE_KEYS.has(key)) return { value: raw * 100, unit: "rate" };
-  if (/Cents$/.test(key)) return { value: raw / 100, unit: "money" };
+  if (/Cents(?:PerOrder)?$/.test(key)) return { value: raw / 100, unit: "money" }; // fulfilmentCentsPerOrder is cents too
   return { value: raw, unit: "count" };
 }
 

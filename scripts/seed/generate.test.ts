@@ -1,9 +1,11 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { COST_CATEGORIES } from "../../lib/ebitda/types";
+import { readFixtureFile } from "../fixtures/load-pace";
 import { AS_OF, SEED, STORES } from "./stores.js";
 import type { Dataset, StoreKey } from "./types.js";
 import { addDays, daysBetween, localDate, localIso } from "./time.js";
 import { metricValue } from "./truth.js";
-import { adSpendRows, datasetHash, generateDataset, planRows, storylineSpecs } from "./generate.js";
+import { adSpendRows, costAssumptionRows, costAssumptionsCsv, costsCsv, datasetHash, generateDataset, operatingCostRows, planRows, storylineSpecs } from "./generate.js";
 
 const sol = { on: undefined as unknown as Dataset, off: undefined as unknown as Dataset };
 const tp = { on: undefined as unknown as Dataset, off: undefined as unknown as Dataset };
@@ -375,5 +377,80 @@ describe("fixtures from the generator", () => {
     expect(cut).toBeGreaterThan(0.33);
     expect(cut).toBeLessThan(0.47);
     expect(rows.every((r) => Number.isInteger(r.spend) && r.spend >= 0)).toBe(true);
+  });
+});
+
+describe("cost sheet fixtures", () => {
+  const months = (rows: { month: string }[]) => [...new Set(rows.map((r) => r.month))];
+
+  it("operatingCostRows: one row per month and category from the store's first month to asOf's month, none after", () => {
+    for (const [store, first, count] of [
+      ["solenne", "2025-09", 14],
+      ["tidepool", "2025-11", 12],
+    ] as const) {
+      const rows = operatingCostRows(store, AS_OF, true);
+      const seen = months(rows);
+      expect(seen).toHaveLength(count);
+      expect(seen[0]).toBe(first);
+      expect(seen[seen.length - 1]).toBe("2026-10");
+      expect(seen).toEqual([...seen].sort());
+      expect(new Set(rows.map((r) => `${r.month}|${r.category}`)).size).toBe(rows.length);
+    }
+    // An earlier as-of stops at its own month, and one before the store opened has no rows.
+    expect(months(operatingCostRows("solenne", "2026-03-15", true)).at(-1)).toBe("2026-03");
+    expect(operatingCostRows("tidepool", "2025-10-31", true)).toEqual([]);
+  });
+
+  it("operatingCostRows is deterministic and every amount is a whole number of cents >= 0", () => {
+    for (const store of ["solenne", "tidepool"] as const) {
+      for (const storylines of [true, false]) {
+        const rows = operatingCostRows(store, AS_OF, storylines);
+        expect(operatingCostRows(store, AS_OF, storylines)).toEqual(rows);
+        expect(rows.every((r) => Number.isInteger(r.amountCents) && r.amountCents >= 0)).toBe(true);
+        expect(rows.every((r) => (COST_CATEGORIES as readonly string[]).includes(r.category))).toBe(true);
+      }
+    }
+  });
+
+  it("without storylines Solenne has software only, flat at 25000", () => {
+    const rows = operatingCostRows("solenne", AS_OF, false);
+    expect(rows).toHaveLength(14);
+    expect(rows.every((r) => r.category === "software" && r.amountCents === 25000)).toBe(true);
+  });
+
+  it("Solenne's cost storylines: software steps up in 2026-01, 04, 07 and 10, a contractor starts in 2026-03, one shoot in 2026-06", () => {
+    const rows = operatingCostRows("solenne", AS_OF, true);
+    const of = (category: string) => rows.filter((r) => r.category === category);
+    const software = of("software");
+    expect(software.filter((r, i) => i > 0 && r.amountCents > software[i - 1]!.amountCents).map((r) => r.month)).toEqual(["2026-01", "2026-04", "2026-07", "2026-10"]);
+    expect(software.every((r, i) => i === 0 || r.amountCents >= software[i - 1]!.amountCents)).toBe(true); // it creeps up and never falls
+    expect(months(of("contractors"))).toEqual(["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]);
+    expect(months(of("other"))).toEqual(["2026-06"]);
+    expect(new Set(rows.map((r) => r.category))).toEqual(new Set(["software", "contractors", "other"]));
+  });
+
+  it("Tidepool has software only, flat, with or without storylines", () => {
+    for (const storylines of [true, false]) {
+      const rows = operatingCostRows("tidepool", AS_OF, storylines);
+      expect(rows.every((r) => r.category === "software")).toBe(true);
+      expect(new Set(rows.map((r) => r.amountCents)).size).toBe(1);
+    }
+  });
+
+  it("costAssumptionRows lists the same three rates for both stores", () => {
+    for (const store of ["solenne", "tidepool"] as const) {
+      expect(costAssumptionRows(store)).toEqual([
+        { key: "card_fee_bps", value: 290 },
+        { key: "card_fee_fixed_cents", value: 30 },
+        { key: "fulfilment_cents_per_order", value: 450 },
+      ]);
+    }
+  });
+
+  it("the checked-in costs.csv and cost-assumptions.csv match what the generator writes", () => {
+    for (const store of ["solenne", "tidepool"] as const) {
+      expect(readFixtureFile(store, "costs.csv")).toBe(costsCsv(store, AS_OF, true));
+      expect(readFixtureFile(store, "cost-assumptions.csv")).toBe(costAssumptionsCsv(store));
+    }
   });
 });

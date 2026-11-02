@@ -30,7 +30,7 @@ interface CsvRow {
 }
 
 // The fixtures have no quoted cells. Comment lines (the FICTIONAL SAMPLE line) and blank lines are skipped.
-function readRows(text: string, header: readonly string[]): CsvRow[] {
+export function readRows(text: string, header: readonly string[]): CsvRow[] {
   const rows: CsvRow[] = [];
   let sawHeader = false;
   text.split("\n").forEach((raw, i) => {

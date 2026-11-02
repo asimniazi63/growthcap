@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, date, doublePrecision, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { EncryptedSecret } from "../crypto/secrets";
+import type { CostSource } from "../ebitda/types";
 import type { ViewSourceRef } from "../views/types";
 
 // One row per client brand, made only by `npm run tenant:create -- --org <orgId>`. orgId is the Clerk organization id.
@@ -298,6 +299,34 @@ export const planTargets = pgTable(
   },
   (t) => [primaryKey({ columns: [t.tenantId, t.planId, t.month, t.metric] })],
 );
+
+// ---- EBITDA cost sheet. A brand's operating costs by month and category, and the rates behind its card fees and fulfilment cost.
+// They are planning inputs, not Shopify data: seeded from fixtures/<store>/costs.csv and cost-assumptions.csv, then editable by
+// Growth Capital roles. Reloading the files replaces only the cells whose source is "fixture", so a typed-in cell is never overwritten.
+export const operatingCosts = pgTable(
+  "operating_costs",
+  {
+    tenantId: tenantRef(),
+    month: text("month").notNull(), // YYYY-MM
+    category: text("category").notNull(), // one of COST_CATEGORIES (lib/ebitda/types.ts), checked by the file parser and the edit endpoint
+    amountCents: integer("amount_cents").notNull(),
+    source: text("source").$type<CostSource>().notNull(),
+    updatedBy: text("updated_by"), // the Clerk user who typed the cell in; null for a fixture row
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.month, t.category] })],
+);
+
+// One row per brand. With no row, the defaults in lib/ebitda/types.ts apply.
+export const costAssumptions = pgTable("cost_assumptions", {
+  tenantId: tenantRef().primaryKey(),
+  cardFeeBps: integer("card_fee_bps").notNull(), // basis points of net sales: 290 is 2.9%
+  cardFeeFixedCents: integer("card_fee_fixed_cents").notNull(), // per order
+  fulfilmentCentsPerOrder: integer("fulfilment_cents_per_order").notNull(),
+  source: text("source").$type<CostSource>().notNull(),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ---- Saved views, threads and memories (T6).
 // A pinned view keeps what re-runs it (the tool and its input), never the data, so it is fresh every time it loads.

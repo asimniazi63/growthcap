@@ -7,6 +7,8 @@
 //  - Ids are stable generator ids: P_001 (product), V_001 (variant), COL_01 (collection), LOC_01 (location),
 //    CUST_8f3a19c2 (customer: "CUST_" + 8 hex), O_00001 (order), R_00001 (refund).
 
+import type { CostCategory } from "../../lib/ebitda/types";
+
 export type StoreKey = "solenne" | "tidepool";
 
 export type Persona = "loyalist" | "regular" | "one_and_done" | "deal_seeker" | "gifter" | "wholesale";
@@ -157,4 +159,17 @@ export interface AdSpendRow {
   date: string;
   channel: "meta" | "google" | "tiktok";
   spend: number; // cents
+}
+
+// fixtures/<store>/costs.csv: one row per month and cost category. The file's column is `amount`, in whole cents.
+export interface CostRow {
+  month: string; // "YYYY-MM"
+  category: CostCategory;
+  amountCents: number;
+}
+
+// fixtures/<store>/cost-assumptions.csv: one row per rate behind the card-fee and fulfilment lines.
+export interface CostAssumptionRow {
+  key: string; // card_fee_bps, card_fee_fixed_cents or fulfilment_cents_per_order
+  value: number; // a whole number: basis points or cents
 }

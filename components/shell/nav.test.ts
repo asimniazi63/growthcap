@@ -6,12 +6,20 @@ const hrefs = (gc: boolean) => navGroups(gc).flatMap((g) => g.items.map((i) => i
 
 describe("navGroups: the sidebar only links to pages the person may open", () => {
   it("shows Growth Capital staff every page, including the ones that are theirs alone", () => {
-    expect(hrefs(true)).toEqual(["/overview", "/chat", "/pace", "/portfolio", "/briefs", "/audit", "/playbooks", "/segments", "/plan", "/actions"]);
+    expect(hrefs(true)).toEqual(["/overview", "/chat", "/pace", "/ebitda", "/portfolio", "/briefs", "/audit", "/playbooks", "/segments", "/plan", "/actions"]);
   });
 
   it("hides Portfolio, Audit, Playbooks, Segments, Plan and Actions from everyone else, and drops the group that would be empty", () => {
-    expect(hrefs(false)).toEqual(["/overview", "/chat", "/pace", "/briefs"]);
+    expect(hrefs(false)).toEqual(["/overview", "/chat", "/pace", "/ebitda", "/briefs"]);
     expect(navGroups(false).map((g) => g.label)).toEqual(["", "Ask", "Track"]);
+  });
+
+  it("offers EBITDA to every role, straight after Pace: a client viewer can read the page, and only the cost sheet on it is locked", () => {
+    for (const gc of [true, false]) {
+      const list = hrefs(gc);
+      expect(list.indexOf("/ebitda")).toBe(list.indexOf("/pace") + 1);
+    }
+    expect(GC_ONLY_PAGES).not.toContain("/ebitda");
   });
 
   it("hides exactly the pages in the shared Growth-Capital-only list, which the command palette also reads", () => {

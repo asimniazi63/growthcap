@@ -9,6 +9,8 @@ import { askDocumentTool } from "../plan-in/ask-tool";
 import { getBundleCandidatesTool } from "../tools/bundles";
 import { getCohortsTool } from "../tools/cohorts";
 import { getCustomerSegmentsTool } from "../tools/customer-segments";
+import { getEbitdaTool } from "../tools/ebitda";
+import { getEbitdaScenarioTool } from "../tools/ebitda-scenario";
 import { getLaunchCurvesTool } from "../tools/launch-curves";
 import { getPromoPostmortemTool } from "../tools/promo-postmortem";
 import { getUnitEconomicsTool } from "../tools/unit-economics";
@@ -66,6 +68,8 @@ export const TOOL_DEFS: Record<string, ToolDef> = {
   ask_document: askDocumentTool as unknown as ToolDef,
   get_cohorts: getCohortsTool as unknown as ToolDef,
   get_unit_economics: getUnitEconomicsTool as unknown as ToolDef,
+  get_ebitda: getEbitdaTool as unknown as ToolDef,
+  get_ebitda_scenario: getEbitdaScenarioTool as unknown as ToolDef,
   get_promo_postmortem: getPromoPostmortemTool as unknown as ToolDef,
   get_customer_segments: getCustomerSegmentsTool as unknown as ToolDef,
   get_zero_sales_days: getZeroSalesDaysTool as unknown as ToolDef,

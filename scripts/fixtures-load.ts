@@ -1,11 +1,12 @@
 // `npm run fixtures:load -- [--store solenne|tidepool|both] [--check]`
-// Loads each store's plan.csv, ad-spend.csv, calendar.csv and call-notes/*.md into the brand's tenant in the database
-// (.env.local's DATABASE_URL). Safe to run again: the same files leave the same rows. `--check` only reads and validates the
-// files, and writes nothing.
+// Loads each store's plan.csv, ad-spend.csv, calendar.csv, costs.csv, cost-assumptions.csv and call-notes/*.md into the brand's
+// tenant in the database (.env.local's DATABASE_URL). Safe to run again: the same files leave the same rows, and a cost sheet cell
+// a person edited is never overwritten. `--check` only reads and validates the files, and writes nothing.
 import { existsSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { getDb } from "../lib/db/client";
 import { shopConnections } from "../lib/db/schema";
+import { loadCostAssumptions, loadCosts, parseCostAssumptions, parseCosts } from "./fixtures/load-costs";
 import { loadAdSpend, loadPlan, parseAdSpend, parsePlan, readFixtureFile } from "./fixtures/load-pace";
 import { loadCalendar, loadCallNotes, parseCalendar, parseCallNotes, readCallNoteFiles } from "./fixtures/load-why";
 import { STORES } from "./seed/stores.js";
@@ -27,10 +28,13 @@ async function main(): Promise<void> {
     const plan = readFixtureFile(store, "plan.csv");
     const spend = readFixtureFile(store, "ad-spend.csv");
     const calendar = readFixtureFile(store, "calendar.csv");
+    const costs = readFixtureFile(store, "costs.csv");
+    const rates = readFixtureFile(store, "cost-assumptions.csv");
     const noteFiles = readCallNoteFiles(store);
     if (checkOnly) {
+      parseCostAssumptions(rates); // throws, naming the line, if a rate is missing, unknown or not a whole number
       console.log(
-        `${store}: plan ${new Set(parsePlan(plan).map((t) => t.month)).size} months, ad spend ${parseAdSpend(spend).length} rows, calendar ${parseCalendar(calendar).length} events, call notes ${parseCallNotes(noteFiles).length}: files are valid, nothing written.`,
+        `${store}: plan ${new Set(parsePlan(plan).map((t) => t.month)).size} months, ad spend ${parseAdSpend(spend).length} rows, calendar ${parseCalendar(calendar).length} events, call notes ${parseCallNotes(noteFiles).length}, costs ${parseCosts(costs).length} rows: files are valid, nothing written.`,
       );
       continue;
     }
@@ -42,7 +46,9 @@ async function main(): Promise<void> {
     const a = await loadAdSpend(db, conn.tenantId, spend);
     const c = await loadCalendar(db, conn.tenantId, calendar);
     const n = await loadCallNotes(db, conn.tenantId, noteFiles);
-    console.log(`${store}: plan ${p.months} months, ad spend ${a.rows} rows, calendar ${c.events} events, call notes ${n.notes} loaded.`);
+    const k = await loadCosts(db, conn.tenantId, costs);
+    await loadCostAssumptions(db, conn.tenantId, rates);
+    console.log(`${store}: plan ${p.months} months, ad spend ${a.rows} rows, calendar ${c.events} events, call notes ${n.notes}, costs ${k.rows} rows loaded.`);
   }
   process.exit(0);
 }

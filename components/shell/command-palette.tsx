@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, useOrganizationList } from "@clerk/nextjs";
-import { BookOpenCheck, Building2, CornerDownLeft, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Search, Settings, Sparkles, UsersRound, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, Building2, Calculator, CornerDownLeft, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Search, Settings, Sparkles, UsersRound, type LucideIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from "react";
@@ -44,6 +44,7 @@ const PAGES: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/chat", label: "Chat", icon: MessagesSquare },
   { href: "/pace", label: "Pace", icon: Gauge },
+  { href: "/ebitda", label: "EBITDA", icon: Calculator },
   { href: "/portfolio", label: "Portfolio", icon: LayoutGrid },
   { href: "/briefs", label: "Briefs", icon: Newspaper },
   { href: "/audit", label: "Audit", icon: ScanSearch },

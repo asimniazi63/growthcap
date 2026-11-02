@@ -5,6 +5,7 @@ import type { ViewData } from "../lib/views/types";
 import { readFixtureFile } from "../scripts/fixtures/load-pace";
 import { metricValue, monthPeriod } from "../scripts/seed/truth.js";
 import { CORE_CASES } from "./core-cases";
+import { EBITDA_CASES } from "./ebitda-cases";
 import { LANDING_CASES } from "./landing-cases";
 import { T12_CASES } from "./t12-cases";
 import { T13_CALLNOTE_CASES } from "./t13-callnote-cases";
@@ -130,4 +131,5 @@ export const CASES: EvalCase[] = [
   ...T14_CASES,
   ...T17_CASES,
   ...T18_CASES,
+  ...EBITDA_CASES,
 ];

@@ -15,6 +15,8 @@ const TOOL_NAMES: Record<string, string> = {
   get_notes: "Call notes",
   get_cohorts: "Customer cohorts",
   get_unit_economics: "Unit economics",
+  get_ebitda: "EBITDA",
+  get_ebitda_scenario: "EBITDA what-if",
   get_promo_postmortem: "Promotion results",
   get_customer_segments: "Customer segments",
   get_launch_curves: "Launch curves",
