@@ -2,9 +2,12 @@ import { AppError } from "../errors";
 import type { MetricRow, QueryMetricInput } from "../metrics/query";
 import { METRICS, type MetricId } from "../metrics/registry";
 import { PLAN_METRICS } from "../pace/metrics";
+import type { BundleCandidatesData, GetBundleCandidatesInput } from "../tools/bundles";
 import type { CohortsData, GetCohortsInput } from "../tools/cohorts";
+import type { GetLaunchCurvesInput, LaunchCurvesData } from "../tools/launch-curves";
+import type { GetPromoPostmortemInput, PromoPostmortemData } from "../tools/promo-postmortem";
 import type { ToolResult } from "../tools/result";
-import { VIEW_COMPONENTS, type Basis, type CohortRow, type GaugeItem, type KpiCard, type TableColumn, type ViewComponent, type ViewData } from "./types";
+import { BUNDLE_MAX_PRODUCTS, BUNDLE_THIN_ORDERS, VIEW_COMPONENTS, type Basis, type BundlePair, type BundleProduct, type CohortRow, type GaugeItem, type KpiCard, type TableColumn, type ViewComponent, type ViewData } from "./types";
 
 // Turns tool results into what a component draws. The numbers are copied from the results; nothing here accepts a value
 // from the model. Used when the model asks for a view, and again when a pinned view re-runs its queries.
@@ -14,13 +17,32 @@ export interface MetricViewSource {
   input: QueryMetricInput;
   result: ToolResult<MetricRow[]>;
 }
-// The cohort grid is drawn from get_cohorts, the only other tool a view can be drawn from.
+// The other four views each draw one tool's result: the cohort grid from get_cohorts, the lift and dip from
+// get_promo_postmortem, the launch curves from get_launch_curves and the bundle matrix from get_bundle_candidates.
 export interface CohortViewSource {
   tool: "get_cohorts";
   input: GetCohortsInput;
   result: ToolResult<CohortsData>;
 }
-export type ViewSource = MetricViewSource | CohortViewSource;
+export interface PromoViewSource {
+  tool: "get_promo_postmortem";
+  input: GetPromoPostmortemInput;
+  result: ToolResult<PromoPostmortemData>;
+}
+export interface LaunchViewSource {
+  tool: "get_launch_curves";
+  input: GetLaunchCurvesInput;
+  result: ToolResult<LaunchCurvesData>;
+}
+export interface BundleViewSource {
+  tool: "get_bundle_candidates";
+  input: GetBundleCandidatesInput;
+  result: ToolResult<BundleCandidatesData>;
+}
+export type ViewSource = MetricViewSource | CohortViewSource | PromoViewSource | LaunchViewSource | BundleViewSource;
+
+// The tools a view can be drawn from, and the one component that draws each tool other than query_metric.
+export const VIEW_SOURCE_TOOLS = ["query_metric", "get_cohorts", "get_promo_postmortem", "get_launch_curves", "get_bundle_candidates"] as const;
 
 const TIME_DIMS = new Set(["day", "week", "month"]);
 const bad = (message: string): never => {
@@ -49,8 +71,11 @@ export function buildView(component: ViewComponent, sources: ViewSource[]): View
   if (!(VIEW_COMPONENTS as readonly string[]).includes(component)) bad(`component must be one of ${VIEW_COMPONENTS.join(", ")}.`);
   if (sources.length === 0) bad("Give at least one result to draw (a query id from this turn).");
   if (component === "cohort") return buildCohort(sources);
+  if (component === "lift_dip") return buildLiftDip(sources);
+  if (component === "launch_curves") return buildLaunchCurves(sources);
+  if (component === "bundle_matrix") return buildBundleMatrix(sources);
   const metricSources = sources.filter((s): s is MetricViewSource => s.tool === "query_metric");
-  if (metricSources.length !== sources.length) bad("Views are drawn from query_metric results only (a cohort grid from a get_cohorts result).");
+  if (metricSources.length !== sources.length) bad("A kpi, line, bar, table, gauge or waterfall is drawn from query_metric results only (a cohort grid from get_cohorts, lift_dip from get_promo_postmortem, launch_curves from get_launch_curves, bundle_matrix from get_bundle_candidates).");
   return buildMetricView(component, metricSources);
 }
 
@@ -70,6 +95,109 @@ function buildCohort(sources: ViewSource[]): ViewData {
   for (const r of rows) r.cells.sort((a, b) => a.monthsSince - b.monthsSince);
   const windowMonths = [...new Set(cells.map((c) => c.monthsSince))].sort((a, b) => a - b);
   return { component: "cohort", windowMonths, rows, ...(first.input.firstOrderCode ? { firstOrderCode: first.input.firstOrderCode } : {}), ...basisOf(sources) };
+}
+
+// Net sales over days, to the cent. The result gives the baseline's own daily rate; the window and the days after get theirs this way.
+const perDay = (cents: number, days: number) => (days > 0 ? Math.round(cents / days) : 0);
+
+// The promo post-mortem as three level bars (before, during, after). Every figure is a field of the result.
+function buildLiftDip(sources: ViewSource[]): ViewData {
+  const first = sources[0]!;
+  if (sources.length !== 1 || first.tool !== "get_promo_postmortem") return bad("A lift_dip draws one get_promo_postmortem result; give one queryRef.");
+  const d = first.result.data;
+  return {
+    component: "lift_dip",
+    ...(d.code ? { code: d.code } : {}),
+    baseline: { from: d.baseline.from, to: d.baseline.to, days: d.baseline.days, netSalesCents: d.baseline.netSalesCents, perDayCents: d.baseline.netSalesPerDayCents },
+    window: { from: d.window.from, to: d.window.to, days: d.window.days, netSalesCents: d.during.netSalesCents, perDayCents: perDay(d.during.netSalesCents, d.window.days), expectedNetSalesCents: d.expected.netSalesCents },
+    after: {
+      from: d.after.from,
+      to: d.after.to,
+      daysObserved: d.after.daysObserved,
+      fullyObserved: d.after.fullyObserved,
+      netSalesCents: d.after.netSalesCents,
+      perDayCents: perDay(d.after.netSalesCents, d.after.daysObserved),
+      expectedNetSalesCents: d.after.expectedNetSalesCents,
+    },
+    extraNetSalesCents: d.extra.netSalesCents,
+    pulledForwardNetSalesCents: d.after.pulledForwardNetSalesCents,
+    netLiftNetSalesCents: d.netLift.netSalesCents,
+    customers: {
+      repeatWindowDays: d.customers.repeatWindowDays,
+      promo: { cohortCustomers: d.customers.promoCohort.cohortCustomers, customers: d.customers.promoCohort.customers, repeatRate: d.customers.promoCohort.repeatRate },
+      comparison: { cohortCustomers: d.customers.comparison.cohortCustomers, customers: d.customers.comparison.customers, repeatRate: d.customers.comparison.repeatRate },
+      repeatRateGap: d.customers.repeatRateGap,
+    },
+    ...(d.caveats ? { caveats: d.caveats } : {}),
+    ...basisOf(sources),
+  };
+}
+
+const MAX_LAUNCH_CARDS = 12;
+const GONE = "A product no longer in the catalogue";
+
+// One small curve per launch, newest first, against the median launch. Nothing is refused for being empty: a pinned view of a
+// store with no launches should say so, not fail.
+function buildLaunchCurves(sources: ViewSource[]): ViewData {
+  const first = sources[0]!;
+  if (sources.length !== 1 || first.tool !== "get_launch_curves") return bad("A launch_curves chart draws one get_launch_curves result; give one queryRef.");
+  const d = first.result.data;
+  const shown = d.launches.slice(0, MAX_LAUNCH_CARDS);
+  const total = Math.max(first.result.truncated?.total ?? 0, d.launches.length);
+  return {
+    component: "launch_curves",
+    benchmark: d.benchmark.map((b) => ({ week: b.week, medianCumulativeUnits: b.medianCumulativeUnits, launches: b.launches })),
+    launches: shown.map((l) => ({
+      title: l.untrusted.product ?? GONE,
+      launchDate: l.launchDate,
+      daysObserved: l.daysObserved,
+      fullyObserved: l.fullyObserved,
+      totalUnits: l.totalUnits,
+      weeks: l.weeks.map((w) => ({ week: w.week, daysObserved: w.daysObserved, units: w.units, cumulativeUnits: w.cumulativeUnits })),
+    })),
+    ...(shown.length < total ? { truncated: { shown: shown.length, total } } : {}),
+    ...(d.caveats ? { caveats: d.caveats } : {}),
+    ...basisOf(sources),
+  };
+}
+
+// The pairs as a matrix over the products they involve. The axis holds the BUNDLE_MAX_PRODUCTS products that share the most
+// orders with the others listed; a pair between two products that made the axis is drawn, and the rest are counted in `omitted`.
+function buildBundleMatrix(sources: ViewSource[]): ViewData {
+  const first = sources[0]!;
+  if (sources.length !== 1 || first.tool !== "get_bundle_candidates") return bad("A bundle_matrix draws one get_bundle_candidates result; give one queryRef.");
+  const d = first.result.data;
+  const seen = new Map<string, BundleProduct>();
+  const note = (id: string, title: string, orders: number, together: number) => {
+    const p = seen.get(id) ?? { title, orders, sharedOrders: 0 };
+    p.sharedOrders += together;
+    seen.set(id, p);
+  };
+  for (const p of d.pairs) {
+    note(p.productAId, p.untrusted.productA, p.ordersA, p.ordersTogether);
+    note(p.productBId, p.untrusted.productB, p.ordersB, p.ordersTogether);
+  }
+  const ranked = [...seen].sort(([ia, a], [ib, b]) => b.sharedOrders - a.sharedOrders || a.title.localeCompare(b.title) || (ia < ib ? -1 : ia > ib ? 1 : 0)).slice(0, BUNDLE_MAX_PRODUCTS);
+  const index = new Map(ranked.map(([id], i) => [id, i]));
+  const pairs: BundlePair[] = [];
+  for (const p of d.pairs) {
+    const x = index.get(p.productAId);
+    const y = index.get(p.productBId);
+    if (x === undefined || y === undefined) continue;
+    const common = { ordersTogether: p.ordersTogether, lift: p.lift, thin: p.ordersTogether < BUNDLE_THIN_ORDERS };
+    pairs.push(x < y ? { a: x, b: y, confidenceAtoB: p.confidenceAtoB, confidenceBtoA: p.confidenceBtoA, ...common } : { a: y, b: x, confidenceAtoB: p.confidenceBtoA, confidenceBtoA: p.confidenceAtoB, ...common });
+  }
+  const hiddenPairs = d.pairs.length - pairs.length;
+  return {
+    component: "bundle_matrix",
+    ordersInRange: d.ordersInRange,
+    products: ranked.map(([, p]) => p),
+    pairs,
+    ...(hiddenPairs > 0 ? { omitted: { pairs: hiddenPairs, products: seen.size - ranked.length } } : {}),
+    ...(first.result.truncated ? { truncated: first.result.truncated } : {}),
+    ...(d.caveats ? { caveats: d.caveats } : {}),
+    ...basisOf(sources),
+  };
 }
 
 function buildMetricView(component: ViewComponent, sources: MetricViewSource[]): ViewData {
@@ -157,6 +285,9 @@ function buildMetricView(component: ViewComponent, sources: MetricViewSource[]):
     }
 
     case "cohort":
-      return bad("A cohort grid is drawn from a get_cohorts result.");
+    case "lift_dip":
+    case "launch_curves":
+    case "bundle_matrix":
+      return bad(`A ${component} is drawn from its own tool's result, not from query_metric.`);
   }
 }

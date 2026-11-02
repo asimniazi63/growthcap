@@ -5,10 +5,13 @@ import { isUuid } from "../ids";
 import { savedViews } from "../db/schema";
 import { AppError } from "../errors";
 import { queryMetric, queryMetricInputSchema } from "../metrics/query";
+import { getBundleCandidates, getBundleCandidatesInputSchema } from "../tools/bundles";
 import { getCohorts, getCohortsInputSchema } from "../tools/cohorts";
 import type { TenantContext } from "../tenancy/context";
 import { dbFor, parseInput } from "../tools/common";
-import { buildView, type ViewSource } from "./build";
+import { getLaunchCurves, getLaunchCurvesInputSchema } from "../tools/launch-curves";
+import { getPromoPostmortem, getPromoPostmortemInputSchema } from "../tools/promo-postmortem";
+import { buildView, VIEW_SOURCE_TOOLS, type ViewSource } from "./build";
 import { VIEW_COMPONENTS, type ViewComponent, type ViewData, type ViewSourceRef } from "./types";
 
 // Pinned views. A person pins a view they liked in the chat; what is kept is the tool and its input, so every load re-runs
@@ -19,7 +22,7 @@ export const MAX_SAVED_VIEWS = 12;
 const pinInput = z.strictObject({
   title: z.string().trim().min(1).max(80),
   component: z.enum(VIEW_COMPONENTS),
-  sources: z.array(z.strictObject({ tool: z.enum(["query_metric", "get_cohorts"]), input: z.unknown() })).min(1).max(3),
+  sources: z.array(z.strictObject({ tool: z.enum(VIEW_SOURCE_TOOLS), input: z.unknown() })).min(1).max(3),
 });
 export type PinInput = z.input<typeof pinInput>;
 
@@ -36,14 +39,35 @@ export interface SavedView {
 export async function runSources(ctx: TenantContext, sources: ViewSourceRef[], deps: { db?: Db } = {}): Promise<ViewSource[]> {
   const out: ViewSource[] = [];
   for (const s of sources) {
-    if (s.tool === "get_cohorts") {
-      const input = parseInput(getCohortsInputSchema, s.input);
-      out.push({ tool: "get_cohorts", input, result: await getCohorts(ctx, input, deps) });
-      continue;
+    switch (s.tool) {
+      case "get_cohorts": {
+        const input = parseInput(getCohortsInputSchema, s.input);
+        out.push({ tool: "get_cohorts", input, result: await getCohorts(ctx, input, deps) });
+        break;
+      }
+      case "get_promo_postmortem": {
+        const input = parseInput(getPromoPostmortemInputSchema, s.input);
+        out.push({ tool: "get_promo_postmortem", input, result: await getPromoPostmortem(ctx, input, deps) });
+        break;
+      }
+      case "get_launch_curves": {
+        const input = parseInput(getLaunchCurvesInputSchema, s.input);
+        out.push({ tool: "get_launch_curves", input, result: await getLaunchCurves(ctx, input, deps) });
+        break;
+      }
+      case "get_bundle_candidates": {
+        const input = parseInput(getBundleCandidatesInputSchema, s.input);
+        out.push({ tool: "get_bundle_candidates", input, result: await getBundleCandidates(ctx, input, deps) });
+        break;
+      }
+      case "query_metric": {
+        const input = parseInput(queryMetricInputSchema, s.input);
+        out.push({ tool: "query_metric", input, result: await queryMetric(ctx, input, deps) });
+        break;
+      }
+      default:
+        throw new AppError("INVALID_INPUT", `Views are drawn from ${VIEW_SOURCE_TOOLS.join(", ")} results only.`);
     }
-    if (s.tool !== "query_metric") throw new AppError("INVALID_INPUT", "Views are drawn from query_metric results (a cohort grid from get_cohorts) only.");
-    const input = parseInput(queryMetricInputSchema, s.input);
-    out.push({ tool: "query_metric", input, result: await queryMetric(ctx, input, deps) });
   }
   return out;
 }

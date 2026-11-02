@@ -3,8 +3,11 @@ import type { ReactNode } from "react";
 import { PaceTrack } from "@/components/pace/pace-track";
 import { formatGap, formatMove, formatRange, formatUnit } from "@/lib/pace/format";
 import type { CohortRow, GaugeItem, KpiCard, ViewData } from "@/lib/views/types";
+import { BundleMatrix } from "./bundle-matrix";
+import { LaunchCurves } from "./launch-curves";
+import { LiftDip } from "./lift-dip";
 
-// The seven components a chat answer can draw. Each is plain server-safe markup (no chart library), with a label that gives
+// The ten components a chat answer can draw (the last three each have a file of their own). Each is plain server-safe markup (no chart library), with a label that gives
 // the figures to a screen reader and a table of the numbers behind every chart. Every figure comes from `data`, which the
 // server built from tool results; store text (a product title) is only ever rendered as text.
 
@@ -424,6 +427,24 @@ export function ViewRenderer({ data, title, currency }: { data: ViewData; title:
       return (
         <Frame title={title} data={data}>
           <Cohort data={data} />
+        </Frame>
+      );
+    case "lift_dip":
+      return (
+        <Frame title={title} data={data}>
+          <LiftDip data={data} currency={currency} />
+        </Frame>
+      );
+    case "launch_curves":
+      return (
+        <Frame title={title} data={data}>
+          <LaunchCurves data={data} />
+        </Frame>
+      );
+    case "bundle_matrix":
+      return (
+        <Frame title={title} data={data}>
+          <BundleMatrix data={data} />
         </Frame>
       );
   }

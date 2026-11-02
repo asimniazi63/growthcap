@@ -1,8 +1,8 @@
 import type { PlanGap } from "../pace/gap";
 import type { MetricId, MetricUnit } from "../metrics/registry";
 
-// The seven components a chat answer can draw. The set is closed: render_view rejects anything else.
-export const VIEW_COMPONENTS = ["kpi", "line", "bar", "table", "gauge", "waterfall", "cohort"] as const;
+// The ten components a chat answer can draw. The set is closed: render_view rejects anything else.
+export const VIEW_COMPONENTS = ["kpi", "line", "bar", "table", "gauge", "waterfall", "cohort", "lift_dip", "launch_curves", "bundle_matrix"] as const;
 export type ViewComponent = (typeof VIEW_COMPONENTS)[number];
 
 export interface Basis {
@@ -49,6 +49,62 @@ export interface CohortRow {
   cells: { monthsSince: number; customers: number; repeaters: number; repeatShare: number | null }[];
 }
 
+// get_promo_postmortem as three level bars: the average day before the window, in it, and after it. The result has period totals
+// and per-day rates, not a daily series, so nothing here is a daily curve. Money is in cents. Every field is copied from the
+// result except the two `perDayCents` for the window and the days after, which are the period's net sales over its days (the
+// baseline's own rate comes with the result).
+export interface LiftDipData {
+  code?: string; // store text
+  baseline: { from: string; to: string; days: number; netSalesCents: number; perDayCents: number };
+  window: { from: string; to: string; days: number; netSalesCents: number; perDayCents: number; expectedNetSalesCents: number };
+  after: { from: string; to: string; daysObserved: number; fullyObserved: boolean; netSalesCents: number; perDayCents: number; expectedNetSalesCents: number };
+  extraNetSalesCents: number; // window minus expected; negative when the window sold less than the baseline pace
+  pulledForwardNetSalesCents: number; // never below 0
+  netLiftNetSalesCents: number; // extra minus pulled forward
+  customers: {
+    repeatWindowDays: number;
+    promo: { cohortCustomers: number; customers: number; repeatRate: number | null };
+    comparison: { cohortCustomers: number; customers: number; repeatRate: number | null };
+    repeatRateGap: number | null;
+  };
+  caveats?: string[];
+}
+
+// get_launch_curves as small multiples. Each launch's weeks carry the cumulative units of the result; a week with fewer than
+// seven days observed is a partial one.
+export interface LaunchCard {
+  title: string; // store text, or "Untitled product"
+  launchDate: string;
+  daysObserved: number;
+  fullyObserved: boolean;
+  totalUnits: number;
+  weeks: { week: number; daysObserved: number; units: number; cumulativeUnits: number }[];
+}
+export interface LaunchBenchmarkWeek {
+  week: number;
+  medianCumulativeUnits: number;
+  launches: number;
+}
+
+// get_bundle_candidates as a heat matrix. `products` are the products in the pairs drawn, most shared orders first; a pair
+// points at two of them by index (a < b). confidenceAtoB is the share of orders with products[a] that also had products[b].
+export const BUNDLE_THIN_ORDERS = 8; // fewer orders together than this is a thin signal
+export const BUNDLE_MAX_PRODUCTS = 12;
+export interface BundleProduct {
+  title: string; // store text
+  orders: number; // orders that hold this product
+  sharedOrders: number; // orders together summed over the pairs listed with it: what the axis is ordered by
+}
+export interface BundlePair {
+  a: number;
+  b: number;
+  ordersTogether: number;
+  confidenceAtoB: number;
+  confidenceBtoA: number;
+  lift: number;
+  thin: boolean;
+}
+
 export type ViewData =
   | ({ component: "kpi"; cards: KpiCard[] } & Basis)
   | ({ component: "gauge"; gauges: GaugeItem[] } & Basis)
@@ -56,6 +112,9 @@ export type ViewData =
   | ({ component: "bar"; metric: MetricId; label: string; unit: MetricUnit; dimension: string; bars: { label: string; value: number; share?: number }[]; truncated?: { shown: number; total: number } } & Basis)
   | ({ component: "table"; columns: TableColumn[]; rows: Record<string, string | number | null>[]; truncated?: { shown: number; total: number } } & Basis)
   | ({ component: "cohort"; windowMonths: number[]; rows: CohortRow[]; firstOrderCode?: string } & Basis)
+  | ({ component: "lift_dip" } & LiftDipData & Basis)
+  | ({ component: "launch_curves"; benchmark: LaunchBenchmarkWeek[]; launches: LaunchCard[]; truncated?: { shown: number; total: number }; caveats?: string[] } & Basis)
+  | ({ component: "bundle_matrix"; ordersInRange: number; products: BundleProduct[]; pairs: BundlePair[]; omitted?: { pairs: number; products: number }; truncated?: { shown: number; total: number }; caveats?: string[] } & Basis)
   | ({ component: "waterfall"; metric: MetricId; label: string; unit: MetricUnit; dimension: string; steps: { label: string; value: number; kind: "start" | "delta" | "end" }[] } & Basis);
 
 // What the model asks for. `queryRefs` are query ids from this turn's tool results.

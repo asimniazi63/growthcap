@@ -6,8 +6,12 @@ import { orderLines, orders, savedViews, tenants } from "../db/schema";
 import { createTestDb } from "../db/test-db";
 import { queryMetric } from "../metrics/query";
 import type { TenantContext } from "../tenancy/context";
+import { getBundleCandidates } from "../tools/bundles";
+import { getLaunchCurves } from "../tools/launch-curves";
+import { getPromoPostmortem } from "../tools/promo-postmortem";
 import { loadDataset, readFixture } from "../../scripts/fixtures/load-db";
 import { STORES } from "../../scripts/seed/stores.js";
+import { buildView } from "./build";
 import { MAX_SAVED_VIEWS, listViews, pinView, rebuild, removeView } from "./saved";
 
 let db: Db;
@@ -98,5 +102,59 @@ describe("pinned views", () => {
     const u = asUser(ctx, "user_limit");
     for (let i = 0; i < MAX_SAVED_VIEWS; i++) await pinView(u, { title: `v${i}`, component: "bar", sources: [bar] }, { db });
     await expect(pinView(u, { title: "one too many", component: "bar", sources: [bar] }, { db })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+  });
+});
+
+// The three charts drawn from their own tool: what is kept is the tool and its input, and every load runs it again.
+describe("pinned lift, launch and bundle views", () => {
+  const promo = { tool: "get_promo_postmortem" as const, input: { code: "BFCM25" } };
+  const launches = { tool: "get_launch_curves" as const, input: { weeks: 4 } };
+  const bundles = { tool: "get_bundle_candidates" as const, input: { minOrders: 5 } };
+
+  it.each([
+    ["lift_dip", promo],
+    ["launch_curves", launches],
+    ["bundle_matrix", bundles],
+  ] as const)("pins a %s, keeps the tool and its input and no results, and draws it again from today's data", async (component, source) => {
+    const { id } = await pinView(ctx, { title: `Pinned ${component}`, component, sources: [source] }, { db });
+    const [row] = await db.select().from(savedViews).where(eq(savedViews.id, id));
+    expect(row).toMatchObject({ tenantId: ctx.tenantId, userId: "user_a", component });
+    expect(row!.sources).toEqual([source]);
+    expect(JSON.stringify(row!.sources)).not.toMatch(/netSalesCents|ordersTogether|cumulativeUnits/); // no figures stored
+
+    const view = (await listViews(ctx, { db })).find((v) => v.id === id)!;
+    const drawn = await rebuild(ctx, view, { db });
+    expect(drawn.component).toBe(component);
+
+    const direct =
+      component === "lift_dip"
+        ? buildView("lift_dip", [{ ...promo, result: await getPromoPostmortem(ctx, promo.input, { db }) }])
+        : component === "launch_curves"
+          ? buildView("launch_curves", [{ ...launches, result: await getLaunchCurves(ctx, launches.input, { db }) }])
+          : buildView("bundle_matrix", [{ ...bundles, result: await getBundleCandidates(ctx, bundles.input, { db }) }]);
+    expect(drawn).toEqual(direct);
+  });
+
+  it.each([
+    ["a lift_dip drawn from a query_metric result", { title: "x", component: "lift_dip", sources: [bar] }],
+    ["a launch_curves drawn from a bundle result", { title: "x", component: "launch_curves", sources: [bundles] }],
+    ["a bundle_matrix drawn from a promo result", { title: "x", component: "bundle_matrix", sources: [promo] }],
+    ["a bar drawn from a promo result", { title: "x", component: "bar", sources: [promo] }],
+    ["a lift_dip with two results", { title: "x", component: "lift_dip", sources: [promo, promo] }],
+    ["a promo input with a tenant in it", { title: "x", component: "lift_dip", sources: [{ tool: "get_promo_postmortem", input: { code: "BFCM25", tenantId: "other" } }] }],
+    ["a launch input with a field the tool doesn't have", { title: "x", component: "launch_curves", sources: [{ tool: "get_launch_curves", input: { weeks: 4, shop: "other.myshopify.com" } }] }],
+    ["a bundle input out of range", { title: "x", component: "bundle_matrix", sources: [{ tool: "get_bundle_candidates", input: { minOrders: 1 } }] }],
+    ["a promo input for a code that was never used", { title: "x", component: "lift_dip", sources: [{ tool: "get_promo_postmortem", input: { code: "NEVERUSED" } }] }],
+  ])("refuses %s, and stores nothing", async (_what, input) => {
+    const user = asUser(ctx, "user_refuse");
+    const before = (await listViews(user, { db })).length;
+    await expect(pinView(user, input as never, { db })).rejects.toBeDefined();
+    expect((await listViews(user, { db })).length).toBe(before);
+  });
+
+  it("keeps a pinned chart private to the person and the brand, like any other view", async () => {
+    const mine = await pinView(asUser(ctx, "user_chart"), { title: "Mine", component: "bundle_matrix", sources: [bundles] }, { db });
+    expect((await listViews(asUser(ctx, "user_other"), { db })).map((v) => v.id)).not.toContain(mine.id);
+    expect((await listViews(asUser(other, "user_chart"), { db })).map((v) => v.id)).not.toContain(mine.id);
   });
 });

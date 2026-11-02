@@ -5,11 +5,9 @@ import type { UIMessageChunk } from "ai";
 import type { Db } from "../db/client";
 import { AppError } from "../errors";
 import { proposeMemory } from "../memory/store";
-import type { QueryMetricInput, MetricRow } from "../metrics/query";
 import type { TenantContext } from "../tenancy/context";
-import type { CohortsData, GetCohortsInput } from "../tools/cohorts";
 import type { ToolResult } from "../tools/result";
-import { buildView, type ViewSource } from "../views/build";
+import { buildView, VIEW_SOURCE_TOOLS, type ViewSource } from "../views/build";
 import { VIEW_COMPONENTS, type ViewPayload } from "../views/types";
 
 // The two tools that act on the conversation rather than read the store: render_view draws a result, remember proposes a
@@ -47,7 +45,7 @@ const recoverable = (e: unknown) => e instanceof AppError && (e.code === "INVALI
 export function buildRenderViewTool(d: ViewToolDeps) {
   return tool({
     description:
-      "Draw results from this turn as a card or chart in the answer. component is one of kpi (totals), line (a metric by day, week or month), bar (a metric by product, channel, code and so on), table, gauge (month to date against plan; needs a result with gapToPlan), waterfall (a bridge from the previous period, needs compareTo and a grouping) or cohort (a first-order month by months-since grid, drawn from a get_cohorts result). title is a few words. queryRefs are the queryId values of the query_metric or get_cohorts results to draw. The server reads the numbers from those results; you never type them.",
+      "Draw results from this turn as a card or chart in the answer. component is one of kpi (totals), line (a metric by day, week or month), bar (a metric by product, channel, code and so on), table, gauge (month to date against plan; needs a result with gapToPlan), waterfall (a bridge from the previous period, needs compareTo and a grouping) or cohort (a first-order month by months-since grid, drawn from a get_cohorts result). Three more are drawn from one result of their own tool: lift_dip (a promotion's average day before, during and after the window, with the extra sales and the sales pulled forward; from get_promo_postmortem), launch_curves (one small cumulative-units curve per product launch against the median launch; from get_launch_curves) and bundle_matrix (a heat matrix of products often bought together, shaded by lift with the orders together in each cell; from get_bundle_candidates). title is a few words. queryRefs are the queryId values of the results to draw (one for lift_dip, launch_curves, bundle_matrix and cohort). The server reads the numbers from those results; you never type them.",
     inputSchema: renderViewInput,
     execute: async (input) => {
       const started = Date.now();
@@ -55,9 +53,9 @@ export function buildRenderViewTool(d: ViewToolDeps) {
         const sources: ViewSource[] = input.queryRefs.map((ref) => {
           const call = d.calls.get(ref);
           if (!call) throw new AppError("INVALID_INPUT", `${ref} is not a query id from this turn. Use the queryId of a result you already have.`);
-          if (call.tool !== "query_metric" && call.tool !== "get_cohorts") throw new AppError("INVALID_INPUT", "Views are drawn from query_metric or get_cohorts results only.");
-          if (call.tool === "get_cohorts") return { tool: "get_cohorts" as const, input: call.input as GetCohortsInput, result: call.result as ToolResult<CohortsData> };
-          return { tool: "query_metric" as const, input: call.input as QueryMetricInput, result: call.result as ToolResult<MetricRow[]> };
+          if (!(VIEW_SOURCE_TOOLS as readonly string[]).includes(call.tool)) throw new AppError("INVALID_INPUT", `Views are drawn from ${VIEW_SOURCE_TOOLS.join(", ")} results only.`);
+          // build.ts checks that the tool is the one the component needs, so the cast only says which results are allowed here.
+          return { tool: call.tool, input: call.input, result: call.result } as ViewSource;
         });
         const stray = d.titleProblems(input.title);
         if (stray.length > 0) throw new AppError("INVALID_INPUT", `The title has numbers that are not in the results (${stray.join(", ")}). Write the title without them.`);
