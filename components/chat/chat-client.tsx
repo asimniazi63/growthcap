@@ -2,7 +2,7 @@
 
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { ArrowUp, Boxes, Check, LoaderCircle, MessageSquareText, Plus, Receipt, ShoppingBag, Sparkles, TicketPercent, Trash2, TrendingUp, TriangleAlert, Undo2, Users, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowUp, Boxes, Check, LoaderCircle, MessageSquareText, Plus, Receipt, ShoppingBag, Sparkles, TicketPercent, Trash2, TrendingUp, TriangleAlert, Undo2, Users, type LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionView } from "@/lib/actions/types";
@@ -16,6 +16,7 @@ import { ViewRenderer } from "../views/view-renderer";
 import { MemoryCard, type MemoryCardState } from "./memory-card";
 import { ERROR_COPY, ErrorBanner, type ChatErrorCode } from "./error-banner";
 import { followUps } from "./follow-ups";
+import { useFollowScroll } from "./use-follow-scroll";
 import { ProofDrawerContext, ProofDrawerPanel, useProofDrawerState } from "./proof-drawer";
 import { SafeMarkdown } from "./safe-markdown";
 import { toolLabel } from "./tool-labels";
@@ -184,22 +185,24 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
   });
   const [input, setInput] = useState("");
   const [modelId, setModelId] = useState(defaultModelId);
-  const end = useRef<HTMLDivElement>(null);
+  const { scroller, end, away, nudge, resume } = useFollowScroll();
   const proof = useProofDrawerState();
   const asked = useRef(false);
   const busy = status === "submitted" || status === "streaming";
   const code = codeOf(error);
 
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth", block: "end" }), [messages, status]);
+  // New text keeps the conversation at its bottom, unless the reader has scrolled up to read something above.
+  useEffect(() => nudge(), [messages, status, nudge]);
 
   const ask = useCallback(
     (text: string) => {
       const clean = text.trim();
       if (!clean || busy) return;
       setInput("");
+      resume(); // a new question brings the reader back to the bottom
       void sendMessage({ text: clean }, { body: { modelId, ...(threadRef.current ? { threadId: threadRef.current } : {}) } });
     },
-    [busy, modelId, sendMessage],
+    [busy, modelId, sendMessage, resume],
   );
 
   // A question that came in on the address (?q=) is asked once, as an ordinary question. The ref keeps React's strict mode from asking twice.
@@ -218,7 +221,7 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
       <div className="flex min-h-[65dvh] min-w-0 flex-col lg:min-h-0">
         {/* The proof drawer sits over the right of this block on large screens (over the conversation, as in the mockup) and below the conversation on small ones. */}
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <div className="-mx-1 flex-1 px-1 lg:min-h-0 lg:overflow-y-auto lg:pr-3">
+          <div ref={scroller} className="-mx-1 flex-1 px-1 lg:min-h-0 lg:overflow-y-auto lg:pr-3">
             <div className="mx-auto w-full max-w-3xl space-y-6 pb-6">
               {messages.length === 0 ? (
                 <div className="pt-4 lg:pt-10">
@@ -276,6 +279,16 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
               {code ? <ErrorBanner code={code} role={role} onRetry={() => void regenerate({ body: { modelId, ...(threadRef.current ? { threadId: threadRef.current } : {}) } })} /> : null}
               <div ref={end} />
             </div>
+            {away ? (
+              <div className="pointer-events-none sticky bottom-24 z-10 h-0 lg:bottom-3">
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
+                  <button type="button" onClick={resume} className="btn btn-secondary btn-sm pointer-events-auto gap-1.5 shadow-md">
+                    <ArrowDown className="size-3.5" aria-hidden />
+                    Jump to latest
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
           <ProofDrawerPanel />
         </div>
