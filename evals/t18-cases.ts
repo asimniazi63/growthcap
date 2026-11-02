@@ -47,7 +47,7 @@ export const T18_CASES: EvalCase[] = [
     expect: () => ({
       tools: ["get_cohorts", "query_metric"],
       mentions: [
-        { label: "gives the repeat rate as a percentage", pattern: /\d+(\.\d+)?%[\s\S]{0,60}(ordered again|repeat)/i },
+        { label: "gives the repeat rate as a percentage", pattern: /\d+(\.\d+)?%[\s\S]{0,80}(ordered again|repeat|second order|came back|returned)|(ordered again|repeat|second order|came back|returned)[\s\S]{0,80}\d+(\.\d+)?%/i },
         { label: "says how many customers were counted", pattern: /\d[\d,]* customers/i },
       ],
       verified: true,

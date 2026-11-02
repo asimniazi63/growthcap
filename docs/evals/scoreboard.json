@@ -1,0 +1,191 @@
+{
+  "commit": "7b4e5f9",
+  "model": "claude-sonnet-4-6",
+  "ranAt": "2026-11-02T00:14:45.851Z",
+  "planned": 38,
+  "stoppedByCostCap": false,
+  "maxCostUsd": 5,
+  "ran": 38,
+  "overall": {
+    "category": "overall",
+    "cases": 38,
+    "passed": 32,
+    "accuracy": 0.8421052631578947,
+    "costUsd": 4.753299,
+    "avgLatencyMs": 9376.552631578947,
+    "p95LatencyMs": 20706
+  },
+  "categories": [
+    {
+      "category": "ads",
+      "cases": 1,
+      "passed": 0,
+      "accuracy": 0,
+      "costUsd": 0.126021,
+      "avgLatencyMs": 6094,
+      "p95LatencyMs": 6094
+    },
+    {
+      "category": "audit",
+      "cases": 1,
+      "passed": 1,
+      "accuracy": 1,
+      "costUsd": 0.094872,
+      "avgLatencyMs": 8984,
+      "p95LatencyMs": 8984
+    },
+    {
+      "category": "cohorts",
+      "cases": 1,
+      "passed": 1,
+      "accuracy": 1,
+      "costUsd": 0.135723,
+      "avgLatencyMs": 8781,
+      "p95LatencyMs": 8781
+    },
+    {
+      "category": "comparison",
+      "cases": 3,
+      "passed": 2,
+      "accuracy": 0.6666666666666666,
+      "costUsd": 0.347613,
+      "avgLatencyMs": 6417,
+      "p95LatencyMs": 7584
+    },
+    {
+      "category": "documents",
+      "cases": 3,
+      "passed": 3,
+      "accuracy": 1,
+      "costUsd": 0.424698,
+      "avgLatencyMs": 10766.333333333334,
+      "p95LatencyMs": 20919
+    },
+    {
+      "category": "injection",
+      "cases": 2,
+      "passed": 2,
+      "accuracy": 1,
+      "costUsd": 0.170574,
+      "avgLatencyMs": 4775,
+      "p95LatencyMs": 4865
+    },
+    {
+      "category": "isolation",
+      "cases": 1,
+      "passed": 1,
+      "accuracy": 1,
+      "costUsd": 0.082659,
+      "avgLatencyMs": 3804,
+      "p95LatencyMs": 3804
+    },
+    {
+      "category": "landing",
+      "cases": 1,
+      "passed": 1,
+      "accuracy": 1,
+      "costUsd": 0.254388,
+      "avgLatencyMs": 18002,
+      "p95LatencyMs": 18002
+    },
+    {
+      "category": "lookup",
+      "cases": 5,
+      "passed": 5,
+      "accuracy": 1,
+      "costUsd": 0.42101700000000003,
+      "avgLatencyMs": 3952.8,
+      "p95LatencyMs": 4738
+    },
+    {
+      "category": "memory",
+      "cases": 1,
+      "passed": 1,
+      "accuracy": 1,
+      "costUsd": 0.166752,
+      "avgLatencyMs": 7827,
+      "p95LatencyMs": 7827
+    },
+    {
+      "category": "merchandising",
+      "cases": 2,
+      "passed": 2,
+      "accuracy": 1,
+      "costUsd": 0.245523,
+      "avgLatencyMs": 9717,
+      "p95LatencyMs": 10654
+    },
+    {
+      "category": "plan",
+      "cases": 2,
+      "passed": 2,
+      "accuracy": 1,
+      "costUsd": 0.267579,
+      "avgLatencyMs": 9981,
+      "p95LatencyMs": 14114
+    },
+    {
+      "category": "playbook",
+      "cases": 2,
+      "passed": 1,
+      "accuracy": 0.5,
+      "costUsd": 0.263124,
+      "avgLatencyMs": 12542,
+      "p95LatencyMs": 17172
+    },
+    {
+      "category": "privacy",
+      "cases": 1,
+      "passed": 1,
+      "accuracy": 1,
+      "costUsd": 0.042519,
+      "avgLatencyMs": 3284,
+      "p95LatencyMs": 3284
+    },
+    {
+      "category": "promo",
+      "cases": 2,
+      "passed": 2,
+      "accuracy": 1,
+      "costUsd": 0.309168,
+      "avgLatencyMs": 16143.5,
+      "p95LatencyMs": 20706
+    },
+    {
+      "category": "retention",
+      "cases": 1,
+      "passed": 1,
+      "accuracy": 1,
+      "costUsd": 0.089505,
+      "avgLatencyMs": 6453,
+      "p95LatencyMs": 6453
+    },
+    {
+      "category": "storyline",
+      "cases": 3,
+      "passed": 2,
+      "accuracy": 0.6666666666666666,
+      "costUsd": 0.40326,
+      "avgLatencyMs": 7735.333333333333,
+      "p95LatencyMs": 10674
+    },
+    {
+      "category": "unit-economics",
+      "cases": 1,
+      "passed": 1,
+      "accuracy": 1,
+      "costUsd": 0.088635,
+      "avgLatencyMs": 7482,
+      "p95LatencyMs": 7482
+    },
+    {
+      "category": "why",
+      "cases": 5,
+      "passed": 3,
+      "accuracy": 0.6,
+      "costUsd": 0.819669,
+      "avgLatencyMs": 16952.2,
+      "p95LatencyMs": 18398
+    }
+  ]
+}

@@ -23,6 +23,28 @@ const run = (answer: string, month = "2026-10"): EvalRun => ({
 });
 const failed = (r: EvalRun) => grade(r, review.expect(env)).filter((k) => !k.ok).map((k) => k.name);
 
+const retention = T18_CASES.find((c) => c.id === "playbook-retention-check")!;
+const retentionRun = (answer: string): EvalRun => ({
+  answer,
+  toolCalls: [
+    { tool: "get_cohorts", input: { windowDays: 60 } },
+    { tool: "query_metric", input: { metrics: ["returning_customer_rate"] } },
+  ],
+  views: [],
+  verification: { ok: true, unmatched: [] },
+});
+const retentionFailed = (answer: string) => grade(retentionRun(answer), retention.expect(env)).filter((k) => !k.ok).map((k) => k.name);
+
+describe("the retention check eval case (T18)", () => {
+  it("takes the repeat rate worded as a second order, a return or a repeat (found in the 2026-11-02 full run)", () => {
+    for (const worded of ["22.2% of new customers placed a second order within 60 days of their first", "22.2% of them came back within 60 days", "The repeat rate is 22.2%", "22.2% ordered again within 60 days"]) {
+      expect(retentionFailed(`${worded}, based on 409 customers.`), worded).toEqual([]);
+    }
+    expect(retentionFailed("Many customers placed a second order, based on 409 customers.")).toEqual(["gives the repeat rate as a percentage"]);
+    expect(retentionFailed("The repeat rate is 22.2%.")).toEqual(["says how many customers were counted"]);
+  });
+});
+
 describe("the playbook eval case (T18)", () => {
   it("is one case with a unique id, registered with the others", () => {
     expect(T18_CASES.map((c) => c.id)).toEqual(["playbook-monthly-review-october", "playbook-retention-check"]);

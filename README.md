@@ -95,26 +95,33 @@ The reasoning is recorded as short ADRs in [docs/decisions/](docs/decisions/).
 
 `npm run eval` asks the real model each case's question against the fixture data (an in-memory database, today's date pinned) and grades the answer with deterministic checks: the expected figures come from the dataset and the fixture files, never from the code under test. Results are written to [docs/evals/latest.md](docs/evals/latest.md).
 
-The full run on the default model, Claude Sonnet 4.6 (commit `d9e0b3c`): **22 of 24 cases pass**, at an estimated $1.99.
+The full run on the default model, Claude Sonnet 4.6 (2026-11-02, all 38 cases): **32 of 38 cases pass**, at an estimated $4.75.
 
 | Category | Passed | Cost |
 |---|---|---|
-| plan | 1 of 1 | $0.14 |
-| memory | 1 of 1 | $0.10 |
-| ads | 0 of 1 | $0.07 |
-| why | 5 of 5 | $0.58 |
-| lookup | 5 of 5 | $0.25 |
-| comparison | 2 of 3 | $0.21 |
-| storyline | 3 of 3 | $0.30 |
-| injection | 2 of 2 | $0.10 |
-| privacy | 1 of 1 | $0.02 |
-| isolation | 1 of 1 | $0.11 |
-| landing | 1 of 1 | $0.10 |
+| plan | 2 of 2 | $0.27 |
+| memory | 1 of 1 | $0.17 |
+| ads | 0 of 1 | $0.13 |
+| why | 3 of 5 | $0.82 |
+| lookup | 5 of 5 | $0.42 |
+| comparison | 2 of 3 | $0.35 |
+| storyline | 2 of 3 | $0.40 |
+| injection | 2 of 2 | $0.17 |
+| privacy | 1 of 1 | $0.04 |
+| isolation | 1 of 1 | $0.08 |
+| landing | 1 of 1 | $0.25 |
+| cohorts, unit economics | 2 of 2 | $0.22 |
+| documents, audit | 4 of 4 | $0.52 |
+| promo post-mortems, retention segments, merchandising | 5 of 5 | $0.64 |
+| playbooks | 1 of 2 | $0.26 |
 
-The 24 cases are 15 core cases (5 lookups, 3 comparisons, 3 storylines, 2 prompt-injection cases, a refused request for a customer's email, a Tidepool user asking about Solenne), 5 "why did we miss plan" cases (one per planted storyline and one month where nothing was planted), the 3 Pace cases and a landing-page case. The two that failed in this run:
+The 38 cases are the 24 of the first run (15 core cases: 5 lookups, 3 comparisons, 3 storylines, 2 prompt-injection cases, a refused request for a customer's email, a Tidepool user asking about Solenne; 5 "why did we miss plan" cases, one per planted storyline and one month where nothing was planted; the 3 Pace cases; a landing-page case) and 14 added since: cohorts, payback, "how much a day do we need", invoices, a document question, a call note, the Tidepool audit, two promo post-mortems, customer segments, bundles, a launch curve and two playbooks. All five of the newest analysis cases pass. The six that failed in this run:
 
-- `mer-last-month`: the answer was right (MER 2.00) but it explained it as "for every $1 of ad spend, $2.00 of net sales", and the checker correctly refused those two dollar figures because no tool returned them.
-- `compare-may-aov-wholesale`: both figures were right ($143.12 with the wholesale order, $81.47 without); the grader's window between a label and its figure was too narrow for a table. The window was widened and the case re-run: it passes.
+- `mer-last-month`: the answer was right (MER 2.00) but it explained it as "for every $1 of ad spend, $2.00 of net sales", and the checker correctly refused those two dollar figures because no tool returned them. It failed the same way in the first run.
+- `compare-may-aov-wholesale`: both figures were right ($143.12 for all orders, $81.47 excluding wholesale), but the grader did not take "All orders" as the with-wholesale label. The grader was fixed and tested offline; the case has not been re-run live.
+- `playbook-retention-check`: the figures were right ("22.2% of new customers placed a second order within 60 days"), but the grader looked only for "repeat" or "ordered again" after the percentage. The grader was fixed and tested offline; the case has not been re-run live.
+- `storyline-s4-barrier-refunds`: a real miss. The model filtered to one variant, the 100 ml jar, and reported that variant's refund rates (16.7% in May, 25.0% in June) instead of the product's (1.3% and 15.2%).
+- `why-july-fig-sellout` and `why-april-nothing-planted`: real misses, not yet triaged. July's write-up named a Lip Balm SPF 15 gap rather than the planted Lip Tint in Fig sell-out, and April's blamed a Peptide Firming Serum stock-out in a month where nothing was planted. Whether the cause is the prompt, the data pack or model variance has not been separated (see issue #22).
 
 The same suite on Devstral 2 passed 10 of 24 before the prompt fixes made after that run, so the model matters: Devstral's failures were mostly mislabelled figures (a store-wide refund total presented as one product's) and weak tool choices, not wrong numbers that slipped past the checker. The per-case results, answers and costs are in [docs/evals/latest.md](docs/evals/latest.md); the run does not depend on the day it is made or on the live store.
 

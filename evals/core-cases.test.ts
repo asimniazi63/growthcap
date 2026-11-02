@@ -256,6 +256,9 @@ describe("the wrong answers each case is built to catch fail", () => {
     expect(failing("With wholesale: $143.12. Without wholesale: $81.47.")).toEqual([]);
     expect(failing("It was $143.12 including the $6,000 wholesale order, or $81.47 excluding it.")).toEqual([]);
     expect(failing("| With wholesale | $143.12 |\n| Without wholesale | $81.47 |")).toEqual([]);
+    // "All orders" is the with-wholesale row (found in the 2026-11-02 full run, whose table said exactly this and was right).
+    expect(failing("| | AOV | Orders |\n|---|---|---|\n| **All orders** | $143.12 | 96 |\n| **Excluding wholesale** | $81.47 | 95 |")).toEqual([]);
+    expect(failing("| **All orders** | $81.47 |\n| **Excluding wholesale** | $143.12 |")).toEqual(["says which figure includes wholesale and which leaves it out"]);
     expect(failing("Excluding wholesale, the average was $81; including it, $143.")).toEqual([]);
     // Without the query that leaves wholesale out, the tool check says so.
     expect(failedBy("compare-may-aov-wholesale", GOOD["compare-may-aov-wholesale"]!.answer, [calls[0]!])).toEqual(["ran a query that left wholesale orders out"]);

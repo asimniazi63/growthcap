@@ -65,7 +65,7 @@ function pairedFigures(a: { value: number; words: string }, b: { value: number; 
   const figureFirst = (x: { value: number; words: string }) => `(?=[\\s\\S]*${figure(x.value)}[^\\n\\d]{0,60}(?:${x.words}))`;
   return new RegExp(`^(?:${labelFirst(a)}${labelFirst(b)}|${figureFirst(a)}${figureFirst(b)})`, "i");
 }
-const WITH_WHOLESALE = "\\bwith\\b[^\\n]{0,25}\\bwholesale|\\binclud(?:e|es|ed|ing)\\b|\\bincl\\b\\.?";
+const WITH_WHOLESALE = "\\bwith\\b[^\\n]{0,25}\\bwholesale|\\binclud(?:e|es|ed|ing)\\b|\\bincl\\b\\.?|\\ball orders\\b";
 const WITHOUT_WHOLESALE = "\\bwithout\\b|\\bexclud(?:e|es|ed|ing)\\b|\\bexcl\\b\\.?|\\bleav(?:e|es|ing) out\\b|\\bleft out\\b|\\bminus\\b|\\bnot counting\\b|\\bnet of\\b|\\bnon-wholesale\\b|\\bwholesale\\b[^\\n]{0,20}\\b(?:excluded|left out|removed)\\b";
 
 const FELL = "down|lower|fell|fall|fallen|declin\\w*|decreas\\w*|drop\\w*|dip\\w*|slipp\\w*|less|behind|below|short";
