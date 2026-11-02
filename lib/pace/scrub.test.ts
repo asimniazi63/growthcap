@@ -22,7 +22,7 @@ async function makeSeries(through = 15): Promise<PaceSeries> {
 }
 
 describe("gapAsOf: the same arithmetic as planGap, on the days up to the day asked for", () => {
-  it.each([4, 9, 15])("matches planGap for October 1 to %i, to the cent", async (day) => {
+  it.each([5, 9, 15])("matches planGap for October 1 to %i, to the cent", async (day) => {
     const series = await makeSeries(15);
     const to = `2026-10-${String(day).padStart(2, "0")}`;
     const truth = (await planGap({ plan, range: { from: "2026-10-01", to }, metrics: ["net_sales"], values: { net_sales: cum(day) }, lastYearDaily }))!.net_sales!;
@@ -36,6 +36,24 @@ describe("gapAsOf: the same arithmetic as planGap, on the days up to the day ask
     expect(got.daysLeft).toBe(truth.daysLeft);
     expect(Math.abs(got.neededPerDay! - truth.neededPerDay!)).toBeLessThanOrEqual(1);
     expect(got.targetMet).toBe(truth.targetMet);
+  });
+
+  it.each([1, 2, 3, 4])("gives no estimate for October 1 to %i, as planGap does, and says the month is young", async (day) => {
+    const series = await makeSeries(15);
+    const to = `2026-10-${String(day).padStart(2, "0")}`;
+    const truth = (await planGap({ plan, range: { from: "2026-10-01", to }, metrics: ["net_sales"], values: { net_sales: cum(day) }, lastYearDaily }))!.net_sales!;
+    const got = gapAsOf(series, day);
+    expect(got.projected).toBeUndefined();
+    expect(got.earlyMonth).toEqual({ daysCounted: day, estimateAfterDays: 5 });
+    expect(got.earlyMonth).toEqual(truth.earlyMonth);
+    expect(got.neededPerDay).toBeDefined();
+    expect(got.daysLeft).toBe(31 - day);
+  });
+
+  it("gives the estimate, and no early-month note, from the fifth day", async () => {
+    const got = gapAsOf(await makeSeries(15), 5);
+    expect(got.projected).toBeGreaterThan(0);
+    expect(got.earlyMonth).toBeUndefined();
   });
 
   it("changes with the day: an early look at the month gives a different estimate and a different need a day", async () => {
@@ -90,6 +108,12 @@ describe("seriesAsOf", () => {
     expect(lastDayOf(series)).toBe(15);
     expect(seriesAsOf(series, 15)).toBe(series);
     expect(seriesAsOf(series, 40)).toBe(series);
+  });
+
+  it("draws no estimate for a day before the fifth", async () => {
+    const s = seriesAsOf(await makeSeries(15), 4);
+    expect(s.projected).toBeNull();
+    expect(s.actualThrough).toBe(cum(4));
   });
 
   it("stops the actual line at the day, leaves the plan as it was, and recomputes the estimate from the days up to it", async () => {

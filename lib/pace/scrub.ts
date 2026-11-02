@@ -3,7 +3,7 @@
 
 import type { PlanGap } from "./gap";
 import type { PaceSeries } from "./series";
-import { landing } from "./shape";
+import { landing, MIN_DAYS_FOR_ESTIMATE } from "./shape";
 
 export const PLAY_SECONDS = 8;
 
@@ -35,8 +35,12 @@ export function gapAsOf(series: PaceSeries, rawDay: number): PlanGap {
     throughDate: here.date,
   };
   if (daysLeft > 0) {
-    const projected = landing(actual, planned, series.target - planned);
-    if (projected !== null) out.projected = Math.round(projected);
+    if (day >= MIN_DAYS_FOR_ESTIMATE) {
+      const projected = landing(actual, planned, series.target - planned);
+      if (projected !== null) out.projected = Math.round(projected);
+    } else {
+      out.earlyMonth = { daysCounted: day, estimateAfterDays: MIN_DAYS_FOR_ESTIMATE };
+    }
     const remaining = series.target - actual;
     out.daysLeft = daysLeft;
     if (remaining > 0) out.neededPerDay = Math.round(remaining / daysLeft);

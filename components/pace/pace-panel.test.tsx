@@ -53,6 +53,25 @@ describe("PacePanel: this month to date", () => {
     expect(out).toMatch(/estimate/i);
   });
 
+  it("says there is no month-end estimate yet, and how long it will take, while the month has fewer than five complete days", () => {
+    const early = { daysCounted: 2, estimateAfterDays: 5 };
+    const v = view({
+      thisMonth: {
+        range: { from: "2026-10-01", to: "2026-10-02" },
+        queryId: "q_early",
+        gaps: {
+          net_sales: gap({ target: 650_688, planned: 40_000, actual: 90_000, gap: 50_000, pctGap: 1.25, spread: "even", earlyMonth: early, throughDate: "2026-10-02" }),
+          orders: gap({ target: 92, planned: 6, actual: 9, gap: 3, pctGap: 0.5, spread: "even", earlyMonth: early, throughDate: "2026-10-02" }),
+        },
+      },
+    });
+    const out = html(v);
+    expect(out).toContain("Needs 5 complete days (2 so far) for a month-end estimate");
+    expect(out).toContain("No estimate yet (2 of 5 days)");
+    expect(out).not.toMatch(/On this pace the month lands at about/);
+    expect(out).not.toMatch(/Estimate \$/);
+  });
+
   it("says how the plan was spread over the days", () => {
     const out = html(view());
     expect(out).toContain("last year&#x27;s daily pattern");

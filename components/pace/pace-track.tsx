@@ -9,11 +9,12 @@ type Props = {
   planned: number;
   target: number;
   projected?: number;
+  estimateNote?: string; // stands in for the estimate while the month is too young for one
   money: (value: number) => string;
   size?: "lg" | "md";
 };
 
-export function PaceTrack({ label, actual, planned, target, projected, money, size = "md" }: Props) {
+export function PaceTrack({ label, actual, planned, target, projected, estimateNote, money, size = "md" }: Props) {
   // The track runs to whichever is largest, so a beaten target or a high estimate never draws past the end.
   const scale = Math.max(target, actual, planned, projected ?? 0);
   const at = (v: number) => (scale > 0 ? `${Math.min(100, Math.max(0, (v / scale) * 100)).toFixed(2)}%` : "0%");
@@ -60,6 +61,8 @@ export function PaceTrack({ label, actual, planned, target, projected, money, si
             On this pace the month lands at about <span className="num font-semibold">{money(projected)}</span> <span className="muted">(estimate)</span>
           </span>
         </p>
+      ) : estimateNote ? (
+        <p className="muted mt-4 text-sm">{estimateNote}</p>
       ) : null}
     </div>
   );

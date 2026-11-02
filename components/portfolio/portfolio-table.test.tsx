@@ -26,6 +26,12 @@ describe("the portfolio table", () => {
     expect(out).toContain("from $1,000.00 on October 28 to $5,500.00 on October 30. Plan to date $6,000.00.");
   });
 
+  it("says why there is no month-end estimate yet in the first days of a month", () => {
+    const early = { ...gap, projected: undefined, earlyMonth: { daysCounted: 2, estimateAfterDays: 5 } };
+    const out = renderToStaticMarkup(<PortfolioTable rows={[row({ gap: early })]} />);
+    expect(out).toContain("No estimate yet (2 of 5 days)");
+  });
+
   it("shows the figure without a sparkline when the brand has no series, and the note when it has no gap", () => {
     const out = renderToStaticMarkup(<PortfolioTable rows={[row({ spark: null }), row({ tenantId: "t2", name: "Beta", gap: null, spark: null, note: "No plan is loaded for this brand." })]} />);
     expect(out).toContain("$5,500.00");

@@ -51,6 +51,12 @@ describe("the Overview sales card", () => {
     expect(out).toContain("Net sales so far this month, running total, from $400.00 on October 1 to $1,500.00 on October 3. Plan to date $900.00.");
   });
 
+  it("says there is no month-end estimate, and why, in the first days of the month", () => {
+    const out = render(view(gap({ projected: undefined, earlyMonth: { daysCounted: 3, estimateAfterDays: 5 } })));
+    expect(out).toContain("Based on 3 complete days, so no month-end estimate until 5 days are complete.");
+    expect(out).not.toContain("by month end");
+  });
+
   it("shows the Plan hit badge when the month's target is met, next to the gap badge", () => {
     const out = render(view(gap({ actual: 400_000, target: 400_000, gap: 310_000, targetMet: true })));
     expect(out).toContain("Plan hit for October");

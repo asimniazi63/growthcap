@@ -67,6 +67,31 @@ describe("PaceHero at its default position", () => {
   });
 });
 
+describe("PaceHero early in the month", () => {
+  const out = hero({ initialDay: 4 });
+  const then = gapAsOf(series, 4);
+
+  it("shows no month-end estimate before the fifth complete day, and says how long it will take", () => {
+    expect(then.projected).toBeUndefined();
+    expect(out).toContain("Net sales as of October 4");
+    expect(out).toContain("Needs 5 complete days (4 so far)");
+    expect(out).not.toContain(money(landing(then.actual, then.planned, TARGET - then.planned)!));
+    expect(out).not.toContain("hatch h-2.5 w-5"); // the estimate's swatch
+  });
+
+  it("says how many days the ahead or behind figure rests on, and still says what each remaining day has to bring", () => {
+    expect(out).toContain("Based on 4 complete days");
+    expect(out).toContain(`Need ${money(then.neededPerDay!)} a day for the rest of the month`);
+  });
+
+  it("from the fifth day shows the estimate and no note", () => {
+    const five = hero({ initialDay: 5 });
+    expect(five).toContain(money(gapAsOf(series, 5).projected!));
+    expect(five).not.toContain("Needs 5 complete days");
+    expect(five).not.toContain("Based on");
+  });
+});
+
 describe("PaceHero replaying an earlier day", () => {
   const out = hero({ initialDay: 9 });
   const then = gapAsOf(series, 9);

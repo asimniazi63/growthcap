@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Sparkline } from "@/components/ui/sparkline";
 import { METRICS } from "@/lib/metrics/registry";
 import { netSalesSparkLabel } from "@/lib/overview/spark";
-import { formatGap, formatPct, formatValue, monthName, type Tone } from "@/lib/pace/format";
+import { estimateWaitShort, formatGap, formatPct, formatValue, monthName, type Tone } from "@/lib/pace/format";
 import type { PortfolioRow } from "@/lib/portfolio/portfolio";
 
 const TONE: Record<Tone, string> = { ahead: "text-ahead", behind: "text-behind", even: "text-ink-2" };
@@ -83,6 +83,8 @@ export function PortfolioTable({ rows }: { rows: PortfolioRow[] }) {
                     <td className="num">
                       {g.projected !== undefined ? (
                         <span className="border-b border-dashed border-estimate text-ink-2">{formatValue("net_sales", g.projected, r.currency)}</span>
+                      ) : g.earlyMonth ? (
+                        <span className="faint">{estimateWaitShort(g.earlyMonth)}</span>
                       ) : (
                         <span className="faint">Not available</span>
                       )}

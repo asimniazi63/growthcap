@@ -22,6 +22,10 @@ export function shareThrough(weights: number[], fromDay: number, toDay: number):
   return share;
 }
 
+// How many complete days a month needs before it gets a month-end estimate. The estimate scales the whole target by how the days so far
+// went against plan, so one or two days (one big order) swing it by thousands. Below this the estimate is left out, not shown with a warning.
+export const MIN_DAYS_FOR_ESTIMATE = 5;
+
 // Where the month will land: what has happened so far plus the rest of the plan, scaled by how the month has gone against
 // its plan so far. An estimate with no range. Null before any of the plan has come due.
 export function landing(actualToDate: number, plannedToDate: number, plannedRest: number): number | null {

@@ -4,7 +4,7 @@ import { GapBadge, gapText, ICON, NeedBadge, TEXT_TONE } from "@/components/pace
 import { PaceHero } from "@/components/pace/pace-hero";
 import { PaceTrack } from "@/components/pace/pace-track";
 import type { PaceAnnotation } from "@/lib/pace/annotation-types";
-import { formatValue, monthName } from "@/lib/pace/format";
+import { estimateWait, estimateWaitShort, formatValue, monthName } from "@/lib/pace/format";
 import type { PlanGap, PlanGapMap } from "@/lib/pace/gap";
 import type { PlanMetric } from "@/lib/pace/metrics";
 import type { PaceView } from "@/lib/pace/view";
@@ -47,7 +47,7 @@ function TrackHero({ g, currency }: { g: PlanGap; currency: string }) {
           </p>
           <NeedBadge metric="net_sales" g={g} currency={currency} className="mt-2.5 text-[13.5px]" />
         </div>
-        <PaceTrack label={label} actual={g.actual} planned={g.planned} target={g.target} projected={g.projected} money={money} size="lg" />
+        <PaceTrack label={label} actual={g.actual} planned={g.planned} target={g.target} projected={g.projected} estimateNote={g.earlyMonth ? `${estimateWait(g.earlyMonth)} for a month-end estimate` : undefined} money={money} size="lg" />
       </div>
     </div>
   );
@@ -97,7 +97,10 @@ function MetricTile({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; c
               </span>
             </p>
           ) : (
-            <p className="faint mt-0.5 text-[12.5px]">Target {money(g.target)}</p>
+            <p className="faint mt-0.5 text-[12.5px]">
+              Target {money(g.target)}
+              {g.earlyMonth ? ` · ${estimateWaitShort(g.earlyMonth)}` : ""}
+            </p>
           )}
         </>
       ) : (

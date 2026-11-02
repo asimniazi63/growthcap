@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { planGap, type PlanTargets } from "./gap";
+import { MIN_DAYS_FOR_ESTIMATE } from "./shape";
 
 const plan: PlanTargets = new Map([
   ["2026-11", { net_sales: 1_000_000, orders: 100, new_customer_orders: 60, aov: 10_000, returning_customer_rate: 0.4 }],
@@ -58,6 +59,46 @@ describe("planGap: month to date", () => {
     expect(g!.net_sales!.planned).toBe(333_333);
     expect(g!.net_sales!.gap).toBe(300_001 - 333_333);
     expect(g!.orders!.planned).toBe(33.3);
+  });
+});
+
+describe("planGap: too early in the month for an estimate", () => {
+  const through = (day: number) => ({ plan, range: { from: "2026-11-01", to: `2026-11-${String(day).padStart(2, "0")}` }, metrics: ["net_sales" as const, "orders" as const, "aov" as const], values: { net_sales: 40_000 * day, orders: 3 * day, aov: 9_000 }, lastYearDaily: noPattern });
+
+  it("waits for five complete days", () => {
+    expect(MIN_DAYS_FOR_ESTIMATE).toBe(5);
+  });
+
+  it("gives no estimate before the fifth day, and says how many days there are and how many it needs", async () => {
+    for (const day of [1, 2, 3, 4]) {
+      const g = await planGap(through(day));
+      for (const metric of ["net_sales", "orders"] as const) {
+        expect(g![metric]!.projected, `${metric} on day ${day}`).toBeUndefined();
+        expect(g![metric]!.earlyMonth, `${metric} on day ${day}`).toEqual({ daysCounted: day, estimateAfterDays: 5 });
+      }
+    }
+  });
+
+  it("gives the estimate from the fifth day, with nothing to say about the month being young", async () => {
+    const g = await planGap(through(5));
+    expect(g!.net_sales!.projected).toBeGreaterThan(0);
+    expect(g!.net_sales!.earlyMonth).toBeUndefined();
+  });
+
+  it("still says what each remaining day has to bring, and how the month stands against plan so far", async () => {
+    const g = await planGap(through(2));
+    expect(g!.net_sales).toMatchObject({ planned: 66_667, actual: 80_000, gap: 13_333, neededPerDay: Math.round((1_000_000 - 80_000) / 28), daysLeft: 28 });
+  });
+
+  it("is not a thing for a rate or an average, which never had an estimate", async () => {
+    expect((await planGap(through(2)))!.aov!.earlyMonth).toBeUndefined();
+  });
+
+  it("is not a thing for a whole month, or a range that does not start the month", async () => {
+    const whole = await planGap({ ...through(2), range: { from: "2026-11-01", to: "2026-11-30" } });
+    expect(whole!.net_sales!.earlyMonth).toBeUndefined();
+    const mid = await planGap({ ...through(2), range: { from: "2026-11-02", to: "2026-11-03" } });
+    expect(mid!.net_sales!.earlyMonth).toBeUndefined();
   });
 });
 

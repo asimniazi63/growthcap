@@ -48,3 +48,13 @@ export function formatRange(from: string, to: string): string {
   const sameMonth = from.slice(0, 7) === to.slice(0, 7);
   return `${day(from, true)} to ${day(to, !sameMonth)}, ${to.slice(0, 4)}`;
 }
+
+// While a month is too young for a month-end estimate (see MIN_DAYS_FOR_ESTIMATE) these stand in its place and say why.
+export interface EarlyMonth {
+  daysCounted: number;
+  estimateAfterDays: number;
+}
+const dayCount = (n: number) => `${n} complete ${n === 1 ? "day" : "days"}`;
+export const estimateWait = (e: EarlyMonth) => `Needs ${dayCount(e.estimateAfterDays)} (${e.daysCounted} so far)`; // where the figure would be
+export const estimateWaitShort = (e: EarlyMonth) => `No estimate yet (${e.daysCounted} of ${e.estimateAfterDays} days)`; // inside a card or a table cell
+export const earlyBasis = (e: EarlyMonth) => `Based on ${dayCount(e.daysCounted)}`; // under the ahead or behind badge

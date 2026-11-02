@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatGap, formatMove, formatPct, formatRange, formatUnit, formatValue, monthName } from "./format";
+import { earlyBasis, estimateWait, estimateWaitShort, formatGap, formatMove, formatPct, formatRange, formatUnit, formatValue, monthName } from "./format";
 
 describe("formatValue", () => {
   it("writes money in dollars from cents, counts plainly, and rates as percentages", () => {
@@ -53,5 +53,20 @@ describe("formatUnit, formatMove and formatRange", () => {
     expect(formatRange("2026-09-01", "2026-09-30")).toBe("September 1 to 30, 2026");
     expect(formatRange("2026-09-28", "2026-10-03")).toBe("September 28 to October 3, 2026");
     expect(formatRange("2026-10-05", "2026-10-05")).toBe("October 5, 2026");
+  });
+});
+
+describe("the early-month wording", () => {
+  const one = { daysCounted: 1, estimateAfterDays: 5 };
+  const four = { daysCounted: 4, estimateAfterDays: 5 };
+
+  it("says how many complete days a month has and how many its estimate needs", () => {
+    expect(estimateWait(one)).toBe("Needs 5 complete days (1 so far)");
+    expect(estimateWaitShort(four)).toBe("No estimate yet (4 of 5 days)");
+  });
+
+  it("says what the ahead or behind badge rests on, in the singular for one day", () => {
+    expect(earlyBasis(one)).toBe("Based on 1 complete day");
+    expect(earlyBasis(four)).toBe("Based on 4 complete days");
   });
 });

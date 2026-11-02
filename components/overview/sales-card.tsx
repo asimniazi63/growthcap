@@ -9,7 +9,7 @@ import { longDate } from "@/lib/overview/format";
 import { isPlanHit } from "@/lib/overview/plan-hit";
 import { netSalesSpark, netSalesSparkLabel } from "@/lib/overview/spark";
 import { METRICS } from "@/lib/metrics/registry";
-import { formatGap, formatValue, monthName } from "@/lib/pace/format";
+import { earlyBasis, formatGap, formatValue, monthName } from "@/lib/pace/format";
 import { PlanHit } from "./plan-hit";
 
 const TONE = {
@@ -65,7 +65,10 @@ export function SalesCard({ view, currency, canPlan, scope = "brand" }: { view: 
                   {gap.projected !== undefined ? `estimate ${formatValue("net_sales", gap.projected, currency)} by month end, ` : ""}target {formatValue("net_sales", gap.target, currency)}
                 </p>
               </div>
-              <p className="faint mt-1 text-xs">Complete days through {longDate(view.through)}.</p>
+              <p className="faint mt-1 text-xs">
+                Complete days through {longDate(view.through)}.
+                {gap.earlyMonth ? ` ${earlyBasis(gap.earlyMonth)}, so no month-end estimate until ${gap.earlyMonth.estimateAfterDays} days are complete.` : ""}
+              </p>
             </div>
             {spark ? <Sparkline values={spark.values} plan={spark.plan} label={netSalesSparkLabel(spark, currency)} /> : null}
           </div>

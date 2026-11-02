@@ -6,7 +6,7 @@ import { PaceChart } from "@/components/pace/pace-chart";
 import { PaceScrubber } from "@/components/pace/pace-scrubber";
 import { useReducedMotion } from "@/components/pace/use-reduced-motion";
 import type { PaceAnnotation } from "@/lib/pace/annotation-types";
-import { formatValue } from "@/lib/pace/format";
+import { earlyBasis, estimateWait, formatValue } from "@/lib/pace/format";
 import type { PlanGap } from "@/lib/pace/gap";
 import { gapAsOf, lastDayOf, nextPlayDay, playIntervalMs, seriesAsOf } from "@/lib/pace/scrub";
 import type { PaceSeries } from "@/lib/pace/series";
@@ -56,6 +56,7 @@ export function PaceHero({ gap, series, currency, annotations = [], initialDay }
             <GapBadge metric="net_sales" g={g} currency={currency} />
           </p>
           <NeedBadge metric="net_sales" g={g} currency={currency} className="mt-2.5 text-[13.5px]" />
+          {g.earlyMonth ? <p className="faint mt-2 text-[12.5px]">{earlyBasis(g.earlyMonth)}</p> : null}
           <dl className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
             <div>
               <dt className="faint text-[13px]">Plan so far</dt>
@@ -68,6 +69,11 @@ export function PaceHero({ gap, series, currency, annotations = [], initialDay }
                   <span aria-hidden className="hatch h-2.5 w-5 shrink-0 rounded-[3px] border border-dashed border-estimate" />
                   {money(g.projected)}
                 </dd>
+              </div>
+            ) : g.earlyMonth ? (
+              <div>
+                <dt className="faint text-[13px]">Month-end estimate</dt>
+                <dd className="muted text-sm">{estimateWait(g.earlyMonth)}</dd>
               </div>
             ) : null}
             <div>

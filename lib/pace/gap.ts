@@ -4,7 +4,7 @@ import { planTargets, plans } from "../db/schema";
 import { monthEnd, monthOf } from "../metrics/dates";
 import { METRICS, type MetricId } from "../metrics/registry";
 import { isPaced, PLAN_METRICS, type PacedMetric, type PlanMetric } from "./metrics";
-import { dayWeights, landing, shareThrough } from "./shape";
+import { dayWeights, landing, MIN_DAYS_FOR_ESTIMATE, shareThrough } from "./shape";
 
 export type PlanTargets = Map<string, Partial<Record<PlanMetric, number>>>; // month (YYYY-MM) -> metric -> target
 
@@ -27,7 +27,9 @@ export interface PlanGap {
   actual: number;
   gap: number; // actual minus planned
   pctGap: number | null; // gap as a fraction of planned (null when nothing is planned yet)
-  projected?: number; // month to date only: where the month will land (an estimate)
+  projected?: number; // month to date only: where the month will land (an estimate), from MIN_DAYS_FOR_ESTIMATE complete days on
+  // Month to date, for totals and counts, while there are fewer complete days than the estimate needs: there is no `projected`.
+  earlyMonth?: { daysCounted: number; estimateAfterDays: number };
   spread?: "last_year" | "even"; // how the target was spread over the days (totals and counts only)
   // Month to date only, for totals and counts: what each remaining day has to bring to land on the month's target. Cents for
   // net sales, a count for orders and new-customer orders. Never negative. Absent once the target is met (targetMet says so)
@@ -79,6 +81,7 @@ export async function planGap(input: PlanGapInput): Promise<PlanGapMap | undefin
 
     let plannedRaw = target;
     let projectedRaw: number | undefined;
+    let earlyMonth: PlanGap["earlyMonth"];
     let spread: PlanGap["spread"];
     let need: Pick<PlanGap, "neededPerDay" | "daysLeft" | "targetMet"> = {};
     if (isPaced(metric)) {
@@ -94,7 +97,8 @@ export async function planGap(input: PlanGapInput): Promise<PlanGapMap | undefin
         plannedRaw = target * shareThrough(weights, fromDay, toDay);
         if (fromDay === 1 && toDay < days) {
           const rest = target * shareThrough(weights, toDay + 1, days);
-          projectedRaw = landing(actualRaw, plannedRaw, rest) ?? undefined;
+          if (toDay >= MIN_DAYS_FOR_ESTIMATE) projectedRaw = landing(actualRaw, plannedRaw, rest) ?? undefined;
+          else earlyMonth = { daysCounted: toDay, estimateAfterDays: MIN_DAYS_FOR_ESTIMATE };
         }
       }
     }
@@ -110,6 +114,7 @@ export async function planGap(input: PlanGapInput): Promise<PlanGapMap | undefin
       gap,
       pctGap: planned === 0 ? null : Math.round((gap / planned) * 1e4) / 1e4,
       ...(projectedRaw !== undefined ? { projected: roundFor(metric, projectedRaw) } : {}),
+      ...(earlyMonth ? { earlyMonth } : {}),
       ...(spread ? { spread } : {}),
       ...need,
       throughDate: range.to,
