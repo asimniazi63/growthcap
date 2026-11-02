@@ -1,9 +1,9 @@
 // Extra demo orders: a few hand-picked orders on top of the generated history, so a small store has a recent day to show
-// (Tidepool sells about one order every three days, and the generator gave it none on 2026-11-01). They go through the
+// (Tidepool sells about one order every three days, and the generator gave it none on 2026-11-01; Solenne's day is thin). They go through the
 // loader, so they get the same request, journal protocol and no-personal-data customers as every seeded order. Each carries
 // the tag `demo-extra`, a fixed id (X_...) and is created once: a rerun finds it in the journal and skips it.
-//   npm run seed:extra -- --store tidepool --dry-run
-//   npm run seed:extra -- --store tidepool
+//   npm run seed:extra -- --store solenne|tidepool --dry-run
+//   npm run seed:extra -- --store solenne|tidepool
 //
 // An order must be dated in the past: Shopify stamps an order dated later than the moment it is created with that moment.
 // So a run refuses while any extra order is still in the future, and says when to run it.
@@ -30,15 +30,23 @@ interface ExtraSpec {
   channel: string;
 }
 
-// Tidepool, Sunday 2026-11-01. The generated data has no order that day. Products are three of its best sellers outside the
-// swaddle (whose stock risk the audit story is about): V_005 Bamboo Sleep Sack 6-12 months $48, V_008 Organic Burp Cloths
-// 5-pack $26, V_012 Hooded Bath Towel $34. The first order is a new customer, the second a returning loyalist. Both are above
-// the $50 free-shipping line.
+// Sunday 2026-11-01. The generated data has no Tidepool order that day, and Solenne's three generated ones leave a thin day.
+// Tidepool: products are best sellers outside the swaddle (whose stock risk the audit story is about): V_005 Bamboo Sleep Sack
+// 6-12 months $48, V_008 Organic Burp Cloths 5-pack $26, V_012 Hooded Bath Towel $34. X_TP_001 is a new customer, X_TP_002 a
+// returning loyalist, X_TP_003 another new customer.
+// Solenne: V_001 (SOL-01A) $48, V_011 (SOL-06A) $28, V_019 (SOL-10A) $42 and V_002 (SOL-01B) $72, its best sellers. X_SOL_001
+// and X_SOL_003 are new customers, X_SOL_002 a returning loyalist. Eastern time went back an hour at 02:00 that day.
+// Every order is above the $50 free-shipping line.
 const EXTRAS: Record<StoreKey, ExtraSpec[]> = {
-  solenne: [],
+  solenne: [
+    { genId: "X_SOL_001", date: "2026-11-01", hh: 11, mm: 5, customer: "CUST_DEMO0001", lines: [["V_001", 1], ["V_011", 1]], channel: "online_store" },
+    { genId: "X_SOL_002", date: "2026-11-01", hh: 14, mm: 30, customer: "CUST_84e64712", lines: [["V_019", 2]], channel: "instagram" },
+    { genId: "X_SOL_003", date: "2026-11-01", hh: 19, mm: 20, customer: "CUST_DEMO0002", lines: [["V_002", 1]], channel: "email" },
+  ],
   tidepool: [
     { genId: "X_TP_001", date: "2026-11-01", hh: 10, mm: 15, customer: "CUST_DEMO0001", lines: [["V_005", 1], ["V_008", 1]], channel: "online_store" },
     { genId: "X_TP_002", date: "2026-11-01", hh: 15, mm: 40, customer: "CUST_c4d1ace7", lines: [["V_012", 2]], channel: "instagram" },
+    { genId: "X_TP_003", date: "2026-11-01", hh: 12, mm: 30, customer: "CUST_DEMO0002", lines: [["V_008", 1], ["V_012", 1]], channel: "tiktok" },
   ],
 };
 
@@ -101,7 +109,7 @@ export interface ExtraDeps {
   sleep?: (ms: number) => Promise<void>;
 }
 
-const USAGE = `usage: npm run seed:extra -- --store tidepool [--dry-run]
+const USAGE = `usage: npm run seed:extra -- --store solenne|tidepool [--dry-run]
   --dry-run   print the orders; no network calls
 A real run writes to the store's shop as the seeder app and needs the journal from the first load in .seed-journal/.`;
 
@@ -121,7 +129,7 @@ export async function runExtraCli(argv: string[], deps: ExtraDeps = {}): Promise
   }
   const store = values.store;
   if (store !== "solenne" && store !== "tidepool") {
-    log(`--store tidepool is required.\n${USAGE}`);
+    log(`--store solenne or --store tidepool is required.\n${USAGE}`);
     return 2;
   }
   const cfg = STORES[store];
