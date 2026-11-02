@@ -65,6 +65,15 @@ describe("SegmentCards", () => {
     }
   });
 
+  it("makes the whole card a way to its top customers, with the CSV and Shopify controls still clickable above that", () => {
+    const out = html();
+    expect(out.match(/<article[^>]*class="[^"]*\brelative\b/g)).toHaveLength(4);
+    const links = [...out.matchAll(/<a [^>]*>/g)].map((m) => m[0]).filter((tag) => tag.includes("#top-customers"));
+    expect(links).toHaveLength(4);
+    expect(links.every((tag) => tag.includes("after:absolute") && tag.includes("after:inset-0"))).toBe(true);
+    expect(out.match(/class="relative z-10 inline-flex"/g)?.length).toBe(8); // CSV and Shopify, for each of the four cards
+  });
+
   it("switches the CSV and Shopify controls off, with the reason, when the store is not connected", () => {
     const out = html(false);
     expect(out).not.toContain("/api/segments/export");

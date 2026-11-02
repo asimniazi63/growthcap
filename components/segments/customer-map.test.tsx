@@ -109,6 +109,22 @@ describe("CustomerMap, all segments showing", () => {
   });
 });
 
+describe("CustomerMap, getting from the chart to the table", () => {
+  it("links to the Top customers table once the table is on the chosen segment", () => {
+    const out = html({ initialSolo: "champions", listed: "champions" });
+    expect(out).toMatch(/<a href="#top-customers"[^>]*>See the top customers of Champions in the table<\/a>/);
+  });
+
+  it("does not link while the table is still on another segment", () => {
+    expect(html({ initialSolo: "at_risk", listed: "champions" })).not.toContain("#top-customers");
+  });
+
+  it("does not link for Active, which has no table, or when no segment is chosen", () => {
+    expect(html({ initialSolo: "active", listed: "champions" })).not.toContain("#top-customers");
+    expect(html({ listed: "champions" })).not.toContain("#top-customers");
+  });
+});
+
 describe("CustomerMap with one segment chosen", () => {
   const out = html({ initialSolo: "at_risk" });
 

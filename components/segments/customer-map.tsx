@@ -226,9 +226,13 @@ export function CustomerMap({ points, currency, listed, initialSolo = null }: { 
           <button type="button" onClick={() => onChip(state.solo!)} className="cursor-pointer rounded-md font-medium text-brand-strong underline underline-offset-2">
             Show every segment
           </button>
-        ) : (
-          <span>Pick a segment to show only its dots and list its top customers below.</span>
-        )}
+        ) : null}
+        {state.solo && state.solo !== "active" && state.solo === listed ? (
+          <a href="#top-customers" className="rounded-md font-medium text-brand-strong underline underline-offset-2">
+            See the top customers of {segmentTitle(state.solo)} in the table
+          </a>
+        ) : null}
+        {!state.solo ? <span>Pick a segment to show only its dots and list its top customers below.</span> : null}
       </p>
 
       <p id={descId} className="sr-only">

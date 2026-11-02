@@ -16,7 +16,7 @@ export function SegmentCards({ summaries, currency, connected, selected }: { sum
         const headingId = `segment-${s.id}`;
         return (
           <li key={s.id}>
-            <article aria-labelledby={headingId} className={`card card-pad flex h-full flex-col ${selected === s.id ? "ring-2 ring-brand/40" : ""}`}>
+            <article aria-labelledby={headingId} className={`card card-pad relative flex h-full flex-col transition-colors hover:border-line-strong ${selected === s.id ? "ring-2 ring-brand/40" : ""}`}>
               <h3 id={headingId} className="section-title">
                 {s.title}
               </h3>
@@ -40,11 +40,16 @@ export function SegmentCards({ summaries, currency, connected, selected }: { sum
                 </div>
               </dl>
               <div className="mt-auto flex flex-wrap items-center gap-x-1 gap-y-1.5 pt-4">
-                <Link href={`/segments?segment=${s.id}#top-customers`} aria-current={selected === s.id ? "true" : undefined} className="btn btn-ghost btn-sm">
+                {/* The link stretches over the whole card, so a click anywhere on it goes to the table; the two controls sit above it. */}
+                <Link href={`/segments?segment=${s.id}#top-customers`} aria-current={selected === s.id ? "true" : undefined} className="btn btn-ghost btn-sm after:absolute after:inset-0 after:content-['']">
                   Top customers<span className="sr-only"> in {s.title}</span>
                 </Link>
-                <DownloadCsvLink segment={s.id} connected={connected} label="Download CSV" hidden={`for Klaviyo: ${s.title}`} />
-                <CreateInShopifyLink segment={s.id} title={s.title} connected={connected} />
+                <span className="relative z-10 inline-flex">
+                  <DownloadCsvLink segment={s.id} connected={connected} label="Download CSV" hidden={`for Klaviyo: ${s.title}`} />
+                </span>
+                <span className="relative z-10 inline-flex">
+                  <CreateInShopifyLink segment={s.id} title={s.title} connected={connected} />
+                </span>
               </div>
             </article>
           </li>
