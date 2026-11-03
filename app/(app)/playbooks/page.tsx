@@ -1,6 +1,9 @@
 import { BookOpenCheck, Lock } from "lucide-react";
+import { Suspense } from "react";
 import { ErrorBanner } from "@/components/chat/error-banner";
 import { monthOptions } from "@/components/playbooks/format";
+import { NumbersSkeleton } from "@/components/playbooks/numbers-panel";
+import { PlaybookNumbers } from "@/components/playbooks/playbook-numbers";
 import { PlaybookRun } from "@/components/playbooks/playbook-run";
 import { RunPlaybookButton } from "@/components/playbooks/run-playbook-button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -93,7 +96,17 @@ export default async function PlaybooksPage() {
               </div>
               <div className="px-5 py-5 sm:px-6">
                 {latest ? (
-                  <PlaybookRun run={latest} title={p.title} />
+                  <PlaybookRun
+                    run={latest}
+                    title={p.title}
+                    numbers={
+                      connected ? (
+                        <Suspense fallback={<NumbersSkeleton />}>
+                          <PlaybookNumbers ctx={ctx} run={latest} />
+                        </Suspense>
+                      ) : undefined
+                    }
+                  />
                 ) : (
                   <EmptyState icon={BookOpenCheck} title="Not run yet">
                     {connected ? "Run it to see the write-up here. It makes one AI call, so it runs only when you ask." : "Connect the store first, then run it."}

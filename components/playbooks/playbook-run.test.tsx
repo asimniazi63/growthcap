@@ -166,3 +166,28 @@ describe("the report layout of the other three playbooks", () => {
     expect(html(run({ playbook: "monthly-review", body: "" }), "Monthly business review")).toContain("This run has no write-up.");
   });
 });
+
+// The live numbers (layer B) are passed in as a slot, so this component stays free of data loading: it only places them.
+describe("the live numbers slot", () => {
+  const withNumbers = (r: PlaybookRunView, title = "A playbook") => renderToStaticMarkup(<PlaybookRun run={r} title={title} numbers={<section data-testid="numbers">LIVE NUMBERS HERE</section>} />);
+
+  it("places the numbers under the Ready line and above the write-up, for a report, for cards and for plain text", () => {
+    const report = withNumbers(run({ playbook: "bfcm-review", body: REPORT }));
+    expect(report.indexOf("Ready")).toBeLessThan(report.indexOf("LIVE NUMBERS HERE"));
+    expect(report.indexOf("LIVE NUMBERS HERE")).toBeLessThan(report.indexOf("Report sections"));
+    const cards = withNumbers(run({ body: FULL }), "Creative briefs");
+    expect(cards.indexOf("LIVE NUMBERS HERE")).toBeLessThan(cards.indexOf("Brief 1"));
+    const plain = withNumbers(run({ playbook: "retention-check", body: "One paragraph.\n\nAnother paragraph." }));
+    expect(plain.indexOf("LIVE NUMBERS HERE")).toBeLessThan(plain.indexOf("One paragraph."));
+  });
+
+  it("keeps the numbers on a blocked run: they come from the data, not from the unchecked write-up", () => {
+    const out = withNumbers(run({ playbook: "bfcm-review", body: REPORT, status: "blocked", unmatched: ["36"] }));
+    expect(out).toContain("LIVE NUMBERS HERE");
+    expect(out).toContain("Blocked");
+  });
+
+  it("draws nothing extra when there is no slot", () => {
+    expect(html(run({ playbook: "bfcm-review", body: REPORT }), "Black Friday review")).not.toContain("LIVE NUMBERS HERE");
+  });
+});

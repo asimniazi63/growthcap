@@ -1,5 +1,6 @@
 import { CheckCircle2, PenLine, ShieldAlert } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { PlaybookRunView } from "@/lib/playbooks/store";
 import { parseCreativeBriefs } from "./creative-briefs";
 import { CreativeBriefsView } from "./creative-briefs-view";
@@ -14,12 +15,14 @@ const when = (d: Date) => new Intl.DateTimeFormat("en-US", { dateStyle: "medium"
 // not by the write-up. The question is fixed text, so encoding it is all the escaping the address needs.
 const DRAFT_LANDING_PAGE = `/chat?q=${encodeURIComponent("Draft a landing page for the next planned campaign.")}`;
 
+// `numbers` is a slot for the live numbers drawn from the store data (layer B); the page fills it for the latest run only. This component
+// just places them, under the Ready line and above the write-up, so it does no data loading of its own.
 // One saved run of a playbook. The write-up is model text, shown as text paragraphs: the only markup is a bold lead-in, no HTML.
 // A blocked run lists the figures the number checker could not find in the data, and offers no link: its write-up is unchecked.
 // A finished Creative briefs write-up is drawn as three brief cards instead; a finished write-up of any other playbook is drawn as a short
 // report (a numbered card per paragraph, the lead-in as its heading). A blocked one stays plain text, and so does any write-up the parser
 // cannot read (it then returns null), so the layouts never hide or lose what the model wrote.
-export function PlaybookRun({ run, title }: { run: PlaybookRunView; title: string }) {
+export function PlaybookRun({ run, title, numbers }: { run: PlaybookRunView; title: string; numbers?: ReactNode }) {
   const blocked = run.status === "blocked";
   const text = paragraphs(run.body);
   const cards = run.playbook === "creative-briefs" && !blocked ? parseCreativeBriefs(run.body) : null;
@@ -34,6 +37,7 @@ export function PlaybookRun({ run, title }: { run: PlaybookRunView; title: strin
         <span className="muted">Ran {when(run.createdAt)}</span>
         {run.params.month ? <span className="muted">Month: {monthLabel(run.params.month)}</span> : null}
       </div>
+      {numbers}
       {cards ? (
         <div className="mt-5">
           <CreativeBriefsView parsed={cards} />

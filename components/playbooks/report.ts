@@ -20,7 +20,7 @@ export interface ReportParsed {
 
 const MAX_HEADING = 90; // longer than this, a bold start is part of the sentence, not a lead-in
 const MIN_HEADED = 2; // fewer headed sections than this and the page shows plain text
-const TAKEAWAY = /\b(?:watch|next|to do|to check|action)/i;
+const TAKEAWAY = /\b(?:watch|next|to do|to check|action|priority|recommend|focus|follow-?up|suggest)/i;
 
 const TITLE = /^\*\*([^*\n]+)\*\*$/; // a paragraph that is one bold line
 const LEAD = /^\*\*([^*]+?)\*\*([\s\S]*)$/; // **Lead-in.** text, **Lead-in** — text, **Lead-in**: text

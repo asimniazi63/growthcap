@@ -129,6 +129,15 @@ describe("parseReport: forgiving of how a model writes", () => {
     expect(p.sections[0]!.paragraphs[0]).toBe("One\nsecond line.");
   });
 
+  it("marks the closing section as the takeaway whatever word the model used for it: priority, recommendation, focus, follow-up", () => {
+    // The first real Monthly business review (2026-11-03) closed with "**Priority for November.**".
+    for (const heading of ["Priority for November", "Recommendation", "Focus for the holiday peak", "Follow-up", "What to do about it", "Suggested action"]) {
+      const p = parse(`**First.** One.\n\n**Second.** Two.\n\n**${heading}.** Do this.`);
+      expect(p.sections.map((s) => s.takeaway), heading).toEqual([false, false, true]);
+    }
+    expect(parse("**First.** One.\n\n**Second.** Two.\n\n**Detail.** Three.").sections.at(-1)!.takeaway).toBe(false);
+  });
+
   it("marks only the last section as the takeaway, even when an earlier heading says next", () => {
     const p = parse("**Next steps.** Do this.\n\n**Numbers.** Here.\n\n**Detail.** There.");
     expect(p.sections.map((s) => s.takeaway)).toEqual([false, false, false]);
