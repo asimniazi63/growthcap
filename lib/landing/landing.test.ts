@@ -108,6 +108,49 @@ describe("landing page: the copy is escaped and no price is typed", () => {
     expect(lintCopy(copy("Our biggest sale of the year"))).toEqual([]);
   });
 
+  it("sends back copy that claims results, creates urgency or boasts, and names the field and the reason", () => {
+    // Every line below is from, or a close cousin of, the draft that went to the store on 2026-11-03.
+    const claims: Partial<LandingCopy>[] = [
+      { subhead: "The ceramide-rich Barrier Cream that repairs and protects your skin." },
+      { bullets: ["Deeply nourishes and restores a damaged skin barrier", "Two sizes"] },
+      { bullets: ["Lasting protection all day", "Two sizes"] },
+      { bullets: ["Loved for visible results", "Two sizes"] },
+      { bullets: ["Two sizes", "Heals dry skin"] },
+      { subhead: "Clinically proven and dermatologist approved." },
+      { bullets: ["Limited stock — don't miss out this BFCM", "Two sizes"] },
+      { bullets: ["Limited stock — don’t miss out", "Two sizes"] },
+      { headline: "Last chance to save" },
+      { subhead: "Hurry, it is selling fast." },
+      { subhead: "Yours while supplies last." },
+      { ctaLabel: "Act now" },
+      { subhead: "Stock up at our best price." },
+      { subhead: "Our lowest price, guaranteed." },
+      { bullets: ["A Solenne bestseller", "Two sizes"] },
+      { bullets: ["Our best-selling serum", "Two sizes"] },
+      { subhead: "The most popular routine, and award-winning." },
+    ];
+    for (const c of claims) {
+      const problems = lintCopy({ ...copy, ...c });
+      expect(problems.length, JSON.stringify(c)).toBeGreaterThan(0);
+      const field = Object.keys(c)[0]!;
+      expect(problems[0], JSON.stringify(c)).toContain(field); // the model is told which field to change
+      expect(problems[0], JSON.stringify(c)).toMatch(/claim|urgency|price|popularity/i); // and why
+    }
+  });
+
+  it("lets plain selling words through, including the ones near the claim words", () => {
+    const plain: Partial<LandingCopy>[] = [
+      { headline: "Black Friday at Solenne" },
+      { subhead: "Treat yourself to our best-loved skincare, together in one place." },
+      { subhead: "Our biggest sale of the year." },
+      { bullets: ["Barrier support for dry skin", "Available in two sizes"] },
+      { bullets: ["Ceramide-rich formula", "Gentle daily routines"] },
+      { bullets: ["The sale runs to the end of the weekend", "Free to browse"] },
+      { ctaLabel: "Shop the sale" },
+    ];
+    for (const c of plain) expect(lintCopy({ ...copy, ...c }), JSON.stringify(c)).toEqual([]);
+  });
+
   it("reads prices and stock from the store, never from the file", () => {
     const section = buildLandingFiles(copy, catalogue, bfcm).files[0]!.content;
     expect(section).toContain("{{ p.price | money }}");
@@ -239,6 +282,44 @@ describe("landing page executor", () => {
     expect(sent[1]!.variables).toMatchObject({ themeId: "gid://shopify/OnlineStoreTheme/2" });
     expect(result).toMatchObject({ themeId: "gid://shopify/OnlineStoreTheme/2", pageId: "gid://shopify/Page/9", handle: `oasis-${draft.slug}`, published: false });
     expect(String(result.editorUrlHint)).toContain("/store/solenne/themes/2/editor");
+  });
+
+  describe("when the page is already in the store", () => {
+    const taken = () => new AppError("INVALID_INPUT", "Shopify refused the change: page.handle: Handle has already been taken");
+    const theme = { themes: { nodes: [{ id: "gid://shopify/OnlineStoreTheme/2", name: "Copy of Solenne", role: "UNPUBLISHED", processing: false }] } };
+    const page = (templateSuffix: string | null) => ({ pages: { nodes: [{ id: "gid://shopify/Page/9", title: draft.title, handle: `oasis-${draft.slug}`, isPublished: false, templateSuffix }] } });
+    const fakeShopify = (existing: unknown) =>
+      vi.fn<(query: string, variables?: unknown) => Promise<unknown>>(async (query) => {
+        if (query.includes("themeFilesUpsert")) return { themeFilesUpsert: { upsertedThemeFiles: draft.files.map((f) => ({ filename: f.path })) } };
+        if (query.includes("pageCreate")) throw taken();
+        if (query.includes("OasisPageByHandle")) return existing;
+        return theme;
+      });
+
+    it("counts a page that already uses this template as created, reads it back, and says it existed", async () => {
+      const graphql = fakeShopify(page(`oasis-landing-${draft.slug}`));
+      const result = (await landingPageExecutor.run(payload, { db, ctx, graphql })) as Record<string, unknown>;
+      expect(result).toMatchObject({ pageId: "gid://shopify/Page/9", handle: `oasis-${draft.slug}`, published: false, pageExisted: true });
+      const lookup = graphql.mock.calls.find(([q]) => q.includes("OasisPageByHandle"))!;
+      expect(lookup[1]).toMatchObject({ q: `handle:oasis-${draft.slug}` });
+    });
+
+    it("does not adopt a page at that address that uses another template, or none", async () => {
+      for (const existing of [page("contact"), page(null), { pages: { nodes: [] } }]) {
+        const graphql = fakeShopify(existing);
+        await expect(landingPageExecutor.run(payload, { db, ctx, graphql }), JSON.stringify(existing)).rejects.toThrow(/already been taken/);
+      }
+    });
+
+    it("lets any other refusal of the page through untouched, and never looks the page up for it", async () => {
+      const graphql = vi.fn(async (query: string) => {
+        if (query.includes("themeFilesUpsert")) return { themeFilesUpsert: { upsertedThemeFiles: draft.files.map((f) => ({ filename: f.path })) } };
+        if (query.includes("pageCreate")) throw new AppError("INVALID_INPUT", "Shopify refused the change: page.title: can't be blank");
+        return theme;
+      });
+      await expect(landingPageExecutor.run(payload, { db, ctx, graphql })).rejects.toThrow(/can't be blank/);
+      expect(graphql.mock.calls.some(([q]) => q.includes("OasisPageByHandle"))).toBe(false);
+    });
   });
 
   it("writes nothing and creates no page when Shopify gates theme writes behind an exemption, and says how to finish by hand", async () => {

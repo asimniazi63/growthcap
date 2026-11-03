@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ActionDiff, Executor } from "../actions/types";
+import type { ActionDiff, ExecEnv, Executor } from "../actions/types";
 import { AppError } from "../errors";
 import { activeProducts, campaignById } from "./data";
 import { campaignNumbers } from "./build";
@@ -29,6 +29,11 @@ export const PAGE_CREATE = `mutation OasisPageCreate($page: PageCreateInput!) {
     page { id title handle templateSuffix isPublished }
     userErrors { code field message }
   }
+}`;
+
+// Read only: the page at an address, to tell whether it is the one this payload would create.
+export const PAGE_BY_HANDLE = `query OasisPageByHandle($q: String!) {
+  pages(first: 5, query: $q) { nodes { id title handle isPublished templateSuffix } }
 }`;
 
 const themesResponse = z.object({
@@ -72,6 +77,39 @@ export function landingMutations(payload: LandingPayload) {
     { name: "themeFilesUpsert", query: THEME_FILES_UPSERT, variables: { themeId: THEME_PLACEHOLDER, files: filesInput(payload) } },
     { name: "pageCreate", query: PAGE_CREATE, variables: { page: pageInput(payload) } },
   ];
+}
+
+const pagesResponse = z.object({
+  pages: z.object({ nodes: z.array(z.object({ id: z.string(), handle: z.string(), isPublished: z.boolean().optional(), templateSuffix: z.string().nullable().optional() })) }),
+});
+
+export interface CreatedPage {
+  id: string;
+  handle: string;
+  isPublished: boolean;
+  existed: boolean; // true when the page was already in the store and was read back, not created now
+}
+
+const HANDLE_TAKEN = /handle has already been taken/i;
+
+// Creates the hidden page. If Shopify says the address is taken and the page there already uses this payload's template (an earlier
+// attempt or the hand-finish script made it), that page is the result: the job is done, so a retry does not end as a failure. A page
+// at that address with another template, or none, is somebody else's and the refusal stands. Any other refusal passes through.
+export async function createPage(graphql: ExecEnv["graphql"], payload: LandingPayload): Promise<CreatedPage> {
+  let raw: unknown;
+  try {
+    raw = await graphql(PAGE_CREATE, { page: pageInput(payload) });
+  } catch (e) {
+    if (!(e instanceof AppError) || !HANDLE_TAKEN.test(e.message)) throw e;
+    const handle = pageHandle(payload.slug);
+    const found = pagesResponse.parse(await graphql(PAGE_BY_HANDLE, { q: `handle:${handle}` }));
+    const same = found.pages.nodes.find((p) => p.handle === handle && p.templateSuffix === templateSuffix(payload.slug));
+    if (!same) throw e;
+    return { id: same.id, handle: same.handle, isPublished: same.isPublished ?? false, existed: true };
+  }
+  const page = pageResponse.parse(raw).pageCreate.page;
+  if (!page) throw new AppError("SHOPIFY_UNAVAILABLE", "Shopify did not create the page. The theme files were written; the page can be created by hand with the template.", { retryable: true });
+  return { id: page.id, handle: page.handle, isPublished: page.isPublished ?? false, existed: false };
 }
 
 const numericId = (gid: string) => gid.split("/").pop() ?? gid;
@@ -138,9 +176,7 @@ export const landingPageExecutor: Executor<LandingPayload> = {
       throw new AppError("SHOPIFY_UNAVAILABLE", "Shopify did not confirm that both theme files were written. Nothing was published.", { retryable: true });
     }
 
-    const created = pageResponse.parse(await env.graphql(PAGE_CREATE, { page: pageInput(payload) }));
-    const page = created.pageCreate.page;
-    if (!page) throw new AppError("SHOPIFY_UNAVAILABLE", "Shopify did not create the page. The theme files were written; the page can be created by hand with the template.", { retryable: true });
+    const page = await createPage(env.graphql, payload);
 
     const store = env.ctx.shop?.domain.replace(/\.myshopify\.com$/, "");
     return {
@@ -148,7 +184,8 @@ export const landingPageExecutor: Executor<LandingPayload> = {
       themeName: theme.name,
       pageId: page.id,
       handle: page.handle,
-      published: page.isPublished ?? false,
+      published: page.isPublished,
+      ...(page.existed ? { pageExisted: true } : {}),
       files: written,
       editorUrlHint: store ? `https://admin.shopify.com/store/${store}/themes/${numericId(theme.id)}/editor?previewPath=${encodeURIComponent(`/pages/${page.handle}`)}` : null,
     };

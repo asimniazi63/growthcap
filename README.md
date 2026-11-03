@@ -201,7 +201,7 @@ The table above is the index. Below, each brief item is broken into its features
 **Bring documents in, and act**
 
 - **Plan in** (`/plan`) and **Actions** (`/actions`): documents become plan targets, a supplier invoice becomes unit-cost updates (matched to variants by SKU, each shown with its old and new cost), and a call note becomes plan changes and action items that show on Pace until someone marks them done. The agent can also propose a Shopify target, an annotation, turning a discount code off, a unit-cost change, a customer segment or a landing page. Each proposal is a card with the exact change. A Growth Capital admin or partner approves, the server re-validates and runs it once, and the ledger records who and when.
-- **Landing pages**: ask the agent for one and the model writes only the copy. The server builds the Liquid from fixed templates (prices are read from Liquid objects), checks it with its own lint and Shopify's Theme Check, and shows an approval card. Shopify lets an app write theme files only after an exemption request, so an approved page is finished with `npm run landing:push`.
+- **Landing pages**: ask the agent for one and the model writes only the copy. The server builds the Liquid from fixed templates (prices are read from Liquid objects), checks it with its own lint (which sends back copy that claims results, creates urgency or boasts of popularity) and Shopify's Theme Check, and shows an approval card. Shopify lets an app write theme files only after an exemption request, so an approved page is finished with `npm run landing:push`.
 
 **Analyse**
 

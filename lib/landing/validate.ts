@@ -42,6 +42,37 @@ function numberProblems(raw: string, where: string, allowed: ReadonlySet<string>
   return out;
 }
 
+// Words the page may not carry because no tool result backs them: what a product does to skin, a countdown or scarcity (stock is
+// read live from the store, so "limited stock" is a guess), a price promise (the campaign's offer is often still undecided) and
+// popularity. Each rule is one problem per field, with the first matching words quoted so the model can see what to change.
+// "Treat yourself", "best-loved" and "biggest sale of the year" are plain selling words and stay allowed.
+const CLAIM_RULES: { re: RegExp; why: (hit: string) => string }[] = [
+  {
+    re: /\b(?:repair(?:s|ed|ing)?|restor(?:e|es|ed|ing)|heal(?:s|ed|ing)?|cure[sd]?|(?:visible|proven|instant|fast|real|guaranteed)\s+results?|clinically|dermatologists?|proven|guarantee[sd]?|(?:long[- ])?lasting|anti[- ]?(?:aging|ageing|wrinkle))\b/i,
+    why: (hit) => `makes a claim about what the product does ("${hit}"). Leave results, benefits and skin or health claims out; say what the page shows (the product, its price and stock) instead.`,
+  },
+  {
+    re: /\blimited\b|\bwhile (?:stocks?|supplies) last\b|\blast chance\b|\bhurry\b|\bdon['’]?t miss\b|\bselling (?:out|fast)\b|\bsell(?:s)? out\b|\bact (?:now|fast)\b|\b(?:ends?|ending|going|gone) (?:soon|fast)\b|\bfew left\b|\b(?:before|once) (?:it|they)(?:['’]s|['’]re| is| are) gone\b|\bnow or never\b/i,
+    why: (hit) => `creates urgency or scarcity ("${hit}"). Stock is shown live on the page, so do not say it is limited or running out; the campaign's own dates are the only deadline.`,
+  },
+  {
+    re: /\b(?:best|lowest|cheapest) prices?\b|\bprice (?:match|guarantee|promise)\b|\bunbeatable\b/i,
+    why: (hit) => `makes a price claim ("${hit}"). The campaign's offer is not decided by this page, so do not promise a best price or a deal.`,
+  },
+  {
+    re: /\bbest[- ]?sell(?:er|ers|ing)\b|\bmost popular\b|\bmost loved\b|\btop[- ]rated\b|\baward[- ]winning\b|\bnumber (?:one|1)\b|\b(?:customer|fan)[- ]favou?rites?\b/i,
+    why: (hit) => `claims popularity or awards ("${hit}") that no tool result backs. Leave it out.`,
+  },
+];
+
+function claimProblems(raw: string, where: string): string[] {
+  const text = raw.normalize("NFKC");
+  return CLAIM_RULES.flatMap(({ re, why }) => {
+    const hit = text.match(re);
+    return hit ? [`${where} ${why(hit[0])}`] : [];
+  });
+}
+
 // Checks the model's words before anything is built, so that the message it gets back names the field.
 export function lintCopy(copy: LandingCopy, allowedNumbers: ReadonlySet<string> = new Set()): string[] {
   const fields: [string, string][] = [["headline", copy.headline], ["subhead", copy.subhead], ["ctaLabel", copy.ctaLabel], ...copy.bullets.map((b, i): [string, string] => [`bullets[${i}]`, b])];
@@ -52,6 +83,7 @@ export function lintCopy(copy: LandingCopy, allowedNumbers: ReadonlySet<string> 
     if (/(?:https?:)?\/\/\S|\bwww\./i.test(text)) out.push(`${name} has a link. Write plain words only; the page links to the store's own products.`);
     if (/\{\{|\{%/.test(text)) out.push(`${name} has Liquid syntax. Write plain words only.`);
     out.push(...numberProblems(text, name, allowedNumbers));
+    out.push(...claimProblems(text, name));
   }
   return out;
 }

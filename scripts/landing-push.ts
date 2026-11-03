@@ -12,7 +12,7 @@ import { hashPayload } from "../lib/actions/ledger";
 import { shopGraphqlFor } from "../lib/actions/shopify";
 import { getDb } from "../lib/db/client";
 import { actions, shopConnections } from "../lib/db/schema";
-import { PAGE_CREATE, pageInput } from "../lib/landing/executor";
+import { createPage } from "../lib/landing/executor";
 import { SKELETON } from "../lib/landing/validate";
 import { landingPayloadSchema } from "../lib/landing/types";
 import type { TenantContext } from "../lib/tenancy/context";
@@ -51,14 +51,18 @@ async function main(): Promise<void> {
 
   const ctx = { tenantId: row.tenantId } as TenantContext;
   const graphql = await shopGraphqlFor(db, ctx);
-  const created = (await graphql(PAGE_CREATE, { page: pageInput(payload) })) as { pageCreate?: { page?: { id: string; handle: string; isPublished?: boolean } | null } };
-  const page = created.pageCreate?.page;
-  if (!page) throw new Error("The files were pushed, but Shopify did not create the page. Create it by hand with the template.");
+  // A page already at that address with this template (an earlier try made it) counts as created, so a re-run can finish the record.
+  const page = await createPage(graphql, payload);
   await db
     .update(actions)
-    .set({ status: "done", error: null, result: { written: true, via: "shopify-cli", themeId: result.themeId, pageId: page.id, handle: page.handle, published: page.isPublished ?? false }, updatedAt: new Date() })
+    .set({
+      status: "done",
+      error: null,
+      result: { written: true, via: "shopify-cli", themeId: result.themeId, pageId: page.id, handle: page.handle, published: page.isPublished, ...(page.existed ? { pageExisted: true } : {}) },
+      updatedAt: new Date(),
+    })
     .where(eq(actions.id, id));
-  console.log(`Done. Hidden page /pages/${page.handle} uses the new template. Preview it in the theme editor, then publish it from the Shopify admin.`);
+  console.log(`Done. ${page.isPublished ? "Page" : "Hidden page"} /pages/${page.handle} ${page.existed ? "was already in the store and" : "was created and"} uses the new template. Preview it in the theme editor, then publish it from the Shopify admin.`);
   process.exit(0);
 }
 
