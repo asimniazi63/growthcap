@@ -25,12 +25,17 @@ export function monthOptions(now: Date, n = 6): MonthOption[] {
   return options;
 }
 
-// A write-up is model text, shown as plain text only: split into paragraphs on blank lines, single line breaks kept by CSS.
+// Three or more of the same dash, asterisk or underscore, with spaces allowed between: a horizontal rule. The shared rules forbid them in
+// a write-up, but a model sometimes puts one between its sections, and as plain text it would show as a line of dashes.
+const HORIZONTAL_RULE = /^([-*_])(?:\s*\1){2,}$/;
+
+// A write-up is model text, shown as plain text only: split into paragraphs on blank lines, single line breaks kept by CSS. A paragraph
+// that is only a horizontal rule is left out; one that merely contains dashes ("a - b", "-- note") stays.
 export const paragraphs = (body: string): string[] =>
   body
     .split(/\r?\n\s*\r?\n/)
     .map((p) => p.trim())
-    .filter(Boolean);
+    .filter((p) => p !== "" && !HORIZONTAL_RULE.test(p));
 
 export interface Segment {
   text: string;

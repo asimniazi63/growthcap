@@ -13,6 +13,7 @@ import { T13_INVOICE_CASES } from "./t13-invoice-cases";
 import { T14_CASES } from "./t14-cases";
 import { T17_CASES } from "./t17-cases";
 import { T18_CASES } from "./t18-cases";
+import { T23_CASES } from "./t23-cases";
 import { WHY_CASES } from "./why-cases";
 import type { Dataset, StoreKey, Truth } from "../scripts/seed/types.js";
 import type { Expectation } from "./graders";
@@ -132,4 +133,5 @@ export const CASES: EvalCase[] = [
   ...T17_CASES,
   ...T18_CASES,
   ...EBITDA_CASES,
+  ...T23_CASES,
 ];

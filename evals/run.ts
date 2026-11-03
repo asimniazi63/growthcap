@@ -64,6 +64,7 @@ interface CaseResult {
   checks: Check[];
   answer: string;
   control?: { answer: string; numbers: number[] };
+  repaired: boolean; // the number check sent the first answer back once (RunSummary.repaired): the answer graded is the second
   costUsd: number;
   latencyMs: number;
   tokens: { input: number; output: number };
@@ -93,7 +94,7 @@ async function runCase(c: EvalCase, env: EvalEnv, modelId: string | undefined): 
   await env.db.delete(memories);
 
   const checks = await gradeAsync(run, c.expect(env));
-  return { id: c.id, category: c.category, passed: checks.every((k) => k.ok), checks, answer: run.answer, ...(control ? { control } : {}), costUsd: cost, latencyMs: Date.now() - started, tokens };
+  return { id: c.id, category: c.category, passed: checks.every((k) => k.ok), checks, answer: run.answer, ...(control ? { control } : {}), repaired: summary.repaired, costUsd: cost, latencyMs: Date.now() - started, tokens };
 }
 
 function markdown(results: CaseResult[], meta: { commit: string; model: string; ranAt: string }): string {
@@ -113,6 +114,7 @@ function markdown(results: CaseResult[], meta: { commit: string; model: string; 
   for (const r of results) {
     lines.push(`## ${r.id}`, "", ...r.checks.map((k) => `- ${k.ok ? "pass" : "FAIL"}: ${k.name}${k.ok || !k.detail ? "" : ` (${k.detail})`}`));
     if (r.control) lines.push("", `Without the setup the answer stated: ${r.control.numbers.slice(0, 8).join(", ") || "no numbers"}.`);
+    if (r.repaired) lines.push("", "The number check sent the first answer back once (a repair turn); the answer below is the second.");
     lines.push("", `Answer: ${r.answer.replace(/\s+/g, " ").trim()}`, "");
   }
   return lines.join("\n");
@@ -167,12 +169,13 @@ async function main(): Promise<void> {
       passed: false,
       checks: [{ name: "the case ran to the end without an error", ok: false, detail: (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 300) }],
       answer: "",
+      repaired: false,
       costUsd: 0,
       latencyMs: 0,
       tokens: { input: 0, output: 0 },
     }));
     results.push(r);
-    console.log(`${r.passed ? "pass" : "FAIL"} (${r.checks.filter((k) => k.ok).length}/${r.checks.length}, $${r.costUsd.toFixed(4)})`);
+    console.log(`${r.passed ? "pass" : "FAIL"} (${r.checks.filter((k) => k.ok).length}/${r.checks.length}, $${r.costUsd.toFixed(4)}${r.repaired ? ", repaired" : ""})`);
     for (const k of r.checks.filter((x) => !x.ok)) console.log(`    FAIL: ${k.name}${k.detail ? ` - ${k.detail}` : ""}`);
   }
   setTestNow(null);

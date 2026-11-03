@@ -123,8 +123,8 @@ Reviewer demo logins: `reviewer-gc+clerk_test@example.com` is `gc_partner` in bo
 
 `npm run eval -- [--case <id>]... [--model <id>] [--out <file>]` **[paid]** needs `AWS_BEARER_TOKEN_BEDROCK` in `.env.local`. It asks the real model each case against the fixture data in an in-memory database (not the live one), with the clock pinned per case. Graders are deterministic, and expected numbers come from the dataset and fixture files, not from `lib/metrics`. It exits 1 if a case fails.
 
-- The cases are in `evals/cases.ts` and `evals/why-cases.ts` (eight today: pacing gauge, remembered note, MER, and five "why" cases).
-- It writes `docs/evals/latest.md` and `latest.json` only when every case was run (no `--case`). The committed files are from the full 24-case run on Sonnet 4.6 (22 of 24; see the README for the two that failed). `--out` writes the run's JSON to a path you choose.
+- The cases are in `evals/cases.ts` and the files it imports (41 today; [evals/notes.md](evals/notes.md) says what they are).
+- It writes `docs/evals/latest.md` and `latest.json` only when every case was run (no `--case`). The committed files are from the full 41-case run on Sonnet 4.6 on 2026-11-03 (35 of 41; [evals/notes.md](evals/notes.md) says which failed and why). A case that needed the repair turn (the number check sent its first answer back once) shows ", repaired" on the run's line, and `latest.md` says the answer shown is the second. `--out` writes the run's JSON to a path you choose.
 - `AGENT_SINGLE_AGENT=true` leaves out `explain_gap`, to compare one agent with the multi-agent "why". It is for evals only.
 - Run it when you change `lib/agent`, `lib/tools`, prompts or `models.ts`. It is run locally and the result is committed: there is no eval run in CI (section 9a). `--max-cost <usd>` (or `EVAL_MAX_COST_USD`) stops starting new cases once the estimated cost reaches the cap. A full run also writes `docs/evals/scoreboard.md` and `.json`.
 - `docs/evals/reconciliation.md` comes from `reconcile:truth` (section 4), not from this.
@@ -145,9 +145,9 @@ Prompts, answers and tool arguments or results are never recorded (`recordInputs
 
 - Secret `AWS_BEARER_TOKEN_BEDROCK` (the Bedrock API key the app uses), or the pair `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (an IAM user allowed to invoke the models). Secret `AWS_REGION` (for example `eu-central-1`).
 - Optional secrets `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, to trace the runs.
-- Optional variables `EVAL_MAX_COST_USD` (the cap per run in US dollars, default 3) and `BEDROCK_CLAUDE_ENABLED`.
+- Optional variables `EVAL_MAX_COST_USD` (the cap per run in US dollars, default 3, which a full 41-case run at $6.29 exceeds, so set it higher for one) and `BEDROCK_CLAUDE_ENABLED`.
 
-A run stops starting new cases once the estimated cost reaches the cap and says so (`npm run eval -- --max-cost 5`, or `EVAL_MAX_COST_USD`); with the cap hit, `latest.*` is not written. The scoreboard (accuracy, cost, average and p95 latency per category and overall) goes to `docs/evals/scoreboard.md` and `.json` with `latest.md` and `latest.json`. To keep a result, commit those four files. The 31-case full run costs about $3 on Sonnet 4.6, so run it with `--max-cost 5`.
+A run stops starting new cases once the estimated cost reaches the cap and says so (`npm run eval -- --max-cost 8`, or `EVAL_MAX_COST_USD`); with the cap hit, `latest.*` is not written. The scoreboard (accuracy, cost, average and p95 latency per category and overall) goes to `docs/evals/scoreboard.md` and `.json` with `latest.md` and `latest.json`. To keep a result, commit those four files. The 41-case full run cost $6.29 on Sonnet 4.6 (2026-11-03), so run it with `--max-cost 8`.
 
 ## 10. Approved writes
 
@@ -190,6 +190,28 @@ GC roles only. Upload a SOW (PDF) or a plan sheet (CSV), up to 4 MB. The file ty
 - **Delivery is a log line.** Slack is not added yet. Approval writes `[brief] delivered` (brand, week, brief id; never the body) to the server log and marks the brief delivered. A reviewer's approval writes `[brief] dry run` and leaves it undelivered. Slack goes in `deliver.ts`, after the approval check, and nowhere else.
 - To run it by hand: `curl -H "Authorization: Bearer $CRON_SECRET" <app url>/api/cron/brief`. It makes one model run per connected brand.
 
+## 13a. Playbooks
+
+`/playbooks` (Growth Capital roles only) runs a saved review with one click. Each playbook is one fixed question that the server writes (`lib/playbooks/questions.ts`) and sends through the shared agent loop, so the number checker runs on the write-up. A request (`POST /api/playbooks`) names only the playbook and, for the monthly review, a month. Nothing else reaches the question.
+
+- **[paid]** Every run is one model call. A brand can run each playbook once per 10 minutes: a second run inside that window answers 429, and a double click is caught too. A run that fails (a timeout or a model error) stores nothing, so it can be tried again at once. A blocked run is stored, so it starts the 10-minute window too.
+- A run is stored per brand in `playbook_runs` (migration 0008). It is `ready`, or `blocked` when the checker could not match every figure after its one repair turn. A blocked run lists the unmatched figures and says to treat the write-up as unchecked. A write-up is stored whole up to 8,000 characters (`MAX_BODY_CHARS` in `lib/playbooks/generate.ts`, raised from 4,000 for Creative briefs), and a longer one is cut at 8,000 without a word and is still shown as Ready. The page leaves out a paragraph that is only a horizontal rule, and shows each playbook's latest run and up to five earlier ones.
+- Playbook runs are not counted by the daily spend cap (section 8 counts chat runs only), so the 10-minute limit is the only limit on how often one runs.
+- The playbooks are code, so adding one needs a deploy and no migration (`playbook_runs.playbook` is plain text).
+
+| Playbook | What it does | Cost of a run |
+|---|---|---|
+| Black Friday review (`bfcm-review`) **[paid]** | How the last Black Friday to Cyber Monday weekend went, which discount codes drove it, and which variants are most at risk of running out before the next one | about $0.12 to $0.14 |
+| Retention check (`retention-check`) **[paid]** | The repeat rate by first-order month, and how the share of returning customers moved against the previous 30 days | about $0.12 to $0.14 |
+| Monthly business review (`monthly-review`) **[paid]** | A finished month against plan: the main numbers, what drove the gap, and the cause with its source. Takes a month (YYYY-MM); without one it reviews the last month | about $0.12 to $0.14 |
+| Creative briefs (`creative-briefs`) **[paid]** | Three creative briefs for the brand's next campaign, from its own numbers: best customers first, win back the quiet ones, new customers. Takes no input. Eight read-tool calls in two steps (first the calendar for the next 60 days, the customer segments, the top eight products by units over the last 90 complete days, the post-mortem of the latest Black Friday weekend whose 180-day repeat window has finished, and the EBITDA what-if at a 10% and a 25% price cut, quoted only as a profit margin and never in dollars; then those products' margin and stock). The write-up is asked to be under 480 words, and it starts with a campaign line, a "Last year" paragraph and a "Not pushing" line. The page draws a finished run as three brief cards (the campaign line and the Last year and Not pushing notes above them, a Copy button on every hook line); a blocked run, or a write-up whose layout cannot be read, stays plain text. Under a finished run, a link opens Chat, which asks for the campaign's landing page at once (a paid chat run, counted by the daily spend cap), where the landing page draft and approval card (sections 10 and 11) take over | about $0.23 to $0.46 (eight live runs on 2026-11-03) |
+
+The cost for the first three is the figure recorded for T18 in [build-plan.md](build-plan.md).
+
+**Creative briefs needs a calendar entry to name a campaign.** It writes for the first promotion, campaign or launch on the marketing calendar that has not started yet, within 60 days of today. The calendar comes from `calendar.csv` through `npm run fixtures:load` (section 4), and the app has no calendar editor. If nothing is planned in that window (no calendar loaded, the campaign is further out, or it has already started or is over), it writes for the next 30 days in general and says nothing is planned. On the demo data both brands have Black Friday and Cyber Monday 2026 (27 to 30 November) on the calendar. That fallback has not been run live.
+
+Its eval case is `creative-briefs-black-friday` (`evals/t23-cases.ts`, 38 checks): `npm run eval -- --case creative-briefs-black-friday` **[paid]**. It has passed three times in eight runs on 2026-11-03: once on an earlier wording of the question (31 of 31 checks) and twice in a row on the final wording (38 of 38, each after one repair turn). Two passes in a row is a tiny sample, so a run can still be Blocked, and a retry costs about $0.34. The checker is lenient for small whole numbers, so "verified" in a case is a floor and not proof.
+
 ## 14. Deploying
 
 Vercel builds and deploys every push to `main` (project `oasis-pace`). Environment variables are set in the Vercel project, and a change takes effect on the next deploy. The app needs everything in section 1 except the `SEEDER_*` and `*_SHOP_DOMAIN` variables.
@@ -216,6 +238,8 @@ Vercel builds and deploys every push to `main` (project `oasis-pace`). Environme
 | Cron route answers 401 or 500 | `CRON_SECRET` is wrong or not set in Vercel |
 | Webhook answers 401 | The HMAC failed. Check `SHOPIFY_API_SECRET` in Vercel. If new orders never arrive and nothing is logged, `shopify app deploy` may not have released the `orders/create` subscription yet |
 | Theme Check fails or times out | Theme Check runs inside the chat function on bundled docs (`next.config.ts` includes them) and may try one network fetch. If it can't finish in 30 seconds the draft fails with "Theme Check did not finish in time". This has not been verified on the deployed route. Check Vercel Logs. The bundled docs are included through `outputFileTracingIncludes` in `next.config.ts` |
+| Creative briefs says it couldn't run, and no run is stored | The loop has 8 steps and Creative briefs names 8 tool calls, so its question asks for six in one step and two in the next. If the model made them one at a time, no step would be left to write and the run would fail with "could not be written up". This has not happened in eight live runs. Try again at once (a failed run starts no 10-minute wait). If it keeps failing, cut the second what-if (the 25% price cut) from `creativeBriefs` in `lib/playbooks/questions.ts`: seven calls fit the loop even one at a time. A timeout (the route allows 120 seconds; the live runs took 27 to 55 seconds) or a model error looks the same, so check Vercel Logs |
+| Creative briefs says the calendar has nothing planned | No promotion or campaign is on the marketing calendar in the next 60 days. Load `calendar.csv` with `npm run fixtures:load` (section 4) and check its dates. The 30-day write-up is the designed fallback, not a failure |
 | `INTERNAL_ERROR` in chat | Provider and unexpected errors are shown as this. The detail is in Vercel Logs, and failed tool calls are in `agent_steps` |
 | Every Claude call fails with an access error | `BEDROCK_CLAUDE_ENABLED=true` was set before AWS granted access. Unset it to go back to Sonnet 4.6 |
 | `reconcile:truth` shows a difference | An extra order or a changed fixture. Add a note in `scripts/reconcile/explanations.ts`, or find the real cause |

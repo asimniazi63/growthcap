@@ -33,7 +33,9 @@ export interface PlaybookRunResult {
   runId: string;
 }
 
-const MAX_BODY_CHARS = 4000;
+// A write-up is stored whole up to this many characters, and a longer one is cut without a word. The Creative briefs run to about 5,000
+// (the live runs wrote 4,850 against the 4,000 this was before), and nothing else a playbook writes is near 8,000.
+export const MAX_BODY_CHARS = 8000;
 
 // Runs one playbook for the signed-in Growth Capital user. The tenant, the store and the role come from the session (the route
 // builds `tenant` and `user` from it); a request supplies only the playbook id and its parameters, and both are checked here.

@@ -42,7 +42,7 @@ The brief asked for a test Shopify app, a test dev store and an AI agent that qu
 | Stretch: document parsing | Built | `/plan`: upload a SOW PDF or plan CSV, review the targets read from it with their page, confirm as the active plan. A supplier invoice (PDF) becomes unit-cost updates that a person approves, a call note becomes plan changes and action items, and `ask_document` answers questions about an uploaded document with the page it came from |
 | Stretch: Shopify Liquid page generation | Built | `draft_landing_page`: copy from the model, Liquid built and checked on the server, approval card. Shopify lets an app write theme files only after an exemption, so an approved page is pushed with `npm run landing:push` (Shopify CLI) |
 | Stretch: additional data sources | Built | Ad spend (MER, CAC), marketing calendar, call notes, plan targets, supplier invoices |
-| Beyond the list | Built | Why a month missed plan (`explain_gap`), approved writes to Shopify (Metric Target, annotation, discount off, unit cost, customer segment), weekly brief, portfolio view, team memory, a growth audit (`/audit`), saved playbooks (`/playbooks`), cohort grids and unit economics, an EBITDA calculator with an editable cost sheet and what-if scenarios (`/ebitda`, `get_ebitda`, `get_ebitda_scenario`), promo post-mortems (`get_promo_postmortem`), bundle candidates (`get_bundle_candidates`), launch curves (`get_launch_curves`), retention segments with a Klaviyo CSV (`get_customer_segments`, `/segments`), data-health checks, an Overview home page, a store-health Connect page, colour schemes, optional Langfuse tracing and a fallback model |
+| Beyond the list | Built | Why a month missed plan (`explain_gap`), approved writes to Shopify (Metric Target, annotation, discount off, unit cost, customer segment), weekly brief, portfolio view, team memory, a growth audit (`/audit`), saved playbooks (`/playbooks`, including creative briefs for the next campaign), cohort grids and unit economics, an EBITDA calculator with an editable cost sheet and what-if scenarios (`/ebitda`, `get_ebitda`, `get_ebitda_scenario`), promo post-mortems (`get_promo_postmortem`), bundle candidates (`get_bundle_candidates`), launch curves (`get_launch_curves`), retention segments with a Klaviyo CSV (`get_customer_segments`, `/segments`), data-health checks, an Overview home page, a store-health Connect page, colour schemes, optional Langfuse tracing and a fallback model |
 
 ### Every feature, what it does and what it changes
 
@@ -130,14 +130,14 @@ The table above is the index. Below, each brief item is broken into its features
 | Weekly brief (`/briefs`) | Drafted every Monday through the same agent loop, blocked from approval if a number cannot be sourced, and approved by a person. | A client-ready summary is ready to review instead of written from scratch. |
 | Portfolio (`/portfolio`) | Ranks brands by dollars behind plan, with the biggest driver of each. | One view tells a few operators which brand to look at first. |
 | Growth audit (`/audit`) | Four fixed checks (stock risk, repeat rate, discount dependence, refund outliers) over the synced data, written up by the model through the number checker. | A new brand gets a health check on connection. |
-| Playbooks (`/playbooks`) | A Black Friday review, a retention check and a monthly business review, each run with one click and stored per brand. | A repeatable review is one click, and the figures are checked like any answer. |
+| Playbooks (`/playbooks`) | A Black Friday review, a retention check, a monthly business review and creative briefs for the next campaign ([below](#beyond-the-list-creative-briefs)), each run with one click and stored per brand. | A repeatable review is one click, and the figures are checked like any answer. |
 | Cohorts and unit economics | Repeat rate by first-order month, gross margin, contribution margin and payback from unit costs. | It shows whether acquiring customers pays back. |
 | Promo post-mortems | Weighs a promotion's extra sales against the sales it only pulled forward, and how well its customers came back. | It shows whether a promotion created demand or only moved it. |
 | Bundles and launch curves | Which products are bought together (with the share and lift), and a product's first weeks against the median launch. | Merchandising and launch decisions rest on order data. |
 | Retention segments | Champions, at risk, due to reorder and one and done, scored by recency, frequency and value, with a Klaviyo CSV of pseudonymous ids. | It shows who to win back, and hands the list to an email tool. |
 | Team memory | The agent keeps notes for a brand, such as why a month dipped, which a Growth Capital person confirms. | What the team learns survives from one conversation to the next. |
 | Roles | Growth Capital staff see several brands, and a client viewer sees one brand, read only. | A client can look at their own numbers without seeing another brand or any write tool. |
-| Evals | 40 cases ask the real model questions with known right answers and grade them with deterministic checks. | A change to the prompt or the model is tested instead of guessed. |
+| Evals | 41 cases ask the real model questions with known right answers and grade them with deterministic checks. | A change to the prompt or the model is tested instead of guessed. |
 
 #### Beyond the list: the EBITDA calculator
 
@@ -159,6 +159,29 @@ The table above is the index. Below, each brief item is broken into its features
 - Scenarios rest on two assumptions, both stated beside the answer. A price change moves orders by a price elasticity of `-1.5`, so a 10% price rise loses 15% of orders. Cutting ad spend loses new-customer orders in proportion at today's cost to win a customer and leaves returning-customer orders alone; without that rule, cutting ads would always look free.
 
 **A design, not built:** a QuickBooks or Xero connection (operating costs come only from the seeded sheet and from edits on the page) and a CSV upload for the cost sheet (the reader used for the seed files could serve one later). Tax, interest, depreciation and amortisation have no line, because EBITDA leaves them out by definition.
+
+#### Beyond the list: creative briefs
+
+| Feature | What it does | Impact |
+|---|---|---|
+| Creative briefs (`/playbooks`) | A creative brief is a short plan for one piece of marketing. Press Run on the Creative briefs playbook and it writes three for the brand's next campaign from the store's own numbers: one for the best customers, one to win back customers who have gone quiet, and one for people who have not bought yet. Before them it names the campaign, says what last year's Black Friday discount did to repeat buying and what a 10% and a 25% price cut would do to the profit margin, and is asked to list the products it will not push (a refund rate above 10%, or 30 days of stock or less at the recent sales rate). Each brief says who to talk to, which product to lead with, the angle (the one idea behind the message), three hook lines (short opening lines for an ad or an email), what offer to make and how deep it can go, two figures that back it, what to avoid and what to measure. The page draws a finished run as three cards side by side, with a Copy button on every hook line and the profit limit set apart in the offer; a blocked run, or a write-up whose layout the page cannot read, stays plain text. | A campaign starts from this brand's customers, stock and profit instead of a blank page. The question asks that any percent-off stay small and come with the profit margin at that discount; nothing checks that. |
+| Checked like any answer | It is a saved playbook, so it runs through the same agent loop as the chat. It reads the store through eight read-tool calls, and the number checker reads the finished briefs: a run with a figure that cannot be checked is marked blocked on the page. | A figure that no tool returned is caught and flagged instead of reaching a brief, within the limits below. |
+| A link to the landing page draft | Under a finished run, **Draft the campaign's landing page in chat** opens Chat, which asks "Draft a landing page for the next planned campaign." at once. The click starts a paid chat run, like any question you type, and the existing landing-page draft and approval card take over from there. | The brief and the page it leads to are about the same campaign, and a person still approves the page. |
+
+**Try it:** sign in with a Growth Capital login (the reviewer `gc_partner` login is one), open **Playbooks** on Solenne, find **Creative briefs** and press **Run**. It makes one paid model call, about $0.23 to $0.46, so it runs only on a click, and a brand can run it once every 10 minutes. Then click the link under the write-up: Chat asks for the landing page draft at once, which is a second paid call.
+
+**Limits to know:**
+
+- It needs a calendar entry to name a campaign. The briefs are written for the first promotion, campaign or launch on the marketing calendar that has not started yet, within 60 days of today (on the demo data, Black Friday and Cyber Monday 2026, 27 to 30 November). With none, it writes for the next 30 days in general and says nothing is planned. Where other data is missing, such as no earlier Black Friday weekend in the data, it is told to say so for that part and invent nothing. Neither fallback has been run live, because the demo data has both.
+- Early access, a gift or free shipping come before a percent-off, and they carry no cost figure, because no tool returns what a gift or free shipping costs. The question asks that a percent-off be at most 10% and never store-wide; nothing checks that when a run happens. What a price cut does is quoted only as a profit margin (EBITDA as a share of net sales), from the EBITDA what-if for a 10% and a 25% cut across the whole store over the last three complete months, and never as a dollar figure: a what-if's money is in cents, and a figure in cents written as dollars was the commonest reason an early run was blocked. On the demo store the margins are 15.6% now, 13.8% at 10% off and 6.8% at 25% off. The question calls the margin at 10% off "the worst case for the whole store" but does not say that the what-if assumes how orders respond to price, so for a brand whose products cost little to make it can show a profit gain, and "worst case" would then be wrong. The margins also rest on the calculator's assumptions ([above](#beyond-the-list-the-ebitda-calculator)): assumed card-fee and fulfilment rates, an assumed price response and, for the demo brands, an invented cost sheet.
+- Every figure is checked, but the checker is lenient with small whole numbers (a "15%" or "7 days" can match an unrelated value), so a passing check is a floor and not proof. It checks figures, not wording. The rule that the angle and hook lines carry no numbers, prices or health claims is written into the question the playbook sends and is tested on one answer by the eval case, and nothing checks it when a run happens. Read the briefs before using them.
+- Brief 3's Who line asks for an audience count, and no tool counts people who have not bought. A model may put another segment's count there (one-and-done customers, say), and the checker accepts it because that figure is in the results.
+- The write-up is asked to stay under 480 words and to use no horizontal rules. The last two passing runs wrote 763 and 766 words and put rules between the briefs, which the page leaves out.
+- The evidence so far is thin. The eval case (`creative-briefs-black-friday`, 38 checks) has passed three times in eight paid runs: once on an earlier wording of the question (31 of 31 checks) and twice in a row on the final wording (38 of 38, each after one repair turn: the number check sent the first answer back once and the rewrite passed). It failed on the other five. Two passes in a row is a tiny sample, so a run can still be Blocked on the page, and a retry costs about $0.34. On the fixture data with the clock pinned to 2 November 2026 the case expects 53 champions, 99 at-risk customers, repeat rates of 18.2% (last year's Black Friday weekend) and 42.5%, and margins of 15.6%, 13.8% and 6.8%. The full set of 41 cases was run once, before the last change to the question, and this case failed it; it has been run alone since ([Evals](#evals)). Playbook runs are not counted by the daily spend cap, so the 10-minute limit on each playbook is the only limit on how often one runs.
+- The agent has 8 steps and the question names 8 tool calls, so it asks for six in one step and two in the next. That held in every run. Calls made one at a time would leave no step to write the briefs, and the run would fail and store nothing.
+- The write-up is saved as text with the playbook run, like the others, and the page shows the latest run and up to five earlier ones. A write-up past 8,000 characters is cut and still shown as Ready (the passing runs were about 4,100 to 4,700). A brief is not a record of its own that can be opened, edited or followed up, and the link drafts a page for the campaign, not for one brief.
+
+**Not built:** generated images or ads (people make the creative from the brief), posting to Meta or Google, briefs kept as records of their own, a campaign picker (a way to choose the campaign; the calendar decides today), and tracking a brief's check-on date (each brief says in words what to measure and when, and nothing follows it up).
 
 ## What is in the app
 
@@ -185,7 +208,7 @@ The table above is the index. Below, each brief item is broken into its features
 - **Segments** (`/segments`, Growth Capital roles only): the four retention segments (champions, at risk, due to reorder, one and done) with their counts, average lifetime value and days since the last order, a customer map of recency against lifetime value (one shape per segment, and the legend filters the table), and the top customers by pseudonymous id. Each segment downloads as a CSV for Klaviyo ([below](#export-for-klaviyo)), or can be proposed as a Shopify customer segment through the approval card. The agent reads the same numbers through `get_customer_segments`. Churn risk is a heuristic (days since the last order against the customer's own usual gap), not a prediction.
 - **Merchandising and promotions** (in Chat): `get_bundle_candidates` says which products are bought together, with the orders that held both, the share and the lift. `get_launch_curves` shows a product's first weeks against the median launch, counting the first sale as the launch because there is no publish date. `get_promo_postmortem` weighs a promotion's extra sales against the sales it pulled forward, and how well its customers came back. They are drawn as a bundle matrix, small multiples and a lift-and-dip chart.
 - **Audit** (`/audit`): a growth audit of a connected store, run on demand. The findings (stock risk, repeat rate, discount dependence and refund outliers) are fixed code over the synced data; the model only writes them up, through the same number checker. Ten-minute cooldown, because each run is a paid model call.
-- **Playbooks** (`/playbooks`, Growth Capital roles only): three saved reviews, each run with one click. A Black Friday review, a retention check, and a monthly business review of a finished month against plan, with the cause of the gap and its source. Each is one fixed question, written on the server, sent through the same agent loop, so the number checker runs on the write-up. Every run is stored per brand. Each run is one paid model call, and a brand can run each playbook once per 10 minutes.
+- **Playbooks** (`/playbooks`, Growth Capital roles only): four saved playbooks, each run with one click. A Black Friday review, a retention check, a monthly business review of a finished month against plan (with the cause of the gap and its source), and [creative briefs](#beyond-the-list-creative-briefs) for the next campaign, with a link that drafts the campaign's landing page in chat. Each is one fixed question, written on the server, sent through the same agent loop, so the number checker runs on the write-up. Every run is stored per brand. Each run is one paid model call (about $0.12 to $0.14 for the first three, about $0.23 to $0.46 for creative briefs), and a brand can run each playbook once per 10 minutes.
 - **Connect** (`/connect`): store health. The permissions Shopify actually granted, when the data was last synced, how much history is covered, and real checks of the connection.
 
 **Everywhere**
@@ -250,27 +273,28 @@ The reasoning is recorded as short decision records in [docs/decisions/](docs/de
 
 `npm run eval` asks the real model each case's question against the fixture data (an in-memory database, today's date pinned) and grades the answer with deterministic checks: the expected figures come from the dataset and the fixture files, never from the code under test. Results are written to [docs/evals/latest.md](docs/evals/latest.md).
 
-The full run on the default model, Claude Sonnet 4.6 (2026-11-02, all 38 cases): **32 of 38 cases pass**, at an estimated $4.75.
+The latest full run, on the default model Claude Sonnet 4.6 (2026-11-03, all 41 cases): **35 of 41 cases pass**, at an estimated $6.29. The run before it (2026-11-02, all 38 cases) passed 32 of 38, at an estimated $4.75. The latest run was made before the last change to the Creative briefs question, and that case failed it (31 of 33 checks). It has passed twice since, run alone, and the full set has not been re-run.
 
 | Category | Passed | Cost |
 |---|---|---|
-| plan | 2 of 2 | $0.27 |
-| memory | 1 of 1 | $0.17 |
-| ads | 0 of 1 | $0.13 |
-| why | 3 of 5 | $0.82 |
-| lookup | 5 of 5 | $0.42 |
-| comparison | 2 of 3 | $0.35 |
-| storyline | 2 of 3 | $0.40 |
-| injection | 2 of 2 | $0.17 |
-| privacy | 1 of 1 | $0.04 |
-| isolation | 1 of 1 | $0.08 |
-| landing | 1 of 1 | $0.25 |
-| cohorts, unit economics | 2 of 2 | $0.22 |
+| plan | 2 of 2 | $0.30 |
+| memory | 1 of 1 | $0.19 |
+| ads | 0 of 1 | $0.14 |
+| why | 4 of 5 | $0.87 |
+| lookup | 5 of 5 | $0.47 |
+| comparison | 2 of 3 | $0.39 |
+| storyline | 2 of 3 | $0.50 |
+| injection | 2 of 2 | $0.19 |
+| privacy | 1 of 1 | $0.05 |
+| isolation | 1 of 1 | $0.15 |
+| landing | 1 of 1 | $0.26 |
+| cohorts, unit economics | 2 of 2 | $0.31 |
 | documents, audit | 4 of 4 | $0.52 |
-| promo post-mortems, retention segments, merchandising | 5 of 5 | $0.64 |
-| playbooks | 1 of 2 | $0.26 |
+| promo post-mortems, retention segments, merchandising | 4 of 5 | $1.06 |
+| playbooks | 2 of 3 | $0.63 |
+| EBITDA | 2 of 2 | $0.26 |
 
-The cases cover lookups, comparisons, planted storylines, "why did we miss plan" diagnoses for each storyline, Pace, prompt injection, a refused request for a customer's email, a Tidepool user asking about Solenne, landing pages, cohorts and payback, invoices, document questions, call notes, the audit, promo post-mortems, segments, bundles, launch curves and playbooks. The suite also tells models apart: the same cases on Devstral 2 passed far fewer. Per-case answers and costs are in [docs/evals/latest.md](docs/evals/latest.md), and notes on each case that did not pass are in [docs/evals/notes.md](docs/evals/notes.md).
+The cases cover lookups, comparisons, planted storylines, "why did we miss plan" diagnoses for each storyline, Pace, prompt injection, a refused request for a customer's email, a Tidepool user asking about Solenne, landing pages, cohorts and payback, invoices, document questions, call notes, the audit, promo post-mortems, segments, bundles, launch curves, playbooks, EBITDA and creative briefs. The suite also tells models apart: the same cases on Devstral 2 passed far fewer. Per-case answers and costs are in [docs/evals/latest.md](docs/evals/latest.md), and notes on each case that did not pass are in [docs/evals/notes.md](docs/evals/notes.md).
 
 ## Run it yourself
 
@@ -427,6 +451,8 @@ Money is stored as integer cents and rates as fractions (0.18 means 18%). Every 
 | **Thread** | A saved conversation. |
 | **Suggested questions, follow-up chips** | Starter questions on an empty chat, and one-click next questions under an answer. |
 | **Memory** | Notes the agent keeps for a brand with the `remember` tool, such as why a month dipped. A Growth Capital person confirms a note, and client viewers can read the confirmed ones. |
+| **Playbook** | A saved review the agent runs with one click on the Playbooks page. Each is one fixed question, written on the server, that tells the agent which tools to call and how to write up the result. It goes through the same agent loop as the chat, so the number checker runs on the write-up, and a run with a figure that cannot be matched is marked blocked. There are four: a Black Friday review, a retention check, a monthly business review and creative briefs. Growth Capital roles only. |
+| **Creative brief** | A short plan for one piece of marketing: who it is for, which product leads, the angle (the one idea the message rests on), three hook lines (short opening lines for an ad or an email), the offer and how deep it can go, the figures that back it, what to avoid and what to measure. The Creative briefs playbook writes three for a brand's next campaign from the store's numbers. People make the ads and emails from a brief; the playbook does not. |
 | **Untrusted data** | Order notes, product descriptions, calendar entries, call notes and uploaded documents reach the model as data under an `untrusted` key. The prompt says to treat them as data and never as instructions, and the checker never takes a figure from them. |
 | **Prompt injection** | Text in the store or a document that tries to give the model orders. Two eval cases try it. |
 | **Spend cap** | A daily limit on model spend per brand (`TENANT_DAILY_BUDGET_USD`, $5 by default, per UTC day). Chat warns at 80% and stops at 100% until midnight. |
@@ -488,7 +514,7 @@ Money is stored as integer cents and rates as fractions (0.18 means 18%). Every 
 | **Portfolio** `/portfolio` | Brands ranked by dollars behind plan, with the biggest driver of each. Growth Capital roles only. |
 | **Briefs** `/briefs` | The weekly brief for each brand, drafted every Monday at 06:00 UTC and approved by a person. The number checker runs on it, and a brief with a number it cannot source is blocked. Clients read the approved ones. |
 | **Audit** `/audit` | A growth audit of a store: stock risk, repeat rate, discount dependence and refund outliers. Growth Capital roles only. |
-| **Playbooks** `/playbooks` | Saved reviews run with one click: Black Friday, retention check, monthly business review. Growth Capital roles only. |
+| **Playbooks** `/playbooks` | Saved reviews run with one click: Black Friday, retention check, monthly business review, creative briefs. Growth Capital roles only. |
 | **Segments** `/segments` | Retention segments, the customer map, the top customers table and the Klaviyo CSV. Growth Capital roles only. |
 | **Connect** `/connect` | Store health: granted permissions, last sync, history covered, connection checks, and Resync. |
 | **Settings** `/settings` | Colour scheme and light or dark mode. |

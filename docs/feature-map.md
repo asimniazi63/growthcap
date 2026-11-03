@@ -39,7 +39,7 @@ Every feature we considered for the take-home, sorted under the item of the orig
 | **Stretch 2: Document parsing** | 23 | Invoice → product costs + doc Q&A | Stretch | Supplier invoice PDF → unit costs → proposed update, plus questions over the document |
 | | 41 | Call transcripts → client context | Beyond | Client calls update plans and action items |
 | **Stretch 3: Shopify Liquid page generation** | 24 | Landing page generator | Stretch | Black Friday page for top gift products, pushed to an unpublished theme. Needs theme-write exemption, with a CLI + Theme Access fallback |
-| | 46 | Creative-to-commerce loop | Ranked lower | Ad briefs → static ads → matching landing pages |
+| | 46 | Creative-to-commerce loop | Beyond (the briefs); the rest ranked lower | Ad briefs → static ads → matching landing pages. Built (T23): three creative briefs written from the store's own numbers by the Creative briefs playbook, and a link under the run that drafts the campaign's landing page in chat through the existing landing page tool and approval card. Not built: static ads and any generated image, posting to Meta or Google, briefs stored as records of their own, tracking a brief's check-on date |
 | **Stretch 4: Additional data sources** | 25 | Ad-platform data | Stretch | Meta/Google/TikTok spend → MER, CAC, contribution margin, payback |
 | **Delivery: GitHub repo + Loom** | 10 | README + setup | Core | Step-by-step setup, known limitations |
 | | 11 | Loom | Core | End-to-end flow. Rough "insurance" Loom once core is deployed |

@@ -30,6 +30,43 @@ describe("monthLabel and paragraphs", () => {
   });
 });
 
+// RULES forbids horizontal rules in a write-up, but the passing live run of the Creative briefs (2026-11-03) put a "---" between its
+// briefs. The page shows each paragraph as text, so a rule would show as a line of dashes: it is dropped, and only a rule.
+describe("paragraphs: a horizontal rule is dropped", () => {
+  it("disappears from between two paragraphs, whatever its line ending", () => {
+    expect(paragraphs("One.\n\n---\n\nTwo.")).toEqual(["One.", "Two."]);
+    expect(paragraphs("One.\r\n\r\n---\r\n\r\nTwo.")).toEqual(["One.", "Two."]);
+    expect(paragraphs("**Brief one**\nWho: the champions.\n\n---\n\n**Brief two**\nWho: the at-risk customers.\n\n---\n\n**Last year.** A paragraph.")).toEqual([
+      "**Brief one**\nWho: the champions.",
+      "**Brief two**\nWho: the at-risk customers.",
+      "**Last year.** A paragraph.",
+    ]);
+  });
+
+  it("is dropped when it is three or more dashes, asterisks or underscores, with or without spaces between and around", () => {
+    for (const rule of ["---", "-----", "----------------", "***", "******", "___", "_____", "- - -", "* * *", "_ _ _", "-- --", "  ---  ", "---   ", "\t---"]) {
+      expect(paragraphs(`One.\n\n${rule}\n\nTwo.`), JSON.stringify(rule)).toEqual(["One.", "Two."]);
+    }
+  });
+
+  it("is dropped at the start or the end of a write-up, and a write-up of nothing else is empty", () => {
+    expect(paragraphs("---\n\nOne.")).toEqual(["One."]);
+    expect(paragraphs("One.\n\n---")).toEqual(["One."]);
+    expect(paragraphs("---")).toEqual([]);
+    expect(paragraphs("---\n\n***\n\n___")).toEqual([]);
+  });
+
+  it("is not dropped from a paragraph that merely contains dashes, asterisks or underscores", () => {
+    for (const keep of ["a - b", "-- note", "--", "-", "- - a", "---x", "--- note", "*** note", "-*-", "- a list item", "**Bold** lead-in", "a---b", "snake_case___name", "$5 - $10"]) {
+      expect(paragraphs(`One.\n\n${keep}\n\nTwo.`), keep).toEqual(["One.", keep, "Two."]);
+    }
+  });
+
+  it("is not dropped when it is a line inside a paragraph: only a paragraph that is a rule goes", () => {
+    expect(paragraphs("One.\n---\nStill one.")).toEqual(["One.\n---\nStill one."]);
+  });
+});
+
 describe("segments: bold lead-ins and nothing else", () => {
   it("turns **lead-in** into a bold segment and keeps the rest as text", () => {
     expect(segments("**Repeat rate.** 22.2% ordered again.")).toEqual([

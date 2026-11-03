@@ -4,7 +4,7 @@ import { AppError } from "../errors";
 // loop so the number checker runs on the result. The question each one sends is written here by the server: nothing in a request
 // or in store data reaches it except the validated parameters below.
 
-export const PLAYBOOK_IDS = ["bfcm-review", "retention-check", "monthly-review"] as const;
+export const PLAYBOOK_IDS = ["bfcm-review", "retention-check", "monthly-review", "creative-briefs"] as const;
 export type PlaybookId = (typeof PLAYBOOK_IDS)[number];
 
 export interface PlaybookInfo {
@@ -18,6 +18,7 @@ export const PLAYBOOKS: readonly PlaybookInfo[] = [
   { id: "bfcm-review", title: "Black Friday review", description: "How the last Black Friday to Cyber Monday weekend went, which codes drove it, and which products are most at risk of running out before the next one.", takesMonth: false },
   { id: "retention-check", title: "Retention check", description: "How many customers come back: the repeat rate by first-order month, and how the share of returning customers moved against the previous 30 days.", takesMonth: false },
   { id: "monthly-review", title: "Monthly business review", description: "A finished month against plan: the main numbers, what drove the gap, and the cause with its source.", takesMonth: true },
+  { id: "creative-briefs", title: "Creative briefs", description: "Three creative briefs for the next campaign: who to talk to, which product to lead with, what to say, and how deep an offer can go, from this brand's own numbers.", takesMonth: false },
 ];
 
 export const isPlaybookId = (v: unknown): v is PlaybookId => typeof v === "string" && (PLAYBOOK_IDS as readonly string[]).includes(v);

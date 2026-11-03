@@ -40,9 +40,10 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 | 19 | Extras | T18: Playbooks (**built 2026-11-02; October review eval passes, 8 of 8**) | #19 | Feature 38 |
 | 19b | Extras | T18b: Slack bot | #23 | Feature 39 (the Slack part). Needs a Slack app from Asim. Numbered 19b so the later priorities keep their numbers |
 | 19c | Extras | T22: EBITDA calculator: cost sheet, bridge and what-if scenarios | issue to be opened | Feature 48 (new), extending features 25 and 32. Needs no other extra. Card fees and fulfilment are assumed rates, and the seeded cost sheet is invented and small. Numbered 19c so the later priorities keep their numbers |
+| 19d | Extras | T23: Creative briefs: three campaign briefs from the store's numbers | issue to be opened | Feature 46 (the brief half only), extending feature 38. One more saved playbook (T18) that reads what T17 and T22 already return and links to T9's landing page draft. It needs a calendar entry to name a campaign. No new table, page or tool. Images and ads, posting, stored briefs and tracking are not built. Numbered 19d so the later priorities keep their numbers |
 | 21 | Last, always | T11: Final ship | #12 | Whatever is built gets its evals, docs and the final Loom |
 
-**If time runs short,** cut from the bottom: T22 back to T12, then T10, then T8 part D, then T7, then T9, then T8 part C, then T6. Nothing in T0–T5 is cut.
+**If time runs short,** cut from the bottom: T23 back to T12, then T10, then T8 part D, then T7, then T9, then T8 part C, then T6. Nothing in T0–T5 is cut.
 
 ## Changes made while building
 
@@ -57,6 +58,8 @@ Finish each ticket before starting the next. T11 always runs last, whatever has 
 - **2026-11-03, Asim:** T19 (the fuller dataset, #20) is dropped. The brief asks for a dev store with test data, which Solenne and Tidepool already are, and no step of the demo uses the extra volume or the S1 and S2 storylines. Solenne stays at about 1,000 orders. Priority 20 and issue #20 are gone; T11 keeps priority 21 so the later numbers stay put.
 
 - **2026-11-03:** T22 (the EBITDA calculator) is added as an extra, numbered 19c so the later priorities keep their numbers; its GitHub issue is to be opened. It needs no other extra (it reads T6's ad-spend file and T12's unit costs), so it does not wait for T16. In the feature map it is feature 48, extending 25 and 32. Its card fees and fulfilment are assumed rates, and its seeded cost sheet is invented and small, to match the seeded sales.
+
+- **2026-11-03, Asim:** T23 (creative briefs) is added as an extra, numbered 19d so the later priorities keep their numbers; its GitHub issue is to be opened. Asim chose the simpler first version: one more saved playbook (T18), run from the existing Playbooks page, with no new page, table or tool, so the number checker covers the briefs like any playbook. In the feature map it is the brief half of feature 46 (creative-to-commerce loop). Generated images and ads, posting to Meta or Google, briefs stored as records of their own, a campaign picker and tracking a brief's check-on date are not built; a later version could keep briefs on a page of their own.
 
 ## What this order changes in the build plan
 
@@ -85,7 +88,7 @@ These stay because they're where the thinking shows.
 Every feature in [feature-map.md](feature-map.md) now has a ticket, except those listed under "Not built" below.
 
 - **Folded into existing tickets, at no extra time:** feature 2, the Plus plan, is in T0. Feature 24, Shopify CLI with the Theme Access app as the fallback for theme writes, is in T9.
-- **New tickets T12–T18b and T22** cover the rest, as in the priority order above.
+- **New tickets T12–T18b, T22 and T23** cover the rest, as in the priority order above.
 
 **Not built**
 
@@ -95,4 +98,5 @@ Every feature in [feature-map.md](feature-map.md) now has a ticket, except those
 | 4 | Checking the seeded data against ShopifyQL | Needs Level 2 customer data; `reconcile:truth` already checks the synced numbers |
 | 39 | A Sidekick extension (part of "use it anywhere") | Needs an embedded app, which is a non-goal |
 | 43 | Production token handling | Designed in [production/](production/); a demo doesn't need it |
-| 46, 47 | Creative-to-commerce loop; AI-shopping readiness audit | Ranked lower in the feature map |
+| 46 (part) | Creative-to-commerce loop: generated images and ads, posting to ad platforms, briefs stored as records, tracking | T23 builds the briefs only. The rest stays ranked lower in the feature map |
+| 47 | AI-shopping readiness audit | Ranked lower in the feature map |
