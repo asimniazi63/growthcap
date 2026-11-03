@@ -97,10 +97,12 @@ describe("the Creative briefs cards", () => {
     expect(out).not.toContain("<button");
   });
 
-  it("are for Creative briefs only: another playbook with the same text stays plain", () => {
+  it("are for Creative briefs only: another playbook with the same text is drawn as a report, never as brief cards", () => {
     const out = html(run({ playbook: "retention-check", body: FULL }), "Retention check");
     expect(out).not.toContain("Brief 1");
-    expect(out).toContain("<strong>Best customers first</strong>");
+    expect(out).not.toContain('aria-label="Creative briefs"');
+    expect(out).not.toContain("<button");
+    expect(out).toContain('aria-label="Report sections"');
   });
 
   it("fall back to the plain paragraphs when the write-up cannot be told apart, and lose no words", () => {
@@ -110,5 +112,57 @@ describe("the Creative briefs cards", () => {
     expect(out).toContain("A short note with no briefs in it.");
     expect(out).not.toContain("Brief 1");
     expect(out).toContain(`href="${HREF}"`); // the link is for any finished Creative briefs run
+  });
+});
+
+// The other three playbooks (layer A): a short report, a section per paragraph, the lead-in as its heading.
+const REPORT = [
+  "**Black Friday to Cyber Monday 2025 Review — November 28 to December 1, 2025**",
+  "**How the weekend went.** The weekend delivered $2,083.00 in net sales from 36 orders, a jump of 275.2%.",
+  "**Which codes drove orders.** BFCM25 was the dominant code, accounting for 29 orders.",
+  "**Stock to check before next Black Friday.** Lip Tint in Berry is out of stock.",
+].join("\n\n");
+
+describe("the report layout of the other three playbooks", () => {
+  const OTHERS = PLAYBOOK_IDS.filter((id) => id !== "creative-briefs");
+
+  it("draws a finished run as numbered section cards with the lead-ins as headings, and the closing section as a note", () => {
+    for (const playbook of OTHERS) {
+      const out = html(run({ playbook, body: REPORT, params: playbook === "monthly-review" ? { month: "2026-10" } : {} }), "A playbook");
+      expect(out, playbook).toContain('aria-label="Report sections"');
+      expect((out.match(/<h3 /g) ?? []).length, playbook).toBe(3);
+      expect(out, playbook).toContain("How the weekend went");
+      expect(out, playbook).toContain("Black Friday to Cyber Monday 2025 Review");
+      expect(out, playbook).toContain('role="note"');
+      expect(out, playbook).not.toContain("**");
+      expect(out, playbook).not.toContain("/chat?q=");
+      expect(out, playbook).toContain("Ready");
+    }
+  });
+
+  it("shows a blocked run as plain text, because its figures are unchecked, with the list of figures that did not match", () => {
+    const out = html(run({ playbook: "bfcm-review", body: REPORT, status: "blocked", unmatched: ["36"] }), "Black Friday review");
+    expect(out).not.toContain("Report sections");
+    expect(out).toContain("<strong>How the weekend went.</strong>");
+    expect(out).toContain("<li>36</li>");
+    expect(out).toContain("Blocked");
+  });
+
+  it("falls back to the plain paragraphs when the write-up is not a report, and loses no words", () => {
+    const body = "A single paragraph with no lead-in at all.\n\nAnd a second one, also with no bold.";
+    const out = html(run({ playbook: "retention-check", body }), "Retention check");
+    expect(out).not.toContain("Report sections");
+    expect(out).toContain("A single paragraph with no lead-in at all.");
+    expect(out).toContain("And a second one, also with no bold.");
+  });
+
+  it("leaves a Creative briefs write-up that cannot be read as briefs as plain text, not as a report", () => {
+    const out = html(run({ playbook: "creative-briefs", body: "**First.** One.\n\n**Second.** Two." }));
+    expect(out).not.toContain("Report sections");
+    expect(out).toContain("<strong>First.</strong>");
+  });
+
+  it("says so when a run has no write-up", () => {
+    expect(html(run({ playbook: "monthly-review", body: "" }), "Monthly business review")).toContain("This run has no write-up.");
   });
 });

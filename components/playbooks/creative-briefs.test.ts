@@ -81,6 +81,39 @@ const outputWords = (p: CreativeBriefsParsed): string[] =>
     .filter((w) => w !== "")
     .sort();
 
+// What the first real run on the live site did (2026-11-03): the Last year paragraph opened with a bold phrase that is part of its first
+// sentence, not a name followed by a stop, and the paragraph fell out of its box and sat under the cards.
+describe("parseCreativeBriefs: an intro whose bold start is part of its first sentence", () => {
+  const SENTENCE = "customers who placed their first order in that four-day window had a 180-day repeat rate of 18.2% (33 customers counted), against 42.5% for the comparison group.";
+
+  it("puts a paragraph that starts with Last year's... in the Last year box, with the bold words kept in its text", () => {
+    const text = GOOD.replace(LAST_YEAR, `**Last year's Black Friday weekend** ${SENTENCE}`);
+    const parsed = parse(text);
+    expect(parsed.lastYear).toBe(`Last year's Black Friday weekend ${SENTENCE}`);
+    expect(parsed.rest).toEqual([]);
+    expect(parsed.briefs).toHaveLength(3);
+  });
+
+  it("does the same for a Not pushing or Campaign paragraph that runs on into its first sentence", () => {
+    const text = GOOD.replace(NOT_PUSHING, "**Not pushing Lip Tint** because its refund rate is 18.4%.").replace(CAMPAIGN, "**Campaign dates** are November 27 to 30, 2026.");
+    const parsed = parse(text);
+    expect(parsed.notPushing).toBe("Not pushing Lip Tint because its refund rate is 18.4%.");
+    expect(parsed.campaign).toBe("Campaign dates are November 27 to 30, 2026.");
+    expect(parsed.rest).toEqual([]);
+  });
+
+  it("still reads a bold line alone, even one that begins with Last year, as a brief title", () => {
+    const parsed = parse(GOOD.replace("**Best customers first**", "**Last year's winners**"));
+    expect(parsed.briefs.map((b) => b.title)).toEqual(["Last year's winners", "Win back the quiet ones", "New customers"]);
+    expect(parsed.lastYear).toBe(LAST_YEAR.replace("**Last year.** ", ""));
+  });
+
+  it("loses no word", () => {
+    const text = GOOD.replace(LAST_YEAR, `**Last year's Black Friday weekend** ${SENTENCE}`);
+    expect(outputWords(parse(text))).toEqual(inputWords(text)); // the bold phrase has no stop inside, so it counts on both sides
+  });
+});
+
 describe("parseCreativeBriefs: a write-up as the question asks for it", () => {
   it("reads the three intro paragraphs and the three briefs, item by item", () => {
     const parsed = parse(GOOD);

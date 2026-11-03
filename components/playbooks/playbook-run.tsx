@@ -4,6 +4,8 @@ import type { PlaybookRunView } from "@/lib/playbooks/store";
 import { parseCreativeBriefs } from "./creative-briefs";
 import { CreativeBriefsView } from "./creative-briefs-view";
 import { monthLabel, paragraphs, segments } from "./format";
+import { parseReport } from "./report";
+import { ReportView } from "./report-view";
 
 const when = (d: Date) => new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(d) + " UTC";
 
@@ -14,12 +16,14 @@ const DRAFT_LANDING_PAGE = `/chat?q=${encodeURIComponent("Draft a landing page f
 
 // One saved run of a playbook. The write-up is model text, shown as text paragraphs: the only markup is a bold lead-in, no HTML.
 // A blocked run lists the figures the number checker could not find in the data, and offers no link: its write-up is unchecked.
-// A finished Creative briefs write-up is drawn as three brief cards instead. A blocked one stays plain text, and so does any write-up
-// whose briefs cannot be told apart (the parser then returns null), so the cards never hide or lose what the model wrote.
+// A finished Creative briefs write-up is drawn as three brief cards instead; a finished write-up of any other playbook is drawn as a short
+// report (a numbered card per paragraph, the lead-in as its heading). A blocked one stays plain text, and so does any write-up the parser
+// cannot read (it then returns null), so the layouts never hide or lose what the model wrote.
 export function PlaybookRun({ run, title }: { run: PlaybookRunView; title: string }) {
   const blocked = run.status === "blocked";
   const text = paragraphs(run.body);
   const cards = run.playbook === "creative-briefs" && !blocked ? parseCreativeBriefs(run.body) : null;
+  const report = run.playbook !== "creative-briefs" && !blocked ? parseReport(run.body) : null;
   return (
     <article aria-label={`${title}, run ${when(run.createdAt)}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
@@ -33,6 +37,10 @@ export function PlaybookRun({ run, title }: { run: PlaybookRunView; title: strin
       {cards ? (
         <div className="mt-5">
           <CreativeBriefsView parsed={cards} />
+        </div>
+      ) : report ? (
+        <div className="mt-5">
+          <ReportView parsed={report} />
         </div>
       ) : (
         <div className="mt-4 max-w-[68ch] space-y-3 text-[0.9375rem] leading-7">

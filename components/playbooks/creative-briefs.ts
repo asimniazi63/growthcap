@@ -46,6 +46,15 @@ const norm = (label: string): string =>
     .replace(/[\s:.]+$/, "")
     .trim();
 const introKey = (label: string): Intro | null => INTROS.get(norm(label)) ?? null;
+// A real answer opened its Last year paragraph with "**Last year's Black Friday weekend** customers who...": the bold words are the start
+// of the sentence, not a name. With text after them, a lead-in that begins with an intro's name opens that intro, and its words stay in
+// the text. A bold line alone is still a title ("**Last year's winners**").
+const INTRO_STARTS: [RegExp, Intro][] = [
+  [/^campaign\b/, "campaign"],
+  [/^last year\b/, "lastYear"],
+  [/^not pushing\b/, "notPushing"],
+];
+const introStartKey = (label: string): Intro | null => INTRO_STARTS.find(([re]) => re.test(norm(label)))?.[1] ?? null;
 const itemKey = (label: string): Field | null => {
   const n = norm(label);
   return HOOKS_NAME.test(n) ? "hooks" : (ITEMS.get(n) ?? null);
@@ -98,6 +107,8 @@ function classify(line: string): Line {
     if (intro) return { kind: "intro", key: intro, text: b.text };
     const field = itemKey(b.label);
     if (field) return { kind: "item", key: field, text: b.text };
+    const started = b.text === "" ? null : introStartKey(b.label);
+    if (started) return { kind: "intro", key: started, text: `${b.label} ${b.text}` };
     // An unknown name with nothing after it and no colon is a title ("**Best customers first**", or with a full stop); with a colon
     // or a dash it opens a line of an item the parser does not know (parse() turns one with no text, directly above an item line,
     // into a title); with only a full stop and some text it opens one too. A bold phrase that merely starts a sentence is none of
