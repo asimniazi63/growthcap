@@ -1,4 +1,4 @@
-import { Ban, CalendarDays, History, ShieldCheck, Target, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Ban, CalendarDays, ChevronDown, History, ShieldCheck, Target, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { CopyButton } from "./copy-button";
 import type { CreativeBrief, CreativeBriefsParsed } from "./creative-briefs-types";
@@ -7,6 +7,9 @@ import { segments } from "./format";
 // The Creative briefs write-up (T23) drawn as three cards side by side instead of a wall of text. It draws the parts the parser told
 // apart and nothing else: every word on the page is the model's own, and what the parser did not recognise is shown too (as extra rows
 // or as the paragraphs under the cards). No markup comes from the text, so there is no raw HTML here.
+// To keep a card calm, it opens with what a person uses first (title, who, angle, hook lines) and the Do not line, which must not be
+// missed. The rest (product, offer, proof, measure and any line the parser did not know) sits in a Details section, closed until
+// opened. It is the browser's own <details>, so it needs no script, and the words are all still in the page.
 
 const EYEBROW = "text-xs font-semibold uppercase tracking-wider";
 
@@ -102,121 +105,150 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+interface Part {
+  label: string;
+  node: ReactNode;
+}
+
 // A part that is empty or missing is left out, so a card never shows a label with nothing under it.
-function rowsOf(brief: CreativeBrief): ReactNode[] {
-  const rows: ReactNode[] = [];
-  if (present(brief.product)) {
-    rows.push(
-      <Row key="product" label="Product">
-        <p>
-          <Figures text={brief.product} />
-        </p>
-      </Row>,
-    );
-  }
+// What a card shows without opening anything: the angle and the hook lines, each with its copy button.
+function frontParts(brief: CreativeBrief): Part[] {
+  const parts: Part[] = [];
   if (present(brief.angle)) {
-    rows.push(
-      <Row key="angle" label="Angle">
-        <p className="text-base font-medium leading-7">{`“${brief.angle}”`}</p>
-        <div className="mt-2.5">
-          <CopyButton text={brief.angle} label={`Copy angle: ${brief.angle}`} />
-        </div>
-      </Row>,
-    );
+    parts.push({
+      label: "Angle",
+      node: (
+        <Row key="angle" label="Angle">
+          <p className="text-base font-medium leading-7">{`“${brief.angle}”`}</p>
+          <div className="mt-2.5">
+            <CopyButton text={brief.angle} label={`Copy angle: ${brief.angle}`} />
+          </div>
+        </Row>
+      ),
+    });
   }
   const hooks = brief.hooks.filter((h) => h.trim() !== "");
   if (hooks.length > 0) {
-    rows.push(
-      <Row key="hooks" label="Hook lines">
-        <ul className="space-y-2">
-          {hooks.map((hook, i) => (
-            <li key={`${i}-${hook}`} className="flex items-start justify-between gap-3 rounded-xl bg-paper-2 py-2 pl-3.5 pr-2.5">
-              <span className="min-w-0 flex-1 py-0.5">{hook}</span>
-              <CopyButton text={hook} label={`Copy hook line: ${hook}`} />
-            </li>
-          ))}
-        </ul>
-      </Row>,
-    );
-  }
-  if (present(brief.offer)) {
-    const offer = splitOffer(brief.offer);
-    rows.push(
-      <Row key="offer" label="Offer">
-        {offer.text !== "" ? (
-          <p>
-            <Figures text={offer.text} />
-          </p>
-        ) : null}
-        {offer.profitLimit ? (
-          <div role="note" className={`flex items-start gap-2.5 rounded-xl border border-ahead/30 bg-ahead-tint px-3 py-2.5 ${offer.text !== "" ? "mt-3" : ""}`}>
-            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ahead" aria-hidden />
-            <div className="min-w-0">
-              <p className={`${EYEBROW} text-ahead`}>Profit limit</p>
-              <p className="mt-0.5">
-                <Figures text={offer.profitLimit} onTint />
-              </p>
-            </div>
-          </div>
-        ) : null}
-      </Row>,
-    );
-  }
-  if (present(brief.proof)) {
-    const items = proofItems(brief.proof);
-    rows.push(
-      <Row key="proof" label="Proof">
-        {items ? (
-          <ul className="list-disc space-y-1.5 pl-4 marker:text-ink-3">
-            {items.map((item, i) => (
-              <li key={`${i}-${item}`}>
-                <Figures text={item} />
+    parts.push({
+      label: "Hook lines",
+      node: (
+        <Row key="hooks" label="Hook lines">
+          <ul className="space-y-2">
+            {hooks.map((hook, i) => (
+              <li key={`${i}-${hook}`} className="flex items-start justify-between gap-3 rounded-xl bg-paper-2 py-2 pl-3.5 pr-2.5">
+                <span className="min-w-0 flex-1 py-0.5">{hook}</span>
+                <CopyButton text={hook} label={`Copy hook line: ${hook}`} />
               </li>
             ))}
           </ul>
-        ) : (
-          <p>
-            <Figures text={brief.proof} />
-          </p>
-        )}
-      </Row>,
-    );
+        </Row>
+      ),
+    });
   }
-  if (present(brief.doNot)) {
-    rows.push(
-      <Row key="do-not" label="Do not">
-        <div className="flex items-start gap-2.5 rounded-xl bg-behind-tint px-3 py-2.5 text-behind">
-          <Ban className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <p className="min-w-0">{brief.doNot}</p>
-        </div>
-      </Row>,
-    );
-  }
-  if (present(brief.measure)) {
-    rows.push(
-      <Row key="measure" label="Measure">
-        <p className="muted flex items-start gap-2">
-          <Target className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
-          <span className="min-w-0">{brief.measure}</span>
-        </p>
-      </Row>,
-    );
-  }
-  // Item lines the parser did not know by name, in the order written.
-  brief.other.forEach((o, i) => {
-    if (present(o.text)) {
-      rows.push(
-        <Row key={`other-${i}-${o.label}`} label={o.label}>
-          <p>{o.text}</p>
-        </Row>,
-      );
-    }
-  });
-  return rows;
+  return parts;
 }
 
+// What sits in the Details section, in the order written: product, offer, proof, measure, then the lines the parser did not know by name.
+function foldedParts(brief: CreativeBrief): Part[] {
+  const parts: Part[] = [];
+  if (present(brief.product)) {
+    parts.push({
+      label: "Product",
+      node: (
+        <Row key="product" label="Product">
+          <p>
+            <Figures text={brief.product} />
+          </p>
+        </Row>
+      ),
+    });
+  }
+  if (present(brief.offer)) {
+    const offer = splitOffer(brief.offer);
+    parts.push({
+      label: "Offer",
+      node: (
+        <Row key="offer" label="Offer">
+          {offer.text !== "" ? (
+            <p>
+              <Figures text={offer.text} />
+            </p>
+          ) : null}
+          {offer.profitLimit ? (
+            <div role="note" className={`flex items-start gap-2.5 rounded-xl border border-ahead/30 bg-ahead-tint px-3 py-2.5 ${offer.text !== "" ? "mt-3" : ""}`}>
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ahead" aria-hidden />
+              <div className="min-w-0">
+                <p className={`${EYEBROW} text-ahead`}>Profit limit</p>
+                <p className="mt-0.5">
+                  <Figures text={offer.profitLimit} onTint />
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </Row>
+      ),
+    });
+  }
+  if (present(brief.proof)) {
+    const items = proofItems(brief.proof);
+    parts.push({
+      label: "Proof",
+      node: (
+        <Row key="proof" label="Proof">
+          {items ? (
+            <ul className="list-disc space-y-1.5 pl-4 marker:text-ink-3">
+              {items.map((item, i) => (
+                <li key={`${i}-${item}`}>
+                  <Figures text={item} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>
+              <Figures text={brief.proof} />
+            </p>
+          )}
+        </Row>
+      ),
+    });
+  }
+  if (present(brief.measure)) {
+    parts.push({
+      label: "Measure",
+      node: (
+        <Row key="measure" label="Measure">
+          <p className="muted flex items-start gap-2">
+            <Target className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
+            <span className="min-w-0">{brief.measure}</span>
+          </p>
+        </Row>
+      ),
+    });
+  }
+  brief.other.forEach((o, i) => {
+    if (present(o.text)) {
+      parts.push({
+        label: o.label,
+        node: (
+          <Row key={`other-${i}-${o.label}`} label={o.label}>
+            <p>{o.text}</p>
+          </Row>
+        ),
+      });
+    }
+  });
+  return parts;
+}
+
+// "Product, offer, proof, measure": what the closed Details section holds, so a person knows whether it is worth opening.
+const hintOf = (labels: string[]) => {
+  const list = labels.map((l) => l.toLowerCase()).join(", ");
+  return list.charAt(0).toUpperCase() + list.slice(1);
+};
+
 function BriefCard({ brief, number }: { brief: CreativeBrief; number: number }) {
-  const rows = rowsOf(brief);
+  const front = frontParts(brief);
+  const folded = foldedParts(brief);
   return (
     <li data-brief={number} className="card relative flex min-w-0 flex-col overflow-hidden break-words">
       <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-brand" />
@@ -229,7 +261,28 @@ function BriefCard({ brief, number }: { brief: CreativeBrief; number: number }) 
           </p>
         ) : null}
       </div>
-      {rows.length > 0 ? <dl className="divide-y divide-line border-t border-line">{rows}</dl> : null}
+      {front.length > 0 ? <dl className="divide-y divide-line border-t border-line">{front.map((p) => p.node)}</dl> : null}
+      {present(brief.doNot) ? (
+        <dl className={`px-5 pb-4 sm:px-6 ${front.length > 0 ? "" : "border-t border-line pt-4"}`}>
+          <div className="flex items-start gap-2.5 rounded-xl bg-behind-tint px-3 py-2.5 text-sm leading-6 text-behind">
+            <Ban className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <div className="min-w-0">
+              <dt className={EYEBROW}>Do not</dt>
+              <dd className="mt-0.5">{brief.doNot}</dd>
+            </div>
+          </div>
+        </dl>
+      ) : null}
+      {folded.length > 0 ? (
+        <details className="group border-t border-line">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-3.5 text-sm hover:bg-paper-2 sm:px-6 [&::-webkit-details-marker]:hidden">
+            <span className="font-medium text-ink">Details</span>
+            <span className="muted min-w-0 flex-1 text-xs leading-5">{hintOf(folded.map((p) => p.label))}</span>
+            <ChevronDown className="size-4 shrink-0 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+          </summary>
+          <dl className="divide-y divide-line border-t border-line">{folded.map((p) => p.node)}</dl>
+        </details>
+      ) : null}
     </li>
   );
 }
@@ -257,7 +310,7 @@ export function CreativeBriefsView({ parsed }: { parsed: CreativeBriefsParsed })
         </div>
       ) : null}
       {briefs.length > 0 ? (
-        <ol aria-label="Creative briefs" className="grid gap-4 lg:grid-cols-3">
+        <ol aria-label="Creative briefs" className="grid items-start gap-4 lg:grid-cols-3">
           {briefs.map((brief, i) => (
             <BriefCard key={`${i}-${brief.title}`} brief={brief} number={i + 1} />
           ))}

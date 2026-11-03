@@ -220,6 +220,75 @@ describe("CreativeBriefsView", () => {
     expect(html()).not.toContain("<strong>");
   });
 
+  describe("the fold", () => {
+    // One card's markup, and the parts of it before, inside and after its <details> section.
+    const cardOf = (out: string, n: number) => {
+      const start = out.indexOf(`data-brief="${n}"`);
+      const next = out.indexOf(`data-brief="${n + 1}"`);
+      return out.slice(start, next === -1 ? undefined : next);
+    };
+    const parts = (card: string) => {
+      const a = card.indexOf("<details");
+      const b = card.indexOf("</details>");
+      return { before: card.slice(0, a), inside: card.slice(a, b), summary: card.slice(card.indexOf("<summary"), card.indexOf("</summary>")) };
+    };
+    const FOLDED = ["Product", "Offer", "Proof", "Measure"];
+
+    it("opens each card with the title, who it is for, the angle, the hook lines and the Do not line", () => {
+      const out = html();
+      for (const [i, brief] of BRIEFS.entries()) {
+        const { before } = parts(cardOf(out, i + 1));
+        const t = text(before);
+        expect(t, `title ${i + 1}`).toContain(brief.title);
+        expect(t).toContain(brief.who!);
+        expect(t).toContain(brief.angle!);
+        for (const hook of brief.hooks) expect(t, hook).toContain(esc(hook)); // the markup writes an apostrophe or & as an entity
+        expect(t).toContain(`Do not ${brief.doNot}`);
+        for (const label of FOLDED) expect(before, `${label} in card ${i + 1}`).not.toContain(`>${label}<`);
+      }
+    });
+
+    it("folds the product, offer, proof, measure and the unknown lines into one closed Details section per card", () => {
+      const out = html();
+      expect(count(out, /<details/g)).toBe(3);
+      expect(out).not.toMatch(/<details[^>]*\sopen/); // closed until a person opens it
+      for (const [i, brief] of BRIEFS.entries()) {
+        const card = cardOf(out, i + 1);
+        expect(count(card, /<details/g)).toBe(1);
+        const { inside } = parts(card);
+        for (const label of FOLDED) expect(inside, `${label} in card ${i + 1}`).toContain(`>${label}<`);
+        expect(text(inside)).toContain(brief.product!);
+        expect(text(inside)).not.toContain("Hook lines");
+        expect(text(inside)).not.toContain(brief.angle!);
+      }
+      expect(text(parts(cardOf(out, 2)).inside)).toContain("Channel Email first, then SMS two days later.");
+      expect(parts(cardOf(out, 1)).inside).toContain("Profit limit"); // the callout is part of the offer, so it folds with it
+    });
+
+    it("names what the fold holds in its summary, so a person knows whether to open it", () => {
+      const out = html();
+      expect(text(parts(cardOf(out, 1)).summary)).toBe("Details Product, offer, proof, measure");
+      expect(text(parts(cardOf(out, 2)).summary)).toBe("Details Product, offer, proof, measure, channel");
+      const some = html(parsed({ briefs: [emptyBrief({ product: "Serum", measure: "Orders", angle: "A", hooks: ["h"] }), emptyBrief()] }));
+      expect(text(parts(cardOf(some, 1)).summary)).toBe("Details Product, measure");
+    });
+
+    it("leaves the fold out when a brief has nothing to put in it, and still shows what it has", () => {
+      const out = html(parsed({ briefs: [emptyBrief({ angle: "Only an angle", hooks: ["One hook"], doNot: "Do not oversell." }), emptyBrief({ title: "Nothing", angle: "x" })] }));
+      expect(count(out, /<details/g)).toBe(0);
+      expect(text(out)).toContain("Only an angle");
+      expect(text(out)).toContain("One hook");
+      expect(text(out)).toContain("Do not Do not oversell.");
+    });
+
+    it("keeps the Do not line out of the fold, with its own label, even when the model's text does not start with Do not", () => {
+      const out = html(parsed({ briefs: [emptyBrief({ doNot: "Anything above 10% off.", product: "Serum" }), emptyBrief()] }));
+      const { before, inside } = parts(cardOf(out, 1));
+      expect(text(before)).toContain("Do not Anything above 10% off.");
+      expect(inside).not.toContain("Anything above 10% off.");
+    });
+  });
+
   it("draws a brief whose parts are all missing without those sections and without an error", () => {
     const out = html(parsed({ campaign: null, lastYear: null, notPushing: null, briefs: [emptyBrief(), emptyBrief({ title: "Hooks gone", hooks: ["", "  "], angle: "  ", offer: "" })] }));
     expect(count(out, /data-brief="\d"/g)).toBe(2);
