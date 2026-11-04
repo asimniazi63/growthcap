@@ -19,12 +19,12 @@ const GROUPS: { label: string; items: Item[] }[] = [
     label: "Track",
     items: [
       { href: "/pace", label: "Pace", icon: Gauge },
-      { href: "/ebitda", label: "EBITDA", icon: Calculator },
       { href: "/portfolio", label: "Portfolio", icon: LayoutGrid },
       { href: "/briefs", label: "Briefs", icon: Newspaper },
       { href: "/audit", label: "Audit", icon: ScanSearch },
       { href: "/playbooks", label: "Playbooks", icon: BookOpenCheck },
       { href: "/segments", label: "Segments", icon: UsersRound },
+      { href: "/ebitda", label: "EBITDA", icon: Calculator },
     ],
   },
   {
