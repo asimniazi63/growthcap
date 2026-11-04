@@ -23,7 +23,7 @@ New to the jargon (Oasis, SOW, MER, tenant, ledger)? The [glossary](#glossary) e
 Two things to know before you read dates and approvals:
 
 - The demo orders end on 31 October 2026. When the newest order is more than 36 hours old, the app treats the day after it as "today", so "last month" is October. A banner in Chat says so.
-- Approvals from the reviewer logins are a dry run: they go through the whole approval flow and never touch a store.
+- Approvals from the reviewer logins are real, like anyone's: an approved change is written to the dev store once, and the ledger records who approved it.
 
 ## The idea
 
@@ -126,7 +126,7 @@ The table above is the index. Below, each brief item is broken into its features
 |---|---|---|
 | Pace (plan against actual) | A target is spread over the days using last year's pattern. A month-end estimate appears once five complete days exist, and "Need $X a day" says what each remaining day must sell. | A monthly target becomes a daily answer while there is still time to act. |
 | Why a month missed plan (`explain_gap`) | Splits a finished month's gap into new and returning orders, their order values and refunds, then looks for evidence in the store data, the calendar and the call notes. | The post-mortem is drafted from evidence rather than from memory. |
-| Approved writes | The agent can propose a Shopify target, an annotation, turning a discount off, a unit-cost change, a customer segment or a landing page. A person approves a card, the server runs it once, and the ledger records who and when. | The agent can act, not just talk, with a person in the loop and a record of every change. Approvals from reviewer logins are dry runs. |
+| Approved writes | The agent can propose a Shopify target, an annotation, turning a discount off, a unit-cost change, a customer segment or a landing page. A person approves a card, the server runs it once, and the ledger records who and when. | The agent can act, not just talk, with a person in the loop and a record of every change. |
 | Weekly brief (`/briefs`) | Drafted every Monday through the same agent loop, blocked from approval if a number cannot be sourced, and approved by a person. | A client-ready summary is ready to review instead of written from scratch. |
 | Portfolio (`/portfolio`) | Ranks brands by dollars behind plan, with the biggest driver of each. | One view tells a few operators which brand to look at first. |
 | Growth audit (`/audit`) | Four fixed checks (stock risk, repeat rate, discount dependence, refund outliers) over the synced data, written up by the model through the number checker. | A new brand gets a health check on connection. |
@@ -264,7 +264,7 @@ Browser ── Clerk session ──▶ Next.js route (tenant from the session, n
 | A number checker on the answer | Trusting the model; asking it to show its work | Checks the thing that matters (the figures), cheaply, on every answer |
 | Seeded storylines (a bad batch, a leaked code, a budget cut) | Shopify's generated data | The agent has real things to find, and they are the ground truth for the evals |
 | Standalone app with Clerk | Embedded Shopify admin app | Mirrors how Oasis is built; reviewers use a URL without Shopify admin access |
-| Approval ledger for every write, dry run for reviewers | Letting the agent write directly | The demo is the same for every reviewer, and nothing reaches a store without a person |
+| Approval ledger for every write | Letting the agent write directly | Nothing reaches a store until a person approves it, and every change is on record |
 | Documents read in two passes: find and quote, then structure | One call that reads and structures | A quote that is not in the document is dropped, and a figure or date the quote does not state is refused, so the reader cannot invent one |
 | Model writes copy only for landing pages | Model writes Liquid | A typed price or a script tag in generated Liquid is a real risk; the server makes it impossible |
 
@@ -372,7 +372,7 @@ Everything else, including connecting a store, syncing, adding a brand, the revi
 | **Clerk** | The sign-in service. A Clerk organisation is a brand, and a member's role in it decides what they can see and do. The instance is invite-only. |
 | **`gc_admin`, `gc_partner`** | Growth Capital staff who can see several brands. Both can chat, read Pace, propose and approve actions, upload plans, approve briefs and edit the EBITDA cost sheet. Only `gc_admin` connects stores. |
 | **`client_viewer`** | A client who sees one brand, read only: the chat with store data, Pace, EBITDA and the approved weekly briefs. |
-| **Reviewer login** | A demo account for people reviewing this work: one `gc_partner` in both brands and one `client_viewer` in Solenne. Approvals made from a reviewer login are dry runs that never touch a store. |
+| **Reviewer login** | A demo account for people reviewing this work: one `gc_partner` in both brands and one `client_viewer` in Solenne. Its approvals write to the dev stores like any other approval. |
 
 ### Shopify and the data
 
@@ -489,7 +489,7 @@ Money is stored as integer cents and rates as fractions (0.18 means 18%). Every 
 |---|---|
 | **Proposal (approval card)** | A change the agent suggests, shown as a card with the exact change. The model never writes GraphQL or Liquid: proposals are typed fields and the server builds the change. |
 | **Action ledger** | The record of every proposal: its payload and hash, who approved it and when. An approval re-checks both and moves the action from proposed to running in one conditional update, so a double click runs once. |
-| **Dry run** | An approval from a reviewer login. It runs the whole flow and never touches a store. |
+| **Dry run** | An approval that runs the whole flow without touching the store. It applies only to logins listed in `REVIEWER_USER_IDS`, which is empty, so every approval is real. Older rows on Actions may still say dry run. |
 | **Metric Target** | A target set in Shopify's own Metric Targets feature. One of the writes the agent can propose. |
 | **Annotation** | A note on Shopify's analytics charts. One of the writes the agent can propose. |
 | **Discount off** | Turning a discount code off. One of the writes the agent can propose. |
