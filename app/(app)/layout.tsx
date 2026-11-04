@@ -8,6 +8,7 @@ import { TopBar } from "@/components/shell/top-bar";
 import { ToastProvider } from "@/components/ui/toast";
 import { listActions } from "@/lib/actions/ledger";
 import { getDb } from "@/lib/db/client";
+import { canViewTeam } from "@/lib/team/team";
 import { getTenantContext } from "@/lib/tenancy/context";
 
 const switcher = {
@@ -25,22 +26,24 @@ const mobileSwitcher = {
   },
 };
 
-// What the shell needs from the signed-in brand: whether the person is Growth Capital staff, and how many proposed changes
-// wait for a decision (the count on Actions). A failure here must never break a page, so it falls back to "none".
-async function shellState(): Promise<{ gc: boolean; pending: number }> {
+// What the shell needs from the signed-in brand: whether the person is Growth Capital staff, whether they are a Growth Capital admin
+// (who also gets the Team link), and how many proposed changes wait for a decision (the count on Actions). A failure here must never
+// break a page, so it falls back to "none".
+async function shellState(): Promise<{ gc: boolean; admin: boolean; pending: number }> {
   try {
     const ctx = await getTenantContext();
     const gc = ctx.role === "gc_admin" || ctx.role === "gc_partner";
-    if (!gc) return { gc, pending: 0 };
-    return { gc, pending: (await listActions(getDb(), ctx, { status: "proposed" })).length };
+    const admin = canViewTeam(ctx);
+    if (!gc) return { gc, admin, pending: 0 };
+    return { gc, admin, pending: (await listActions(getDb(), ctx, { status: "proposed" })).length };
   } catch {
-    return { gc: false, pending: 0 };
+    return { gc: false, admin: false, pending: 0 };
   }
 }
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { orgId } = await auth();
-  const { gc, pending } = orgId ? await shellState() : { gc: false, pending: 0 };
+  const { gc, admin, pending } = orgId ? await shellState() : { gc: false, admin: false, pending: 0 };
 
   return (
     <ToastProvider>
@@ -51,7 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="side-palette">
             <PaletteButton />
           </div>
-          <Nav variant="side" gc={gc} pending={pending} />
+          <Nav variant="side" gc={gc} admin={admin} pending={pending} />
           <div className="rail-me flex items-center gap-1 border-t border-line pt-4">
             <div className="min-w-0 flex-1">
               <UserButton showName appearance={{ elements: { rootBox: "w-full", userButtonTrigger: "w-full justify-start rounded-[10px] px-2 py-1.5", userButtonOuterIdentifier: "text-on-rail" } }} />
@@ -70,7 +73,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 <UserButton />
               </div>
             </div>
-            <Nav variant="top" gc={gc} pending={pending} />
+            <Nav variant="top" gc={gc} admin={admin} pending={pending} />
           </header>
 
           <TopBar />
@@ -89,7 +92,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
-      <CommandPalette gc={gc} />
+      <CommandPalette gc={gc} admin={admin} />
     </ToastProvider>
   );
 }

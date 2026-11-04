@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpenCheck, Calculator, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Settings, UsersRound, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, Calculator, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Settings, UserCog, UsersRound, type LucideIcon } from "lucide-react";
 import { GC_ONLY_PAGES } from "./pages";
 
 interface Item {
@@ -36,11 +36,14 @@ const GROUPS: { label: string; items: Item[] }[] = [
   },
 ];
 const CONNECT: Item = { href: "/connect", label: "Connect", icon: Plug };
+const TEAM: Item = { href: "/team", label: "Team", icon: UserCog };
 const SETTINGS: Item = { href: "/settings", label: "Settings", icon: Settings };
 
-// The links at the foot of the sidebar (and the end of the mobile bar). They are for everyone, so unlike the groups they never
-// depend on the person's role.
-export const FOOTER_ITEMS: Item[] = [CONNECT, SETTINGS];
+// The links at the foot of the sidebar (and the end of the mobile bar). Connect and Settings are for everyone; Team, who is on the
+// brand and the role each holds, sits above Settings and is only offered to a Growth Capital admin.
+export function footerItems(admin: boolean): Item[] {
+  return admin ? [CONNECT, TEAM, SETTINGS] : [CONNECT, SETTINGS];
+}
 
 // The groups a person sees: the pages that are Growth Capital's alone are left out for everyone else, and a group with nothing
 // left goes too.
@@ -89,14 +92,15 @@ function TopLink({ item, pathname, pending = 0 }: { item: Item; pathname: string
   );
 }
 
-export function Nav({ variant, gc, pending = 0 }: { variant: "side" | "top"; gc: boolean; pending?: number }) {
+export function Nav({ variant, gc, admin = false, pending = 0 }: { variant: "side" | "top"; gc: boolean; admin?: boolean; pending?: number }) {
   const pathname = usePathname() ?? "";
   const groups = navGroups(gc);
+  const footer = footerItems(admin);
 
   if (variant === "top") {
     return (
       <nav aria-label="Main" className="flex gap-1 overflow-x-auto px-4 pb-2.5 [scrollbar-width:none] lg:hidden">
-        {[...groups.flatMap((g) => g.items), ...FOOTER_ITEMS].map((item) => (
+        {[...groups.flatMap((g) => g.items), ...footer].map((item) => (
           <TopLink key={item.href} item={item} pathname={pathname} pending={pending} />
         ))}
       </nav>
@@ -118,7 +122,7 @@ export function Nav({ variant, gc, pending = 0 }: { variant: "side" | "top"; gc:
         </div>
       ))}
       <ul className="mt-auto space-y-0.5">
-        {FOOTER_ITEMS.map((item) => (
+        {footer.map((item) => (
           <li key={item.href}>
             <SideLink item={item} pathname={pathname} />
           </li>

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 // Every route under app/(app) that loads data has a loading.tsx. Each one renders without crashing, announces Loading once, is made of
 // the skeleton blocks, and has no spinner.
 const ROOT = resolve(process.cwd(), "app/(app)");
-const ROUTES = ["overview", "pace", "portfolio", "chat", "segments", "playbooks", "audit", "actions", "briefs", "plan", "connect", "settings"];
+const ROUTES = ["overview", "pace", "portfolio", "chat", "segments", "playbooks", "audit", "actions", "briefs", "plan", "connect", "settings", "team"];
 
 function loadingFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? loadingFiles(join(dir, e.name)) : e.name === "loading.tsx" ? [join(dir, e.name)] : []));

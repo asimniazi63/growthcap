@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FOOTER_ITEMS, navGroups } from "@/components/shell/nav";
+import { footerItems, navGroups } from "@/components/shell/nav";
 import { GC_ONLY_PAGES } from "@/components/shell/pages";
 import { CHORD_MS, GO_TARGETS, goTargets, keyboardBusy, nextFocusIndex, paletteKey, shortcutGroups, singleKeysOn, stepShortcut, type KeyEventLike, type PaletteKeyState, type Pending } from "./shortcuts";
 
@@ -64,7 +64,7 @@ describe("keyboardBusy", () => {
 });
 
 describe("the shortcut targets and the list", () => {
-  const hrefs = new Set([...navGroups(true).flatMap((g) => g.items.map((i) => i.href)), ...FOOTER_ITEMS.map((i) => i.href)]);
+  const hrefs = new Set([...navGroups(true).flatMap((g) => g.items.map((i) => i.href)), ...footerItems(true).map((i) => i.href)]);
 
   it("only point to pages that exist in the sidebar", () => {
     for (const t of GO_TARGETS) expect(hrefs.has(t.href)).toBe(true);

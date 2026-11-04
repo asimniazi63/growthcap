@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FOOTER_ITEMS, navGroups } from "./nav";
-import { GC_ONLY_PAGES } from "./pages";
+import { footerItems, navGroups } from "./nav";
+import { ADMIN_ONLY_PAGES, canOpenPage, GC_ONLY_PAGES } from "./pages";
 
 const hrefs = (gc: boolean) => navGroups(gc).flatMap((g) => g.items.map((i) => i.href));
 
@@ -28,9 +28,48 @@ describe("navGroups: the sidebar only links to pages the person may open", () =>
   });
 
   it("keeps Connect and Settings at the foot for everyone, and Settings is not one of the Growth-Capital-only pages", () => {
-    expect(FOOTER_ITEMS.map((i) => i.href)).toEqual(["/connect", "/settings"]);
+    for (const admin of [true, false]) {
+      const foot = footerItems(admin).map((i) => i.href);
+      expect(foot[0]).toBe("/connect");
+      expect(foot.at(-1)).toBe("/settings");
+    }
     expect(GC_ONLY_PAGES).not.toContain("/settings");
     expect(hrefs(false)).not.toContain("/settings");
     expect(hrefs(true)).not.toContain("/settings");
+  });
+
+  it("puts Team straight above Settings for a Growth Capital admin, and offers it to no one else", () => {
+    expect(footerItems(true).map((i) => i.href)).toEqual(["/connect", "/team", "/settings"]);
+    expect(footerItems(false).map((i) => i.href)).toEqual(["/connect", "/settings"]);
+    expect(footerItems(true).find((i) => i.href === "/team")?.label).toBe("Team");
+  });
+
+  it("keeps the admin-only pages out of the main groups, and out of the Growth-Capital-only list (a partner is Growth Capital staff too)", () => {
+    for (const href of ADMIN_ONLY_PAGES) {
+      expect(hrefs(true)).not.toContain(href);
+      expect(GC_ONLY_PAGES).not.toContain(href);
+      expect(footerItems(true).map((i) => i.href)).toContain(href);
+      expect(footerItems(false).map((i) => i.href)).not.toContain(href);
+    }
+  });
+});
+
+describe("canOpenPage: the command palette lists a page only for a person who may open it", () => {
+  it("offers Team to a GC admin only", () => {
+    expect(canOpenPage("/team", true, true)).toBe(true);
+    expect(canOpenPage("/team", true, false)).toBe(false); // a GC partner
+    expect(canOpenPage("/team", false, false)).toBe(false); // a client viewer
+  });
+
+  it("offers a Growth-Capital-only page to a partner and an admin, and not to a client viewer", () => {
+    for (const href of GC_ONLY_PAGES) {
+      expect(canOpenPage(href, true, true), href).toBe(true);
+      expect(canOpenPage(href, true, false), href).toBe(true);
+      expect(canOpenPage(href, false, false), href).toBe(false);
+    }
+  });
+
+  it("offers every other page to everyone", () => {
+    for (const href of ["/overview", "/chat", "/pace", "/ebitda", "/briefs", "/connect", "/settings"]) expect(canOpenPage(href, false, false), href).toBe(true);
   });
 });

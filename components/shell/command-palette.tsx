@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, useOrganizationList } from "@clerk/nextjs";
-import { BookOpenCheck, Building2, Calculator, CornerDownLeft, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Search, Settings, Sparkles, UsersRound, type LucideIcon } from "lucide-react";
+import { BookOpenCheck, Building2, Calculator, CornerDownLeft, FileText, Gauge, LayoutDashboard, LayoutGrid, ListChecks, MessagesSquare, Newspaper, Plug, ScanSearch, Search, Settings, Sparkles, UserCog, UsersRound, type LucideIcon } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useReducer, useRef, useState } from "react";
@@ -13,7 +13,7 @@ import { SUGGESTED_QUESTIONS } from "../chat/suggestions";
 import { useToast } from "../ui/toast";
 import { trapTab } from "./focus-trap";
 import { KBD } from "./kbd";
-import { GC_ONLY_PAGES } from "./pages";
+import { canOpenPage } from "./pages";
 import { useIsMac } from "./platform";
 import { openShortcuts, ShortcutsHelp } from "./shortcuts-help";
 
@@ -53,6 +53,7 @@ const PAGES: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/plan", label: "Plan", icon: FileText },
   { href: "/actions", label: "Actions", icon: ListChecks },
   { href: "/connect", label: "Connect", icon: Plug },
+  { href: "/team", label: "Team", icon: UserCog },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -63,16 +64,16 @@ const askUrl = (question: string) => `/chat?q=${encodeURIComponent(question)}`;
 const kbd = KBD;
 
 // The search window, with the shortcuts list beside it (the list is its own window, opened by ? or its buttons).
-export function CommandPalette({ gc }: { gc: boolean }) {
+export function CommandPalette({ gc, admin = false }: { gc: boolean; admin?: boolean }) {
   return (
     <>
-      <PaletteWindow gc={gc} />
+      <PaletteWindow gc={gc} admin={admin} />
       <ShortcutsHelp gc={gc} />
     </>
   );
 }
 
-function PaletteWindow({ gc }: { gc: boolean }) {
+function PaletteWindow({ gc, admin }: { gc: boolean; admin: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const { orgId, userId } = useAuth();
@@ -193,7 +194,7 @@ function PaletteWindow({ gc }: { gc: boolean }) {
         }
       })();
     };
-    const pages: Entry[] = PAGES.filter((p) => gc || !GC_ONLY_PAGES.includes(p.href)).map((p) => ({ id: `page:${p.href}`, group: "Jump to", label: p.label, icon: p.icon, run: () => router.push(p.href) }));
+    const pages: Entry[] = PAGES.filter((p) => canOpenPage(p.href, gc, admin)).map((p) => ({ id: `page:${p.href}`, group: "Jump to", label: p.label, icon: p.icon, run: () => router.push(p.href) }));
     const brands: Entry[] =
       (memberships?.length ?? 0) > 1 ? memberships!.map((m) => ({ id: `brand:${m.organization.id}`, group: "Switch brand", label: m.organization.name, icon: Building2, hint: m.organization.id === orgId ? "Current brand" : undefined, run: () => switchTo(m.organization.id) })) : [];
     const asks: Entry[] = SUGGESTED_QUESTIONS.map((q) => ({ id: `ask:${q}`, group: "Ask", label: q, icon: MessagesSquare, run: () => router.push(askUrl(q)) }));
@@ -205,7 +206,7 @@ function PaletteWindow({ gc }: { gc: boolean }) {
     const typed: Entry = { id: "ask:typed", group: "Ask the assistant", label: query.trim(), icon: Sparkles, hint: "Answers here", ask: query.trim(), run: () => undefined };
     const where = askRowPlacement(query, found.length);
     return where === "only" ? [typed] : where === "first" ? [typed, ...found] : found;
-  }, [gc, memberships, orgId, setActive, router, toast, query]);
+  }, [gc, admin, memberships, orgId, setActive, router, toast, query]);
 
   const run = useCallback(
     (i: number) => {

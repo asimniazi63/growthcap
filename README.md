@@ -213,6 +213,7 @@ The table above is the index. Below, each brief item is broken into its features
 
 **Everywhere**
 
+- **Team** (`/team`, Growth Capital admins only): above Settings in the sidebar. How many people the brand has (in total and per role), each person's name and role, and a grid of what each role can do. The people and roles are read from the brand's Clerk organisation when the page opens, names only and never an email address. It is read-only: roles are changed in Clerk. A partner or client viewer sees no link, and the page refuses them if the address is typed.
 - **Settings** (`/settings`): five colour schemes (Sorbet is the default) and light, dark or match-my-device, saved in a cookie in your browser.
 - Every data page has a skeleton loader, every animation stops under reduced motion, and every chart has a text alternative.
 - **Roles:** `gc_admin` and `gc_partner` (Growth Capital staff, several brands) and `client_viewer` (one brand, read only: the chat with store data, the EBITDA page and the approved weekly briefs; no call notes, no write tools, no audit, no playbooks). The sidebar leaves out Portfolio, Audit, Playbooks, Plan and Actions for a client viewer, and those pages say they are for Growth Capital roles only if the link is typed.
@@ -517,6 +518,7 @@ Money is stored as integer cents and rates as fractions (0.18 means 18%). Every 
 | **Playbooks** `/playbooks` | Saved reviews run with one click: Black Friday, retention check, monthly business review, creative briefs. Growth Capital roles only. |
 | **Segments** `/segments` | Retention segments, the customer map, the top customers table and the Klaviyo CSV. Growth Capital roles only. |
 | **Connect** `/connect` | Store health: granted permissions, last sync, history covered, connection checks, and Resync. |
+| **Team** `/team` | Who is on the brand, the role each person holds, and what each role can do. Growth Capital admins only. |
 | **Settings** `/settings` | Colour scheme and light or dark mode. |
 | **Ctrl K palette** | Jump to a page, switch brand, or ask a question from anywhere. `?` lists the shortcuts. |
 
