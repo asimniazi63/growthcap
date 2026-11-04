@@ -42,7 +42,7 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
   const models = availableModels().map((m) => ({ id: m.id, label: m.label }));
 
   return (
-    <div className="space-y-8">
+    <div data-wide-page className="space-y-8">
       {/* On large screens the chat fills the screen height inside the page padding (and below the Sorbet top bar, whose height is --topbar-h); the notes and metric definitions sit below it. */}
       <section className="flex min-h-0 flex-col gap-4 lg:h-[calc(100dvh-5rem-var(--topbar-h,0px))]">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">

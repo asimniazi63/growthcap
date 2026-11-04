@@ -75,7 +75,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
           <TopBar />
 
-          <main className="mx-auto w-full max-w-[1120px] px-5 py-8 sm:px-8 lg:px-12 lg:py-10">
+          {/* Pages are held to 1120px for reading. A page that wants the whole width (the Chat) puts data-wide-page on its root, and the cap lifts. */}
+          <main className="mx-auto w-full max-w-[1120px] px-5 py-8 has-[[data-wide-page]]:max-w-none sm:px-8 lg:px-12 lg:py-10">
             {orgId ? (
               children
             ) : (

@@ -222,7 +222,7 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
         {/* The proof drawer sits over the right of this block on large screens (over the conversation, as in the mockup) and below the conversation on small ones. */}
         <div className="relative flex min-h-0 flex-1 flex-col">
           <div ref={scroller} className="-mx-1 flex-1 px-1 lg:min-h-0 lg:overflow-y-auto lg:pr-3">
-            <div className="mx-auto w-full max-w-3xl space-y-6 pb-6">
+            <div className="mx-auto w-full max-w-6xl space-y-6 pb-6">
               {messages.length === 0 ? (
                 <div className="pt-4 lg:pt-10">
                   <div className="flex flex-col items-center text-center">
@@ -299,7 +299,7 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
               e.preventDefault();
               ask(input);
             }}
-            className="card mx-auto w-full max-w-3xl rounded-2xl p-2 transition-shadow focus-within:border-brand focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-brand)_22%,transparent)]"
+            className="card mx-auto w-full max-w-6xl rounded-2xl p-2 transition-shadow focus-within:border-brand focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-brand)_22%,transparent)]"
           >
             <div className="flex items-center gap-2">
               <label className="sr-only" htmlFor="question">
