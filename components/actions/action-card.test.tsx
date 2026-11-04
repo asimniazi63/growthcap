@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { LedgerView } from "@/lib/actions/ledger";
-import { ActionCard } from "./action-card";
+import { ActionCard, personLabel } from "./action-card";
 
 const base: LedgerView = {
   id: "a1",
@@ -70,5 +70,65 @@ describe("ActionCard", () => {
     const rejected = html({ status: "rejected", decidedBy: "user_2abcdefghij" });
     expect(rejected).toContain("Rejected by");
     expect(rejected).not.toContain("<button");
+  });
+});
+
+// Who proposed and who decided. A ledger row keeps the Clerk user ids; the Actions page looks the names up and passes them in, so the
+// card says "Asim Hameed Khan" instead of "user …4abcde", in bold. Names are text a person typed in their own profile, so they are
+// escaped like everything else on the card.
+describe("who proposed and who decided", () => {
+  const people = { user_2abcdefghij: "Asim Hameed Khan", user_2reviewer00: "Reviewer Partner" };
+  const card = (over: Partial<LedgerView>, me?: string, names?: Record<string, string>) => renderToStaticMarkup(<ActionCard action={{ ...base, ...over }} canDecide me={me} names={names} />);
+  const plain = (markup: string) => markup.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const done = { status: "done" as const, decidedBy: "user_2reviewer00", decidedAt: "2026-11-01T11:00:00.000Z" };
+
+  it("shows each person's name in bold, for who proposed and who approved, not the end of their id", () => {
+    const out = card(done, undefined, people);
+    expect(out).toMatch(/Proposed by <strong[^>]*>Asim Hameed Khan<\/strong>/);
+    expect(out).toMatch(/Approved by <strong[^>]*>Reviewer Partner<\/strong>/);
+    expect(plain(out)).toContain("Proposed by Asim Hameed Khan on 2026-11-01 · Approved by Reviewer Partner on 2026-11-01");
+    expect(out).not.toContain("user …");
+  });
+
+  it("says you, in bold, for the signed-in person, even when their name is known", () => {
+    const out = card(done, "user_2abcdefghij", people);
+    expect(out).toMatch(/Proposed by <strong[^>]*>you<\/strong>/);
+    expect(out).not.toContain("Asim Hameed Khan");
+  });
+
+  it("falls back to the end of the id, still in bold, when no name is known", () => {
+    const out = card(done, undefined, { user_2abcdefghij: "Asim Hameed Khan" });
+    expect(out).toMatch(/Approved by <strong[^>]*>user …ewer00<\/strong>/);
+    const none = card(done);
+    expect(none).toMatch(/Proposed by <strong[^>]*>user …efghij<\/strong>/);
+  });
+
+  it("names the approver in the dry-run note too", () => {
+    const out = card({ ...done, dryRun: true, result: { dryRun: true, mutations: [] } }, undefined, people);
+    expect(plain(out)).toContain("Approved by Reviewer Partner on a reviewer login");
+  });
+
+  it("writes a name as text: markup in it is escaped", () => {
+    const out = card(done, undefined, { user_2abcdefghij: "<img src=x onerror=alert(1)>", user_2reviewer00: "<b>x</b>" });
+    expect(out).not.toContain("<img");
+    expect(out).not.toContain("<b>x</b>");
+    expect(out).toContain("&lt;img");
+  });
+});
+
+describe("personLabel", () => {
+  it("says you for the signed-in person, a known name for anyone else, and the end of the id when there is no name", () => {
+    expect(personLabel("user_2abcdefghij", "user_2abcdefghij", { user_2abcdefghij: "Asim" })).toBe("you");
+    expect(personLabel("user_2abcdefghij", "someone_else", { user_2abcdefghij: "Asim Hameed Khan" })).toBe("Asim Hameed Khan");
+    expect(personLabel("user_2abcdefghij", "someone_else", {})).toBe("user …efghij");
+    expect(personLabel("user_2abcdefghij")).toBe("user …efghij");
+    expect(personLabel("short")).toBe("short");
+    expect(personLabel(null)).toBe("—");
+    expect(personLabel(undefined, "me", { x: "y" })).toBe("—");
+  });
+
+  it("does not read a name off the prototype for an id like constructor", () => {
+    expect(personLabel("constructor", "me", {})).toBe("constructor");
+    expect(personLabel("__proto__", "me", {})).toBe("__proto__");
   });
 });

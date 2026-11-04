@@ -3,6 +3,7 @@ import { ActionsList } from "@/components/actions/actions-list";
 import { ErrorBanner } from "@/components/chat/error-banner";
 import { PageHeader } from "@/components/ui/page-header";
 import { listActions, type LedgerView } from "@/lib/actions/ledger";
+import { namesFor } from "@/lib/actions/people";
 import { getDb } from "@/lib/db/client";
 import { AppError, type ErrorCode } from "@/lib/errors";
 import { getTenantContext, type TenantContext } from "@/lib/tenancy/context";
@@ -52,10 +53,13 @@ export default async function ActionsPage() {
     failure = e instanceof AppError ? e.code : "INTERNAL_ERROR";
   }
 
+  // The ledger keeps Clerk user ids; the names of the people in this list are looked up so the cards can say who they are.
+  const names = failure ? {} : await namesFor(actions.flatMap((a) => [a.owner, a.decidedBy]));
+
   return (
     <section>
       {heading}
-      {failure ? <ErrorBanner code={failure} role={ctx.role} /> : <ActionsList actions={actions} canDecide={ctx.role === "gc_admin" || ctx.role === "gc_partner"} me={ctx.userId} timezone={ctx.shop?.timezone ?? "UTC"} />}
+      {failure ? <ErrorBanner code={failure} role={ctx.role} /> : <ActionsList actions={actions} canDecide={ctx.role === "gc_admin" || ctx.role === "gc_partner"} me={ctx.userId} names={names} timezone={ctx.shop?.timezone ?? "UTC"} />}
     </section>
   );
 }

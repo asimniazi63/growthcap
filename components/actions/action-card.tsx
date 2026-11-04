@@ -56,11 +56,18 @@ const STATUS_ICON: Record<Status, LucideIcon> = {
   rejected: X,
 };
 
-// Owners are Clerk user ids. Say "you" for the signed-in person and keep the end of anyone else's id.
-export function personLabel(id: string | null | undefined, me?: string): string {
+// Owners are Clerk user ids. Say "you" for the signed-in person, use the person's name when the page looked it up (`names` maps a user id
+// to a name), and otherwise keep the end of the id.
+export function personLabel(id: string | null | undefined, me?: string, names?: Record<string, string>): string {
   if (!id) return "—";
   if (me && id === me) return "you";
+  if (names && Object.hasOwn(names, id) && names[id]) return names[id]!;
   return id.length > 12 ? `user …${id.slice(-6)}` : id;
+}
+
+// A person in a sentence, in bold. The name is text a person typed in their profile, so it is drawn as text, never as markup.
+export function Person({ id, me, names }: { id: string | null | undefined; me?: string; names?: Record<string, string> }) {
+  return <strong className="font-semibold text-ink">{personLabel(id, me, names)}</strong>;
 }
 
 export function StatusBadge({ status, dryRun }: { status: Status; dryRun?: boolean }) {
@@ -169,7 +176,7 @@ const on = (iso?: string | null) => (iso ? ` on ${day(iso)}` : "");
 
 // A change the agent proposed. Nothing is sent to the store until a Growth Capital admin or partner approves it here, so the
 // buttons are shown to them alone; anyone else sees that it is waiting. Everything on the card is text, never HTML.
-export function ActionCard({ action, canDecide, me, onChange }: { action: LedgerView; canDecide: boolean; me?: string; onChange?: (next: LedgerView) => void }) {
+export function ActionCard({ action, canDecide, me, names, onChange }: { action: LedgerView; canDecide: boolean; me?: string; names?: Record<string, string>; onChange?: (next: LedgerView) => void }) {
   const [view, setView] = useState<LedgerView>(action);
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [problem, setProblem] = useState("");
@@ -320,7 +327,7 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
               <div role="status" className="flex items-start gap-2 rounded-xl border border-warn/25 bg-warn-tint px-3 py-2.5 text-warn">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <div className="min-w-0 space-y-1">
-                  <p className="font-medium">Approved by {personLabel(view.decidedBy, me)}, but not written to the theme.</p>
+                  <p className="font-medium">Approved by <Person id={view.decidedBy} me={me} names={names} />, but not written to the theme.</p>
                   <p>{String((view.result as { reason?: string }).reason ?? "")}</p>
                   <p className="break-words font-mono text-xs">{String((view.result as { finishByHand?: string }).finishByHand ?? "")}</p>
                 </div>
@@ -350,7 +357,7 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
               <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
               <div className="min-w-0">
                 <p className="font-medium">Dry run: nothing was sent to Shopify</p>
-                <p className="mt-0.5">Approved by {personLabel(view.decidedBy, me)} on a reviewer login. This is the exact change that would have been sent.</p>
+                <p className="mt-0.5">Approved by <Person id={view.decidedBy} me={me} names={names} /> on a reviewer login. This is the exact change that would have been sent.</p>
               </div>
             </div>
             <Fold icon={FileCode} summary="The exact Shopify request">
@@ -364,8 +371,15 @@ export function ActionCard({ action, canDecide, me, onChange }: { action: Ledger
         <p className="faint flex min-w-[12rem] flex-1 items-start gap-2 text-xs leading-relaxed">
           <Clock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           <span className="min-w-0 break-words">
-            {`Proposed by ${personLabel(view.owner, me)}${on(view.createdAt)}`}
-            {decided && view.status !== "failed" ? ` · ${view.status === "rejected" ? "Rejected" : "Approved"} by ${personLabel(view.decidedBy, me)}${on(view.decidedAt)}` : ""}
+            Proposed by <Person id={view.owner} me={me} names={names} />
+            {on(view.createdAt)}
+            {decided && view.status !== "failed" ? (
+              <>
+                {` · ${view.status === "rejected" ? "Rejected" : "Approved"} by `}
+                <Person id={view.decidedBy} me={me} names={names} />
+                {on(view.decidedAt)}
+              </>
+            ) : null}
           </span>
         </p>
         {view.status === "proposed" ? (

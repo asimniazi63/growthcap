@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { LedgerView } from "@/lib/actions/ledger";
-import { ActionCard, KIND_LABEL, personLabel, StatusBadge } from "./action-card";
+import { ActionCard, KIND_LABEL, Person, StatusBadge } from "./action-card";
 
 const when = (iso: string, timezone: string) =>
   new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: timezone }).format(new Date(iso));
 
 // The ledger for one brand: the changes waiting for a decision as cards, and every change below with who asked, who decided
 // and whether it was a dry run. Titles and notes were written by the model, so they are shown as text only.
-export function ActionsList({ actions, canDecide, me, timezone }: { actions: LedgerView[]; canDecide: boolean; me?: string; timezone: string }) {
+export function ActionsList({ actions, canDecide, me, names, timezone }: { actions: LedgerView[]; canDecide: boolean; me?: string; names?: Record<string, string>; timezone: string }) {
   const [items, setItems] = useState(actions);
   // The cards stay on screen after a decision, so the result (a dry run's exact change, an error) is read where it was approved.
   const [waiting] = useState(() => actions.filter((a) => a.status === "proposed").map((a) => a.id));
@@ -46,7 +46,7 @@ export function ActionsList({ actions, canDecide, me, timezone }: { actions: Led
           </div>
           {waiting.map((id) => {
             const a = items.find((x) => x.id === id);
-            return a ? <ActionCard key={`${id}:${a.status}`} action={a} canDecide={canDecide} me={me} onChange={update} /> : null;
+            return a ? <ActionCard key={`${id}:${a.status}`} action={a} canDecide={canDecide} me={me} names={names} onChange={update} /> : null;
           })}
         </section>
       ) : null}
@@ -59,7 +59,7 @@ export function ActionsList({ actions, canDecide, me, timezone }: { actions: Led
         <div className="card overflow-hidden">
           <ul className="divide-y divide-line">
             {items.map((a) => {
-              const decider = a.status === "proposed" ? null : `${a.status === "rejected" ? "Rejected" : "Approved"} by ${personLabel(a.decidedBy, me)}`;
+              const decided = a.status === "proposed" ? null : a.status === "rejected" ? "Rejected" : "Approved";
               return (
                 <li key={a.id}>
                   <details className="group">
@@ -69,8 +69,14 @@ export function ActionsList({ actions, canDecide, me, timezone }: { actions: Led
                         <p className="break-words font-medium text-ink">{a.title}</p>
                         <p className="faint mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
                           <span>{KIND_LABEL[a.kind] ?? a.kind}</span>
-                          <span>Owner: {personLabel(a.owner, me)}</span>
-                          {decider ? <span>{decider}</span> : null}
+                          <span>
+                            Owner: <Person id={a.owner} me={me} names={names} />
+                          </span>
+                          {decided ? (
+                            <span>
+                              {decided} by <Person id={a.decidedBy} me={me} names={names} />
+                            </span>
+                          ) : null}
                           <span className="num">{when(a.decidedAt ?? a.createdAt, timezone)}</span>
                         </p>
                       </div>
@@ -80,7 +86,7 @@ export function ActionsList({ actions, canDecide, me, timezone }: { actions: Led
                       </span>
                     </summary>
                     <div className="border-t border-line bg-paper/50 p-3 sm:p-4">
-                      <ActionCard key={`${a.id}:${a.status}`} action={a} canDecide={canDecide} me={me} onChange={update} />
+                      <ActionCard key={`${a.id}:${a.status}`} action={a} canDecide={canDecide} me={me} names={names} onChange={update} />
                     </div>
                   </details>
                 </li>
