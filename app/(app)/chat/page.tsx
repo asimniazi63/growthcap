@@ -1,4 +1,4 @@
-import { ChevronDown, Info, TriangleAlert } from "lucide-react";
+import { ChevronDown, TriangleAlert } from "lucide-react";
 import { PageHeader } from "@/components/ui/page-header";
 import { ChatClient } from "@/components/chat/chat-client";
 import { ErrorBanner } from "@/components/chat/error-banner";
@@ -6,12 +6,10 @@ import { NotesPanel } from "@/components/chat/notes-panel";
 import { SUGGESTED_QUESTIONS } from "@/components/chat/suggestions";
 import { budgetStatus } from "@/lib/agent/budget";
 import { availableModels, defaultModelId } from "@/lib/agent/models";
-import { isDemoClock } from "@/lib/clock";
 import { getDb } from "@/lib/db/client";
 import { listMemories } from "@/lib/memory/store";
 import { METRIC_IDS, METRICS } from "@/lib/metrics/registry";
 import { getTenantContext, type TenantContext } from "@/lib/tenancy/context";
-import { loadWindow } from "@/lib/tools/common";
 
 async function loadTenant(): Promise<TenantContext | null> {
   try {
@@ -37,12 +35,10 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
 
   const connected = ctx.shop?.status === "connected";
   const db = getDb();
-  const [win, budget, notes] = await Promise.all([
-    loadWindow(db, ctx.tenantId).catch(() => null),
+  const [budget, notes] = await Promise.all([
     budgetStatus(ctx.tenantId, { db }).catch(() => null),
     listMemories(db, ctx.tenantId).catch(() => []),
   ]);
-  const demoThrough = connected && ctx.shop && win?.last && isDemoClock(ctx.shop.timezone, win.newest) ? win.last : null;
   const models = availableModels().map((m) => ({ id: m.id, label: m.label }));
 
   return (
@@ -54,12 +50,6 @@ export default async function ChatPage({ searchParams }: { searchParams: Promise
           <p className="muted text-sm">Ask questions about this brand&apos;s Shopify data. Every number is checked against the store before you see it.</p>
         </div>
 
-        {demoThrough ? (
-          <p role="status" className="flex items-start gap-2.5 rounded-xl border border-brand/20 bg-brand-tint px-4 py-2.5 text-sm text-brand-strong">
-            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
-            <span>Demo data through {demoThrough}. &quot;Today&quot; and &quot;last month&quot; are counted as if it were the day after.</span>
-          </p>
-        ) : null}
         {budget?.warn && !budget.exceeded ? (
           <p role="status" className="flex items-start gap-2.5 rounded-xl border border-warn/30 bg-warn-tint px-4 py-2.5 text-sm text-ink">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />

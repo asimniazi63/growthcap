@@ -44,7 +44,7 @@ export function storeToday(timezone: string, newestOrderAt: string | null): stri
 }
 
 // True when the store has had no order for more than 36 hours, so "today" has been set to the day after its newest
-// order (a demo store between top-ups). The chat says so: "Demo data through <date>".
+// order (a demo store between top-ups). The Pace page says so; the chat no longer shows a banner for it.
 export function isDemoClock(timezone: string, newestOrderAt: string | null): boolean {
   return storeToday(timezone, newestOrderAt) !== localDate(nowMs(), timezone);
 }
