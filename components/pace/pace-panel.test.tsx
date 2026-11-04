@@ -9,6 +9,8 @@ const gap = (over: Partial<PlanGap>): PlanGap => ({ month: "2026-10", target: 10
 const view = (over: Partial<PaceView> = {}): PaceView => ({
   today: "2026-10-16",
   month: "2026-10",
+  current: "2026-10",
+  closed: false,
   through: "2026-10-15",
   started: true,
   demoClock: false,
@@ -123,6 +125,78 @@ describe("PacePanel: last month", () => {
     expect(out).toContain("$6,294.48");
     expect(out).toContain("$705.52 behind plan");
     expect(out).toContain("10.1% behind");
+  });
+});
+
+// October seen from November: the whole month against its whole-month targets, so planned is the target and there is no estimate,
+// no early-month note and no daily need (getPaceView leaves them out of a finished month).
+const finished = (over: Partial<PaceView> = {}): PaceView =>
+  view({
+    today: "2026-11-04",
+    current: "2026-11",
+    month: "2026-10",
+    closed: true,
+    through: "2026-10-31",
+    thisMonth: {
+      range: { from: "2026-10-01", to: "2026-10-31" },
+      queryId: "q_oct",
+      gaps: {
+        net_sales: gap({ target: 650_688, planned: 650_688, actual: 591_500, gap: -59_188, pctGap: -0.091, spread: "last_year", throughDate: "2026-10-31" }),
+        orders: gap({ target: 92, planned: 92, actual: 95, gap: 3, pctGap: 0.0326, spread: "even", throughDate: "2026-10-31" }),
+        aov: gap({ target: 7_436, planned: 7_436, actual: 6_226, gap: -1_210, pctGap: -0.1627, throughDate: "2026-10-31" }),
+      },
+    },
+    ...over,
+  });
+
+describe("PacePanel: a finished month", () => {
+  it("says the month finished, over the whole month, with a way back to this month", () => {
+    const out = html(finished());
+    expect(out).toContain("October 2026 finished");
+    expect(out).not.toContain("October 2026 to date");
+    expect(out).toContain("The whole month, October 1 to 31, 2026.");
+    expect(out).not.toContain("Complete days only");
+    expect(out).toMatch(/<a [^>]*href="\/pace"[^>]*>[^]*?Back to November 2026<\/a>/);
+  });
+
+  it("shows how the month ended against its target, with no plan so far, no estimate and no daily need", () => {
+    const out = html(finished());
+    expect(out).toContain("$5,915.00"); // actual net sales
+    expect(out).toContain("$591.88 behind plan");
+    expect(out).toContain("9.1% behind");
+    expect(out).toContain("Target for the month");
+    expect(out).toContain("$6,506.88");
+    expect(out).toContain("Target 92"); // the orders tile
+    expect(out).toContain("3 ahead of plan");
+    expect(out).not.toContain("Plan so far");
+    expect(out).not.toMatch(/estimate/i);
+    expect(out).not.toContain("a day for the rest of the month");
+    expect(out).not.toContain("So far");
+  });
+
+  it("still explains how the plan was spread over the days", () => {
+    const out = html(finished());
+    expect(out).toContain("last year&#x27;s daily pattern");
+    expect(out).toContain("evenly");
+  });
+
+  it("still shows how the month before it finished, below", () => {
+    const out = html(finished());
+    expect(out).toContain("September 2026 finished");
+    expect(out).toContain("$705.52 behind plan");
+  });
+
+  it("names the month when the plan has no targets for it", () => {
+    const out = html(finished({ thisMonth: { range: { from: "2026-10-01", to: "2026-10-31" }, queryId: "q" } }));
+    expect(out).toContain("No targets for that month");
+    expect(out).toContain("doesn&#x27;t have targets for October 2026");
+  });
+
+  it("offers no way back while this month is shown", () => {
+    const out = html(view());
+    expect(out).toContain("October 2026 to date");
+    expect(out).not.toContain("Back to");
+    expect(out).not.toContain("October 2026 finished");
   });
 });
 

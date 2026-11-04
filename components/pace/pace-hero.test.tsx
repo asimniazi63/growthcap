@@ -134,6 +134,32 @@ describe("PaceHero replaying an earlier day", () => {
   });
 });
 
+describe("PaceHero for a finished month", () => {
+  // October whole, seen from November: the plan for the month is its target, and there is nothing left to estimate or to need.
+  const days = new Map(Array.from({ length: 31 }, (_, i) => [`2026-10-${String(i + 1).padStart(2, "0")}`, 70_000 + (i % 5) * 10_000] as const));
+  const total = Array.from(days.values()).reduce((s, v) => s + v, 0);
+  const whole = buildPaceSeries({ month: "2026-10", through: "2026-10-31", target: TARGET, planned: TARGET, actual: total, projected: null, spread: "even", dailyActual: days, lastYearDaily: null })!;
+  const ended: PlanGap = { month: "2026-10", target: TARGET, planned: TARGET, actual: total, gap: total - TARGET, pctGap: Math.round(((total - TARGET) / TARGET) * 1e4) / 1e4, spread: "even", throughDate: "2026-10-31" };
+
+  it("shows the result and the target once, with no plan so far, estimate or daily need", () => {
+    const out = hero({ gap: ended, series: whole });
+    expect(out).toContain(money(total));
+    expect(out).toContain(money(TARGET - total) + " behind plan");
+    expect(out.match(/Target for the month/g)).toHaveLength(1);
+    expect(out).not.toContain("Plan so far");
+    expect(out).not.toContain("Month-end estimate");
+    expect(out).not.toContain("Need ");
+    expect(out).not.toContain("Based on");
+  });
+
+  it("brings the plan so far back while replaying an earlier day, from the days up to it", () => {
+    const out = hero({ gap: ended, series: whole, initialDay: 9 });
+    expect(out).toContain("Net sales as of October 9");
+    expect(out).toContain("Plan so far");
+    expect(out).toContain(money(gapAsOf(whole, 9).planned));
+  });
+});
+
 describe("the scrubber under a request for less motion", () => {
   it("keeps the slider and the way back but offers no Play button", () => {
     motion.reduced = true;
@@ -190,6 +216,8 @@ describe("PacePanel with the chart", () => {
   const view: PaceView = {
     today: "2026-10-16",
     month: "2026-10",
+    current: "2026-10",
+    closed: false,
     through: "2026-10-15",
     started: true,
     demoClock: false,

@@ -14,6 +14,7 @@ import type { ErrorCode } from "@/lib/errors";
 import { buildAttention } from "@/lib/overview/attention";
 import { isGc, loadOverview } from "@/lib/overview/data";
 import { formatAsOf, longDate } from "@/lib/overview/format";
+import { monthParam } from "@/lib/pace/view";
 import { getTenantContext, type TenantContext } from "@/lib/tenancy/context";
 
 async function loadTenant(): Promise<TenantContext | null> {
@@ -34,7 +35,9 @@ function CardError({ title, code, role }: { title: string; code: ErrorCode; role
   );
 }
 
-export default async function OverviewPage() {
+// ?month=YYYY-MM switches the sales card to a past month. The rest of the page stays on today.
+export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ month?: string | string[] }> }) {
+  const month = monthParam((await searchParams).month);
   const ctx = await loadTenant();
   if (!ctx) {
     return (
@@ -45,7 +48,7 @@ export default async function OverviewPage() {
     );
   }
 
-  const data = await loadOverview(ctx, getDb());
+  const data = await loadOverview(ctx, getDb(), { month });
   const gc = isGc(ctx);
   const connected = ctx.shop?.status === "connected";
   const currency = ctx.shop?.currency ?? "USD";
@@ -60,6 +63,11 @@ export default async function OverviewPage() {
   const gaps = view?.thisMonth?.gaps;
   const attention = connected ? buildAttention({ gaps, currency, stock }) : [];
   const paceError = data.pace && !data.pace.ok ? data.pace.code : null;
+
+  // The sales card's own view: this month's, or the past month picked.
+  const sales = data.salesPace?.ok ? data.salesPace.value : null;
+  const salesError = data.salesPace && !data.salesPace.ok ? data.salesPace.code : null;
+  const months = data.months?.ok ? data.months.value : undefined;
 
   return (
     <section>
@@ -81,10 +89,10 @@ export default async function OverviewPage() {
               >
                 {ctx.shop ? "Shopify stopped sharing this store's data, so there is nothing to show yet." : "Once a Shopify store is connected, this page shows how the month is going against the plan."}
               </EmptyState>
-            ) : paceError ? (
-              <CardError title="Net sales this month" code={paceError} role={ctx.role} />
-            ) : view ? (
-              <SalesCard view={view} currency={currency} canPlan={gc} scope={ctx.tenantId} />
+            ) : salesError ? (
+              <CardError title={month ? "Net sales" : "Net sales this month"} code={salesError} role={ctx.role} />
+            ) : sales ? (
+              <SalesCard view={sales} months={months} currency={currency} canPlan={gc} scope={ctx.tenantId} />
             ) : null}
 
             {connected ? (

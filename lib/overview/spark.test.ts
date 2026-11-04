@@ -46,4 +46,10 @@ describe("netSalesSparkLabel", () => {
       "Net sales so far this month, running total, from $120.00 on October 1 to $1,234.56 on October 4. Plan to date $1,000.00.",
     );
   });
+
+  it("names a month that is over, and its plan is the month's", () => {
+    expect(netSalesSparkLabel(netSalesSpark(series())!, "USD", "2026-10")).toBe(
+      "Net sales in October 2026, running total, from $120.00 on October 1 to $1,234.56 on October 4. Plan for the month $1,000.00.",
+    );
+  });
 });

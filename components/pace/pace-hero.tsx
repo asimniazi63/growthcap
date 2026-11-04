@@ -31,6 +31,8 @@ export function PaceHero({ gap, series, currency, annotations = [], initialDay }
 
   const shownSeries = useMemo(() => (replaying ? seriesAsOf(series, day) : series), [replaying, series, day]);
   const g = useMemo(() => (replaying ? gapAsOf(series, day) : gap), [replaying, series, day, gap]);
+  // A finished month, on its last day: the plan so far is the whole target, so it is shown once, as the target.
+  const wholeMonth = g.throughDate === series.days[series.days.length - 1]?.date;
 
   // The replay: one day forward at a time, so a month takes about eight seconds. It stops by itself at today, and never runs under a
   // request for less motion.
@@ -58,10 +60,12 @@ export function PaceHero({ gap, series, currency, annotations = [], initialDay }
           <NeedBadge metric="net_sales" g={g} currency={currency} className="mt-2.5 text-[13.5px]" />
           {g.earlyMonth ? <p className="faint mt-2 text-[12.5px]">{earlyBasis(g.earlyMonth)}</p> : null}
           <dl className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-            <div>
-              <dt className="faint text-[13px]">Plan so far</dt>
-              <dd className="num text-base font-semibold">{money(g.planned)}</dd>
-            </div>
+            {wholeMonth ? null : (
+              <div>
+                <dt className="faint text-[13px]">Plan so far</dt>
+                <dd className="num text-base font-semibold">{money(g.planned)}</dd>
+              </div>
+            )}
             {g.projected !== undefined ? (
               <div>
                 <dt className="faint text-[13px]">Month-end estimate</dt>

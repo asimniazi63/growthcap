@@ -10,7 +10,7 @@ import { monthPeriod, monthlyMetrics, metricValue } from "../../scripts/seed/tru
 import { STORES } from "../../scripts/seed/stores.js";
 import type { CoreMetricId, Dataset, StoreKey, Truth } from "../../scripts/seed/types.js";
 import { CORE_METRIC_IDS } from "./registry";
-import { getPaceView } from "../pace/view";
+import { chooseMonth, getPaceView, listPaceMonths } from "../pace/view";
 import { queryMetric, type QueryMetricInput } from "./query";
 import { getCohorts } from "../tools/cohorts";
 import { getZeroSalesDays } from "../tools/zero-sales-days";
@@ -506,6 +506,83 @@ describe("the pace view: the morning after the data ends", () => {
     const view = await getPaceView(noAds, { db });
     expect(view).toMatchObject({ hasPlan: false, planLabel: null });
     expect(view.thisMonth?.gaps).toBeUndefined();
+  });
+});
+
+// ---- Looking back: the pace view for a past month (?month=YYYY-MM) and the month list the pickers show. Expected values come
+// from truth.json and plan.csv, never from the code under test.
+const planTarget = (store: StoreKey, month: string): number => {
+  const line = readFixtureFile(store, "plan.csv").split("\n").find((l) => l.startsWith(`${month},`));
+  return Number(line!.split(",")[1]);
+};
+
+describe("chooseMonth", () => {
+  it("takes a past month inside the data, and turns anything else into this month", () => {
+    expect(chooseMonth("2026-08", "2026-10", "2025-09-02")).toBe("2026-08");
+    expect(chooseMonth("2025-09", "2026-10", "2025-09-02")).toBe("2025-09"); // the first month of the data
+    expect(chooseMonth(undefined, "2026-10", "2025-09-02")).toBe("2026-10");
+    expect(chooseMonth("2026-10", "2026-10", "2025-09-02")).toBe("2026-10"); // this month
+    expect(chooseMonth("2026-12", "2026-10", "2025-09-02")).toBe("2026-10"); // the future
+    expect(chooseMonth("2025-08", "2026-10", "2025-09-02")).toBe("2026-10"); // before the first order
+    expect(chooseMonth("2026-8", "2026-10", "2025-09-02")).toBe("2026-10");
+    expect(chooseMonth("2026-13", "2026-10", "2025-09-02")).toBe("2026-10");
+    expect(chooseMonth("2026-08", "2026-10", null)).toBe("2026-10"); // no orders at all
+  });
+});
+
+describe.each(["solenne", "tidepool"] as const)("%s: the pace view for a past month", (store) => {
+  afterEach(() => setTestNow(null));
+
+  it("shows August whole against its whole-month target, with July as the month before", async () => {
+    setTestNow("2026-10-16T12:00:00-04:00");
+    const view = await getPaceView(ctxs[store], { db, month: "2026-08" });
+    expect(view).toMatchObject({ today: "2026-10-16", current: "2026-10", month: "2026-08", closed: true, through: "2026-08-31", started: true });
+    const g = view.thisMonth!.gaps!.net_sales!;
+    const actual = fixtures[store].truth.monthly["2026-08"]!.net_sales;
+    const target = planTarget(store, "2026-08");
+    expect(g).toMatchObject({ throughDate: "2026-08-31", actual, target, planned: target, gap: actual - target });
+    expect(g.projected).toBeUndefined();
+    expect(g.earlyMonth).toBeUndefined();
+    expect(g.neededPerDay).toBeUndefined();
+    expect(view.lastMonth).toMatchObject({ month: "2026-07" });
+    expect(view.lastMonth!.gaps!.net_sales!.actual).toBe(fixtures[store].truth.monthly["2026-07"]!.net_sales);
+    // The chart gets the whole month, ending on the month's actual and the whole target.
+    expect(view.series).toMatchObject({ month: "2026-08", through: "2026-08-31", actualThrough: actual, target });
+    expect(view.series!.days.at(-1)).toMatchObject({ date: "2026-08-31", actual, plan: target });
+  });
+
+  it("shows this month as before when the month asked for is this month, the future, malformed or before the data", async () => {
+    setTestNow("2026-10-16T12:00:00-04:00");
+    for (const month of [undefined, "2026-10", "2026-12", "2025-01", "nonsense"]) {
+      const view = await getPaceView(ctxs[store], { db, month });
+      expect(view, String(month)).toMatchObject({ current: "2026-10", month: "2026-10", closed: false, through: "2026-10-15" });
+    }
+  });
+
+  it("lists every month from the first order to this month, newest first, each past month against its target", async () => {
+    setTestNow("2026-10-16T12:00:00-04:00");
+    const months = await listPaceMonths(ctxs[store], { db });
+    const inData = Object.keys(fixtures[store].truth.monthly).sort(); // every month with orders, through October
+    expect(months[0]).toEqual({ month: "2026-10", closed: false }); // still running: no whole-month figure
+    expect(months.map((m) => m.month)).toEqual([...inData].reverse());
+    for (const m of months.slice(1)) {
+      const actual = fixtures[store].truth.monthly[m.month]!.net_sales;
+      const target = planTarget(store, m.month);
+      expect(m.closed, m.month).toBe(true);
+      expect(m.netSales, m.month).toEqual({ actual, target, gap: actual - target, pctGap: Math.round(((actual - target) / target) * 1e4) / 1e4 });
+    }
+  });
+
+});
+
+describe("the month list for a brand without a plan", () => {
+  afterEach(() => setTestNow(null));
+
+  it("has no whole-month figures, and still lists the months", async () => {
+    setTestNow("2026-10-16T12:00:00-04:00");
+    const months = await listPaceMonths(noAds, { db }); // Tidepool's orders, no plan
+    expect(months).toHaveLength(Object.keys(fixtures.tidepool.truth.monthly).length);
+    expect(months.every((m) => m.netSales === undefined)).toBe(true);
   });
 });
 

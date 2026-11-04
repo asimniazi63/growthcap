@@ -39,6 +39,20 @@ describe("the portfolio table", () => {
     expect(out).toContain("No plan is loaded for this brand.");
   });
 
+  it("heads the net sales column with this month, or with the past month ranked, where a finished month has no estimate", () => {
+    const now = renderToStaticMarkup(<PortfolioTable rows={[row()]} />);
+    expect(now).toContain("Net sales this month");
+    expect(now).not.toContain("Month over");
+
+    const closed = { ...gap, month: "2026-09", throughDate: "2026-09-30", projected: undefined };
+    const past = renderToStaticMarkup(<PortfolioTable rows={[row({ gap: closed })]} month="2026-09" />);
+    expect(past).toContain("Net sales in September 2026");
+    expect(past).not.toContain("Net sales this month");
+    expect(past).toContain("Month over");
+    expect(past).toContain("Net sales in September 2026, running total,"); // the sparkline's words name the month too
+    expect(past).not.toContain("so far this month");
+  });
+
   it("says so when there are no brands", () => {
     expect(renderToStaticMarkup(<PortfolioTable rows={[]} />)).toContain("No brands to compare yet");
   });

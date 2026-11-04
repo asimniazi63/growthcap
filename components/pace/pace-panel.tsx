@@ -1,13 +1,15 @@
-import { CalendarClock, CalendarX, Target } from "lucide-react";
+import { CalendarClock, CalendarX, RotateCcw, Target } from "lucide-react";
+import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { GapBadge, gapText, ICON, NeedBadge, TEXT_TONE } from "@/components/pace/gap-parts";
 import { PaceHero } from "@/components/pace/pace-hero";
 import { PaceTrack } from "@/components/pace/pace-track";
 import type { PaceAnnotation } from "@/lib/pace/annotation-types";
-import { estimateWait, estimateWaitShort, formatValue, monthName } from "@/lib/pace/format";
+import { estimateWait, estimateWaitShort, formatRange, formatValue, monthName } from "@/lib/pace/format";
 import type { PlanGap, PlanGapMap } from "@/lib/pace/gap";
 import type { PlanMetric } from "@/lib/pace/metrics";
 import type { PaceView } from "@/lib/pace/view";
+import { monthStart } from "@/lib/metrics/dates";
 import { METRICS } from "@/lib/metrics/registry";
 
 const PACED: PlanMetric[] = ["net_sales", "orders", "new_customer_orders"];
@@ -32,8 +34,9 @@ function GapCell({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; curr
   );
 }
 
-// The fallback hero, for when the days can't be drawn: the progress track with the same figures written out.
-function TrackHero({ g, currency }: { g: PlanGap; currency: string }) {
+// The fallback hero, for when the days can't be drawn: the progress track with the same figures written out. A finished month has
+// no "so far" left to track (its plan so far is its target), so it shows the target on its own.
+function TrackHero({ g, currency, closed }: { g: PlanGap; currency: string; closed: boolean }) {
   const label = METRICS.net_sales.label;
   const money = (v: number) => formatValue("net_sales", v, currency);
   return (
@@ -47,7 +50,14 @@ function TrackHero({ g, currency }: { g: PlanGap; currency: string }) {
           </p>
           <NeedBadge metric="net_sales" g={g} currency={currency} className="mt-2.5 text-[13.5px]" />
         </div>
-        <PaceTrack label={label} actual={g.actual} planned={g.planned} target={g.target} projected={g.projected} estimateNote={g.earlyMonth ? `${estimateWait(g.earlyMonth)} for a month-end estimate` : undefined} money={money} size="lg" />
+        {closed ? (
+          <dl>
+            <dt className="faint text-[13px]">Target for the month</dt>
+            <dd className="num text-base font-semibold">{money(g.target)}</dd>
+          </dl>
+        ) : (
+          <PaceTrack label={label} actual={g.actual} planned={g.planned} target={g.target} projected={g.projected} estimateNote={g.earlyMonth ? `${estimateWait(g.earlyMonth)} for a month-end estimate` : undefined} money={money} size="lg" />
+        )}
       </div>
     </div>
   );
@@ -72,10 +82,11 @@ function VarianceBar({ pct }: { pct: number | null }) {
   );
 }
 
-function MetricTile({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; currency: string }) {
+// A finished month's tile shows only its target: the plan so far would be the same figure, and there is no estimate or daily need.
+function MetricTile({ metric, g, currency, closed }: { metric: PlanMetric; g: PlanGap; currency: string; closed: boolean }) {
   const money = (v: number) => formatValue(metric, v, currency);
   const { tone, text, pct } = gapText(metric, g, currency);
-  const paced = PACED.includes(metric);
+  const paced = PACED.includes(metric) && !closed;
   return (
     <div className="card flex min-w-0 flex-col p-4 sm:px-[18px]">
       <p className="text-[13.5px] text-ink-2">{METRICS[metric].label}</p>
@@ -110,16 +121,23 @@ function MetricTile({ metric, g, currency }: { metric: PlanMetric; g: PlanGap; c
   );
 }
 
-function SpreadNote({ gaps }: { gaps: PlanGapMap }) {
+// A finished month has no month-end estimate, so only the spread is explained.
+function SpreadNote({ gaps, closed }: { gaps: PlanGapMap; closed: boolean }) {
   const spreads = new Set(PACED.map((m) => gaps[m]?.spread).filter(Boolean));
   if (spreads.size === 0) return null;
   const parts = [
     spreads.has("last_year") ? "by last year's daily pattern" : null,
     spreads.has("even") ? "evenly across the days where the data has no matching month last year" : null,
   ].filter(Boolean);
-  return <p className="muted mt-4 max-w-[70ch] text-[13px] leading-relaxed">The month&apos;s targets are spread {parts.join(", and ")}. The month-end figure is an estimate with no range: what has happened so far, plus the rest of the plan scaled by how the month has gone against its plan so far.</p>;
+  return (
+    <p className="muted mt-4 max-w-[70ch] text-[13px] leading-relaxed">
+      The month&apos;s targets are spread {parts.join(", and ")}.
+      {closed ? null : " The month-end figure is an estimate with no range: what has happened so far, plus the rest of the plan scaled by how the month has gone against its plan so far."}
+    </p>
+  );
 }
 
+// The month shown: this month to date, or a finished month whole (view.closed), which has no estimate and no "need $X a day".
 export function PacePanel({ view, currency, annotations = [] }: { view: PaceView; currency: string; annotations?: readonly PaceAnnotation[] }) {
   const thisName = monthName(view.month);
   const thisGaps = view.thisMonth?.gaps;
@@ -128,9 +146,17 @@ export function PacePanel({ view, currency, annotations = [] }: { view: PaceView
   return (
     <div className="space-y-10">
       <section aria-labelledby="mtd">
-        <h2 id="mtd" className="section-title">
-          {thisName} to date
-        </h2>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 id="mtd" className="section-title">
+            {`${thisName} ${view.closed ? "finished" : "to date"}`}
+          </h2>
+          {view.closed ? (
+            <Link href="/pace" scroll={false} className="btn btn-ghost btn-sm">
+              <RotateCcw className="size-3.5" aria-hidden />
+              Back to {monthName(view.current)}
+            </Link>
+          ) : null}
+        </div>
         {!view.hasPlan ? (
           <div className="mt-4">
             <EmptyState icon={Target} title="No plan for this brand">
@@ -145,24 +171,24 @@ export function PacePanel({ view, currency, annotations = [] }: { view: PaceView
           </div>
         ) : !thisGaps ? (
           <div className="mt-4">
-            <EmptyState icon={CalendarX} title="No targets for this month">
+            <EmptyState icon={CalendarX} title={view.closed ? "No targets for that month" : "No targets for this month"}>
               The plan doesn&apos;t have targets for {thisName}.
             </EmptyState>
           </div>
         ) : (
           <>
-            <p className="muted mt-1 text-sm">Complete days only, through {monthDay(view.through)}.</p>
+            <p className="muted mt-1 text-sm">{view.closed ? `The whole month, ${formatRange(monthStart(view.month), view.through)}.` : `Complete days only, through ${monthDay(view.through)}.`}</p>
             <div className="mt-4 space-y-4">
-              {net ? view.series ? <PaceHero gap={net} series={view.series} currency={currency} annotations={annotations} /> : <TrackHero g={net} currency={currency} /> : null}
+              {net ? view.series ? <PaceHero gap={net} series={view.series} currency={currency} annotations={annotations} /> : <TrackHero g={net} currency={currency} closed={view.closed} /> : null}
               {tiles.length > 0 ? (
                 <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
                   {tiles.map((m) => (
-                    <MetricTile key={m} metric={m} g={thisGaps[m]!} currency={currency} />
+                    <MetricTile key={m} metric={m} g={thisGaps[m]!} currency={currency} closed={view.closed} />
                   ))}
                 </div>
               ) : null}
             </div>
-            <SpreadNote gaps={thisGaps} />
+            <SpreadNote gaps={thisGaps} closed={view.closed} />
           </>
         )}
       </section>
@@ -204,7 +230,7 @@ export function PacePanel({ view, currency, annotations = [] }: { view: PaceView
             </div>
           ) : (
             <div className="mt-4">
-              <EmptyState icon={CalendarX} title="No targets for last month">
+              <EmptyState icon={CalendarX} title={view.closed ? "No targets for that month" : "No targets for last month"}>
                 The plan doesn&apos;t have targets for {monthName(view.lastMonth.month)}.
               </EmptyState>
             </div>

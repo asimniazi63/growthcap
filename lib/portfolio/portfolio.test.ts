@@ -19,6 +19,8 @@ const gapOf = (gap: number): PlanGap => ({ month: "2026-10", target: 1_000_000, 
 const view = (over: Partial<PaceView> = {}, gap?: number): PaceView => ({
   today: "2026-10-31",
   month: "2026-10",
+  current: "2026-10",
+  closed: false,
   through: "2026-10-30",
   started: true,
   demoClock: false,
@@ -109,6 +111,56 @@ describe("the portfolio", () => {
     expect(withSeries[0]!.spark).toEqual({ values: [10_000, 25_000], plan: [12_000, 24_000], firstDay: "2026-10-01", lastDay: "2026-10-02" });
     expect((await getPortfolio(db, me(), { ...one, paceView: async () => view({}, -50_000) }))[0]!.spark).toBeNull();
     expect((await getPortfolio(db, me(), { ...one, paceView: async () => view({ hasPlan: false }) }))[0]).toMatchObject({ spark: null, gap: null });
+  });
+});
+
+describe("the portfolio by month", () => {
+  const september = (gap?: number) => view({ month: "2026-09", closed: true, through: "2026-09-30" }, gap);
+
+  it("for a past month, asks each brand's view and driver tree for that month, and ranks by it", async () => {
+    const asked: (string | undefined)[] = [];
+    const paceView = async (c: TenantContext, month?: string) => {
+      asked.push(month);
+      return september(gaps[c.orgId]);
+    };
+    const driverTree = vi.fn(async (_db: Db, _tenantId: string, period: { month: string }): Promise<DriverTreeResult> => ({ month: period.month, targetCents: 0, actualCents: 0, gapCents: 0, drivers: [] }));
+    const rows = await getPortfolio(db, me(), { memberships: memberships(everyone), paceView, driverTree }, { month: "2026-09" });
+    expect(asked).toEqual(["2026-09", "2026-09", "2026-09"]);
+    expect(driverTree.mock.calls.map(([, , period]) => period.month)).toEqual(["2026-09", "2026-09", "2026-09"]);
+    expect(rows.map((r) => [r.name, r.gap?.gap])).toEqual([
+      ["Beta", -120_000],
+      ["Alpha", -50_000],
+      ["Gamma", 30_000],
+    ]);
+  });
+
+  it("gives a brand whose data does not reach that month a note instead of a gap, and ranks it last", async () => {
+    const paceView = async (c: TenantContext) => {
+      if (c.orgId === "org_alpha") return view({}, -50_000); // its data starts later, so the view fell back to this month
+      if (c.orgId === "org_beta") return view({ month: "2026-09", current: "2026-09", started: false, thisMonth: null }); // a demo store whose orders stop on August 31
+      return september(30_000);
+    };
+    const rows = await getPortfolio(db, me(), { memberships: memberships(everyone), paceView }, { month: "2026-09" });
+    expect(rows.map((r) => [r.name, r.gap?.gap ?? null, r.note])).toEqual([
+      ["Gamma", 30_000, null],
+      ["Alpha", null, "No data for September 2026 for this brand."],
+      ["Beta", null, "No data for September 2026 for this brand."],
+    ]);
+  });
+
+  it("leaves this month as it was when no month is asked for: no month reaches the view, and a brand with no complete day says so", async () => {
+    const asked: (string | undefined)[] = [];
+    const paceView = async (c: TenantContext, month?: string) => {
+      asked.push(month);
+      return c.orgId === "org_alpha" ? view({ started: false, thisMonth: null }) : view({}, gaps[c.orgId]);
+    };
+    const rows = await getPortfolio(db, me(), { memberships: memberships(everyone), paceView });
+    expect(asked).toEqual([undefined, undefined, undefined]);
+    expect(rows.map((r) => [r.name, r.note])).toEqual([
+      ["Beta", null],
+      ["Gamma", null],
+      ["Alpha", "No complete day yet this month."],
+    ]);
   });
 });
 

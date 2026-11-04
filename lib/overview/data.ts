@@ -5,7 +5,7 @@ import type { Db } from "../db/client";
 import { tenants } from "../db/schema";
 import { AppError, type ErrorCode } from "../errors";
 import type { PaceSeries } from "../pace/series";
-import { getPaceView, type PaceView } from "../pace/view";
+import { getPaceView, listPaceMonths, type PaceMonth, type PaceView } from "../pace/view";
 import type { TenantContext } from "../tenancy/context";
 import { getInventory, type InventoryRow } from "../tools/inventory";
 import { COVER_DAYS } from "./attention";
@@ -35,7 +35,9 @@ export interface PendingRow {
 
 export interface OverviewData {
   brand: string | null;
-  pace: Part<OverviewPace> | null; // null when no store is connected
+  pace: Part<OverviewPace> | null; // this month, for the lede and Needs attention; null when no store is connected
+  salesPace: Part<OverviewPace> | null; // the month the sales card shows: this month, or the past month asked for in ?month=
+  months: Part<PaceMonth[]> | null; // the sales card's month picker, newest first
   stock: Part<{ rows: InventoryRow[]; total: number }> | null;
   pending: Part<{ rows: PendingRow[]; total: number }> | null; // null for a client viewer
   brief: Part<BriefItem | null>;
@@ -43,12 +45,18 @@ export interface OverviewData {
 
 export const isGc = (ctx: TenantContext) => ctx.role === "gc_admin" || ctx.role === "gc_partner";
 
-export async function loadOverview(ctx: TenantContext, db: Db): Promise<OverviewData> {
+export async function loadOverview(ctx: TenantContext, db: Db, opts: { month?: string } = {}): Promise<OverviewData> {
   const connected = ctx.shop?.status === "connected";
   const timezone = ctx.shop?.timezone ?? "UTC";
-  const [brand, pace, stock, pending, brief] = await Promise.all([
+  const thisMonth = connected ? part(() => getPaceView(ctx, { db }) as Promise<OverviewPace>) : null;
+  // Only the sales card follows ?month=. The lede and Needs attention stay on today, so a past month is a second view read
+  // alongside this month's; with no month asked for, the card shares this month's view.
+  const shown = connected && opts.month ? part(() => getPaceView(ctx, { db, month: opts.month }) as Promise<OverviewPace>) : thisMonth;
+  const [brand, pace, salesPace, months, stock, pending, brief] = await Promise.all([
     part(async () => (await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1))[0]?.name ?? null),
-    connected ? part(() => getPaceView(ctx, { db }) as Promise<OverviewPace>) : null,
+    thisMonth,
+    shown,
+    connected ? part(() => listPaceMonths(ctx, { db })) : null,
     // The same stock cover the agent's inventory tool states: units available over the last 30 days' sales rate.
     connected
       ? part(async () => {
@@ -64,5 +72,5 @@ export async function loadOverview(ctx: TenantContext, db: Db): Promise<Overview
       : null,
     part(async () => (await listBriefs(db, ctx, 1))[0] ?? null),
   ]);
-  return { brand: brand.ok ? brand.value : null, pace, stock, pending, brief };
+  return { brand: brand.ok ? brand.value : null, pace, salesPace, months, stock, pending, brief };
 }

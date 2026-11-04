@@ -12,8 +12,9 @@ const BADGE: Record<Tone, string> = { ahead: "badge-ahead", behind: "badge-behin
 const BADGE_ICON = { ahead: ArrowUpRight, behind: ArrowDownRight, even: Minus } as const;
 const DRIVER_ICON = { ahead: TrendingUp, behind: TrendingDown, even: Minus } as const;
 
-// The signed-in person's brands, most dollars behind plan first. A brand with nothing to compare shows a plain note.
-export function PortfolioTable({ rows }: { rows: PortfolioRow[] }) {
+// The signed-in person's brands, most dollars behind plan first. A brand with nothing to compare shows a plain note. `month` is
+// the past month ranked (YYYY-MM), absent when the table shows this month.
+export function PortfolioTable({ rows, month }: { rows: PortfolioRow[]; month?: string }) {
   if (rows.length === 0) {
     return (
       <EmptyState icon={LayoutGrid} title="No brands to compare yet">
@@ -28,7 +29,7 @@ export function PortfolioTable({ rows }: { rows: PortfolioRow[] }) {
           <tr>
             <th scope="col">Brand</th>
             <th scope="col" className="num">
-              Net sales this month
+              {month ? `Net sales in ${monthName(month)}` : "Net sales this month"}
             </th>
             <th scope="col" className="num">
               Against plan
@@ -60,7 +61,7 @@ export function PortfolioTable({ rows }: { rows: PortfolioRow[] }) {
                   <>
                     <td className="num">
                       <div className="flex items-center justify-end gap-3">
-                        {r.spark ? <Sparkline values={r.spark.values} plan={r.spark.plan} label={netSalesSparkLabel(r.spark, r.currency)} width={88} height={30} /> : null}
+                        {r.spark ? <Sparkline values={r.spark.values} plan={r.spark.plan} label={netSalesSparkLabel(r.spark, r.currency, month)} width={88} height={30} /> : null}
                         <div className="text-right">
                           <span className="block font-medium">
                             <CountUp value={g.actual} unit={METRICS.net_sales.unit} currency={r.currency} align="end" />
@@ -85,6 +86,9 @@ export function PortfolioTable({ rows }: { rows: PortfolioRow[] }) {
                         <span className="border-b border-dashed border-estimate text-ink-2">{formatValue("net_sales", g.projected, r.currency)}</span>
                       ) : g.earlyMonth ? (
                         <span className="faint">{estimateWaitShort(g.earlyMonth)}</span>
+                      ) : month ? (
+                        // A finished month has no estimate: its net sales figure is the final one.
+                        <span className="faint">Month over</span>
                       ) : (
                         <span className="faint">Not available</span>
                       )}
