@@ -13,21 +13,25 @@ import { createFakeShopify } from "./shopify-fake.test-util.js";
 const base = readDataset("tidepool"); // the committed Tidepool dataset, as-of 2026-10-31
 const solenneBase = readDataset("solenne");
 const SHOP = "tidepool-test.myshopify.com";
-const AFTER = Date.parse("2026-11-02T06:00:00Z"); // every extra order (1 Nov, Pacific and Eastern) is in the past
+const AFTER = Date.parse("2026-11-04T06:00:00Z"); // every extra order (1 and 3 Nov, Pacific and Eastern) is in the past
 const BEFORE = Date.parse("2026-11-01T10:00:00Z");
 
 describe("buildExtras", () => {
-  it("builds the three Tidepool orders, dated 1 Nov store-local, tagged demo-extra and shipped free", () => {
+  it("builds the five Tidepool orders, dated 1 and 3 Nov store-local, tagged demo-extra and shipped free", () => {
     const { orders } = buildExtras("tidepool", base);
     expect(orders.map((o) => [o.genId, o.processedAt, total(o)])).toEqual([
       ["X_TP_001", "2026-11-01T10:15:00-08:00", 7400],
       ["X_TP_003", "2026-11-01T12:30:00-08:00", 6000],
       ["X_TP_002", "2026-11-01T15:40:00-08:00", 6800],
+      ["X_TP_004", "2026-11-01T19:05:00-08:00", 5400],
+      ["X_TP_005", "2026-11-03T13:20:00-08:00", 5800],
     ]);
     expect(orders.every((o) => o.shipping === 0 && o.discountCents === 0 && o.tags.includes("demo-extra"))).toBe(true);
     expect(orders[0]!.tags).toEqual(["channel:online_store", "demo-extra"]);
     expect(orders[1]!.tags).toEqual(["channel:tiktok", "demo-extra"]);
     expect(orders[2]!.tags).toEqual(["channel:instagram", "demo-extra"]);
+    expect(orders[3]!.tags).toEqual(["channel:email", "demo-extra"]);
+    expect(orders[4]!.tags).toEqual(["channel:google", "demo-extra"]);
   });
 
   it("uses today's catalog price for each line", () => {
@@ -35,7 +39,7 @@ describe("buildExtras", () => {
     for (const o of orders) for (const l of o.lines) expect(l.unitPrice).toBe(base.variants.find((v) => v.genId === l.variantGenId)!.price);
   });
 
-  it("makes two new customers and reuses an existing one for the instagram order", () => {
+  it("makes two new customers and reuses existing ones for the instagram, email and google orders", () => {
     const { customers, orders } = buildExtras("tidepool", base);
     expect(customers).toEqual([
       { genId: "CUST_DEMO0001", persona: "regular" },
@@ -43,6 +47,8 @@ describe("buildExtras", () => {
     ]);
     expect(base.customers.some((c) => c.genId === orders[2]!.customerGenId)).toBe(true);
     expect(base.orders.some((o) => o.customerGenId === orders[2]!.customerGenId)).toBe(true);
+    expect(base.orders.some((o) => o.customerGenId === orders[3]!.customerGenId)).toBe(true);
+    expect(base.orders.some((o) => o.customerGenId === orders[4]!.customerGenId)).toBe(true);
   });
 
   it("refuses a date on or before the end of the first load", () => {
@@ -65,8 +71,8 @@ describe("buildExtras", () => {
 describe("planExtra", () => {
   it("selects only the extra orders and their customers, and carries no stock rows", () => {
     const plan = planExtra("tidepool", base);
-    expect(plan.selection.orders.map((o) => o.genId)).toEqual(["X_TP_001", "X_TP_003", "X_TP_002"]);
-    expect(plan.selection.customers.map((c) => c.genId).sort()).toEqual(["CUST_DEMO0001", "CUST_DEMO0002", "CUST_c4d1ace7"]);
+    expect(plan.selection.orders.map((o) => o.genId)).toEqual(["X_TP_001", "X_TP_003", "X_TP_002", "X_TP_004", "X_TP_005"]);
+    expect(plan.selection.customers.map((c) => c.genId).sort()).toEqual(["CUST_DEMO0001", "CUST_DEMO0002", "CUST_bb68cd35", "CUST_c4d1ace7", "CUST_e8e62a59"]);
     expect(plan.selection.refunds).toEqual([]);
     expect(plan.dataset.inventory).toEqual([]);
   });
@@ -75,7 +81,7 @@ describe("planExtra", () => {
 describe("extra orders against a fake Shopify", () => {
   const meta = { store: "tidepool" as const, shop: SHOP };
 
-  it("creates three orders and two customers, touching no catalog record and no stock", async () => {
+  it("creates five orders and two customers, touching no catalog record and no stock", async () => {
     const journal = Journal.open(null, meta);
     const fake = createFakeShopify();
     const client = createAdminClient({ shop: SHOP, clientId: "id", clientSecret: "secret", fetch: fake.fetch, sleep: async () => {} });
@@ -86,9 +92,9 @@ describe("extra orders against a fake Shopify", () => {
     const result = await loadStore(plan.dataset, plan.selection, { client, journal, orderLimiter: noLimit });
 
     expect(result.failures).toEqual([]);
-    expect(result.created).toEqual({ customer: 2, order: 3 });
+    expect(result.created).toEqual({ customer: 2, order: 5 });
     const mutations = fake.calls.slice(before).filter((c) => /mutation /.test(c.query));
-    expect(mutations.map((c) => c.op)).toEqual(["SeedCustomerCreate", "SeedCustomerCreate", "SeedOrderCreate", "SeedOrderCreate", "SeedOrderCreate"]);
+    expect(mutations.map((c) => c.op)).toEqual(["SeedCustomerCreate", "SeedCustomerCreate", "SeedOrderCreate", "SeedOrderCreate", "SeedOrderCreate", "SeedOrderCreate", "SeedOrderCreate"]);
     const order = mutations[2]!.variables.order;
     expect(order).toMatchObject({ sourceIdentifier: "X_TP_001", processedAt: "2026-11-01T10:15:00-08:00", tags: ["channel:online_store", "demo-extra"] });
     expect(mutations[0]!.variables.input).toEqual({ email: "cust_demo0001@example.com" });
@@ -117,7 +123,7 @@ describe("runExtraCli", () => {
 
   it("a real run refuses while an order is still in the future, and says when to run it", async () => {
     expect(await runExtraCli(["--store", "tidepool"], deps(BEFORE))).toBe(2);
-    expect(logs.join("\n")).toMatch(/X_TP_001, X_TP_003, X_TP_002 are dated in the future.*Run again after 2026-11-01T23:40:00\.000Z\. Nothing was created\./);
+    expect(logs.join("\n")).toMatch(/X_TP_001, X_TP_003, X_TP_002, X_TP_004, X_TP_005 are dated in the future.*Run again after 2026-11-03T21:20:00\.000Z\. Nothing was created\./);
   });
 
   it("stops without the first load's journal", async () => {
@@ -133,13 +139,13 @@ describe("runExtraCli", () => {
     const before = fake.calls.length;
 
     expect(await runExtraCli(["--store", "tidepool"], deps(AFTER, { fetch: fake.fetch }))).toBe(0);
-    expect(logs.join("\n")).toMatch(/Created: orders 3, customers 2/);
+    expect(logs.join("\n")).toMatch(/Created: orders 5, customers 2/);
     const created = fake.calls.slice(before).filter((c) => c.op === "SeedOrderCreate").length;
-    expect(created).toBe(3);
+    expect(created).toBe(5);
 
     logs.length = 0;
     expect(await runExtraCli(["--store", "tidepool"], deps(AFTER, { fetch: fake.fetch }))).toBe(0);
     expect(logs.join("\n")).toMatch(/Created: orders 0, customers 0/);
-    expect(fake.calls.filter((c) => c.op === "SeedOrderCreate")).toHaveLength(base.orders.length + 3);
+    expect(fake.calls.filter((c) => c.op === "SeedOrderCreate")).toHaveLength(base.orders.length + 5);
   });
 });

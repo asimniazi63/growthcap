@@ -326,7 +326,7 @@ Local runs, scripts and the deployed app share one Neon database. Connect and re
 | `npm run seed:generate` | Generate the demo orders (deterministic) |
 | `npm run seed:load` **[live]** | Write the generated orders to a dev store (slow: dev stores take five new orders a minute) |
 | `npm run seed:topup -- --store solenne\|tidepool\|all` **[live]** | Add generated orders for the complete days since the first load |
-| `npm run seed:extra -- --store solenne\|tidepool` **[live]** | Add three hand-picked orders dated 1 November |
+| `npm run seed:extra -- --store solenne\|tidepool` **[live]** | Add a few hand-picked orders on quiet days (three on Solenne on 1 November; four on 1 November and one on 3 November on Tidepool) |
 | `npm run landing:push -- <action id>` | Finish an approved landing page through the Shopify CLI |
 | `npm run plan-in:try` **[paid]** | Read the fixture SOW with the real model and print the targets next to the expected ones |
 | `npm run themes:build` | Regenerate `app/themes.css` after changing a colour palette |

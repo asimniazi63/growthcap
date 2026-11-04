@@ -33,7 +33,9 @@ interface ExtraSpec {
 // Sunday 2026-11-01. The generated data has no Tidepool order that day, and Solenne's three generated ones leave a thin day.
 // Tidepool: products are best sellers outside the swaddle (whose stock risk the audit story is about): V_005 Bamboo Sleep Sack
 // 6-12 months $48, V_008 Organic Burp Cloths 5-pack $26, V_012 Hooded Bath Towel $34. X_TP_001 is a new customer, X_TP_002 a
-// returning loyalist, X_TP_003 another new customer.
+// returning loyalist, X_TP_003 another new customer. X_TP_004 (added 2026-11-04) is the other loyalist reordering by email:
+// V_014 Stroller Blanket $54. X_TP_005 (added 2026-11-04) fills Tuesday 2026-11-03, which the generator left empty: a returning
+// regular from Google buying V_015 Diaper Bag Caddy $42 and V_011 Teething Giraffe $16.
 // Solenne: V_001 (SOL-01A) $48, V_011 (SOL-06A) $28, V_019 (SOL-10A) $42 and V_002 (SOL-01B) $72, its best sellers. X_SOL_001
 // and X_SOL_003 are new customers, X_SOL_002 a returning loyalist. Eastern time went back an hour at 02:00 that day.
 // Every order is above the $50 free-shipping line.
@@ -47,6 +49,8 @@ const EXTRAS: Record<StoreKey, ExtraSpec[]> = {
     { genId: "X_TP_001", date: "2026-11-01", hh: 10, mm: 15, customer: "CUST_DEMO0001", lines: [["V_005", 1], ["V_008", 1]], channel: "online_store" },
     { genId: "X_TP_002", date: "2026-11-01", hh: 15, mm: 40, customer: "CUST_c4d1ace7", lines: [["V_012", 2]], channel: "instagram" },
     { genId: "X_TP_003", date: "2026-11-01", hh: 12, mm: 30, customer: "CUST_DEMO0002", lines: [["V_008", 1], ["V_012", 1]], channel: "tiktok" },
+    { genId: "X_TP_004", date: "2026-11-01", hh: 19, mm: 5, customer: "CUST_e8e62a59", lines: [["V_014", 1]], channel: "email" },
+    { genId: "X_TP_005", date: "2026-11-03", hh: 13, mm: 20, customer: "CUST_bb68cd35", lines: [["V_015", 1], ["V_011", 1]], channel: "google" },
   ],
 };
 
