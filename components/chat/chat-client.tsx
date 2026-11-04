@@ -299,7 +299,7 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
               e.preventDefault();
               ask(input);
             }}
-            className="card mx-auto w-full max-w-6xl rounded-2xl p-2 transition-shadow focus-within:border-brand focus-within:shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-brand)_22%,transparent)]"
+            className="card mx-auto w-full max-w-6xl rounded-3xl border-2 border-line-strong p-3 shadow-pop transition-shadow focus-within:border-brand focus-within:shadow-[0_0_0_4px_color-mix(in_oklab,var(--color-brand)_22%,transparent)]"
           >
             <div className="flex items-center gap-2">
               <label className="sr-only" htmlFor="question">
@@ -311,10 +311,10 @@ function ChatSession({ role, models, defaultModelId, suggestions, currency, user
                 onChange={(e) => setInput(e.target.value)}
                 maxLength={MAX_QUESTION}
                 placeholder="Ask about sales, orders, stock or customers"
-                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-[0.9375rem] outline-none placeholder:text-ink-3"
+                className="min-w-0 flex-1 bg-transparent px-3 py-4 text-lg outline-none placeholder:text-ink-3"
               />
-              <button type="submit" disabled={busy || !input.trim()} className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-brand text-on-brand transition-colors enabled:hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-40">
-                <ArrowUp className="size-4.5" strokeWidth={2.5} aria-hidden />
+              <button type="submit" disabled={busy || !input.trim()} className="grid size-12 shrink-0 cursor-pointer place-items-center rounded-full bg-brand text-on-brand transition-colors enabled:hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-40">
+                <ArrowUp className="size-5" strokeWidth={2.5} aria-hidden />
                 <span className="sr-only">Ask</span>
               </button>
             </div>

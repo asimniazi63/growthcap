@@ -122,13 +122,15 @@
 }
 
 /* The white top bar with one control, the search pill. It is in the markup for every scheme and shown only here, and only
-   where the rail is (1024px up, the same breakpoint as lg:). Its left edge lines up with the page content below it. */
+   where the rail is (1024px up, the same breakpoint as lg:). The pill and the ? beside it are centred in the bar, so they stay
+   in the middle of the screen whatever the width of the page below (the Chat page uses the whole width). */
 @media (min-width: 64rem) {
   [data-scheme="sorbet"] .app-topbar {
     display: flex;
     align-items: center;
+    justify-content: center;
     height: 60px;
-    padding: 0 calc(max(0px, (100% - 1120px) / 2) + 3rem);
+    padding: 0 3rem;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-line);
   }
