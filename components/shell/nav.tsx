@@ -107,8 +107,10 @@ export function Nav({ variant, gc, admin = false, pending = 0 }: { variant: "sid
     );
   }
 
+  // The rail is one screen tall and sticks, so on a short window (or a zoomed-in browser) the links scroll inside it, and the brand
+  // switcher above and the account row below stay in view. -m-1 p-1 leaves room for the focus ring, which the scroll box would clip.
   return (
-    <nav aria-label="Main" className="flex flex-1 flex-col">
+    <nav aria-label="Main" className="-m-1 flex min-h-0 flex-1 flex-col overflow-y-auto p-1 [scrollbar-width:thin]">
       {groups.map((g) => (
         <div key={g.label} className="mb-5">
           {g.label ? <p className="px-3 pb-1.5 text-xs font-medium text-on-rail-3">{g.label}</p> : null}
